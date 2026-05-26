@@ -10,6 +10,73 @@ The installer copies only the 10 v0.1 skill folders from:
 
 It does not install new dependencies and does not touch secrets or project config.
 
+## CLI Install
+
+The npm CLI is the v0.2 MVP install path. The `npx` command will work after the npm package is published.
+
+Repo-scoped install into the current directory:
+
+```bash
+npx @setrathexx/codex-engineering-workflow-pack init
+```
+
+After global npm install:
+
+```bash
+npm install -g @setrathexx/codex-engineering-workflow-pack
+cewp init
+```
+
+Explicit repo install:
+
+```bash
+cewp init --mode repo
+cewp init --mode repo --target "/path/to/target-repo"
+cewp init --mode repo --target "/path/to/target-repo" --force
+```
+
+Global skill install:
+
+```bash
+cewp init --mode global
+cewp init --mode global --force
+```
+
+MVP supported commands:
+
+- `cewp init`
+- `cewp init --mode repo`
+- `cewp init --mode global`
+- `cewp init --mode repo --target "<path>"`
+- `cewp init --mode repo --target "<path>" --force`
+- `cewp init --mode global --force`
+
+Planned commands:
+
+- `cewp link`
+- `cewp update`
+- `cewp uninstall`
+- interactive mode
+- symlink/shared setup
+
+## Repo Sharing vs Local-only
+
+If `.agents/skills/` should be shared with the project or team, commit it to the repo.
+
+For local-only use, do not add `.agents/skills/` to the repo `.gitignore`. Use the local exclude file instead:
+
+```txt
+.git/info/exclude
+```
+
+Add this line:
+
+```gitignore
+.agents/skills/
+```
+
+This keeps the public repo surface clean while allowing local repo-scoped skills.
+
 ## Skill Set
 
 - `setup-codex-engineering-workflow`
@@ -24,6 +91,8 @@ It does not install new dependencies and does not touch secrets or project confi
 - `improve-codebase-architecture`
 
 ## Repo-scoped Install
+
+This section documents the fallback script installers. Prefer the CLI install path when npm is available.
 
 Repo-scoped install copies skills to:
 

@@ -32,6 +32,46 @@ The goal is to reduce:
 
 ## Install Modes
 
+## Quick Install
+
+The npm CLI is the v0.2 MVP install path. The `npx` command will work after the npm package is published.
+
+Repo-scoped install into the current directory:
+
+```bash
+npx @setrathexx/codex-engineering-workflow-pack init
+```
+
+After global npm install:
+
+```bash
+npm install -g @setrathexx/codex-engineering-workflow-pack
+cewp init
+```
+
+Explicit repo install:
+
+```bash
+cewp init --mode repo
+cewp init --mode repo --target "/path/to/your/repo"
+cewp init --mode repo --target "/path/to/your/repo" --force
+```
+
+Global skill install:
+
+```bash
+cewp init --mode global
+cewp init --mode global --force
+```
+
+Planned CLI commands:
+
+- `cewp link`
+- `cewp update`
+- `cewp uninstall`
+- interactive mode
+- symlink/shared setup
+
 ### Repo Install
 
 Copies the 10 v0.1 skills into a target project's repo-scoped skill folder:
@@ -41,6 +81,8 @@ Copies the 10 v0.1 skills into a target project's repo-scoped skill folder:
 ```
 
 Use this when a project should carry its own workflow instructions.
+
+If `.agents/skills/` should be shared with the project or team, commit it. For local-only use, do not edit the repo `.gitignore`; add `.agents/skills/` to `.git/info/exclude` instead.
 
 ### Global Install
 
@@ -65,6 +107,8 @@ Do not copy unrelated docs if you only want the skills.
 
 ## Windows PowerShell Install
 
+The PowerShell installer is kept as a fallback for environments that do not use npm.
+
 Repo-scoped:
 
 ```powershell
@@ -84,6 +128,8 @@ Overwrite existing installed skill files without deleting extra target files:
 ```
 
 ## Unix Shell Install
+
+The shell installer is kept as a fallback for environments that do not use npm.
 
 Repo-scoped:
 

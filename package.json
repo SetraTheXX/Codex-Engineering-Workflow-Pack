@@ -1,0 +1,30 @@
+{
+  "name": "@setrathexx/codex-engineering-workflow-pack",
+  "version": "0.2.0-mvp.0",
+  "description": "Local-first Codex engineering workflow skills with a minimal CLI installer.",
+  "license": "MIT",
+  "bin": {
+    "cewp": "./bin/cewp.js"
+  },
+  "files": [
+    ".agents/skills",
+    "bin",
+    "README.md",
+    "docs/install.md",
+    "install.ps1",
+    "install.sh"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "check:cli": "node ./bin/cewp.js --help"
+  },
+  "keywords": [
+    "codex",
+    "skills",
+    "workflow",
+    "engineering",
+    "local-first"
+  ]
+}
