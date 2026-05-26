@@ -160,4 +160,4 @@ v0.1 has passed local validation and early pilot use. It is not production-ready
 - Pilot 2: larger repo architecture and prototype workflow.
 - v0.2: additional workflow extensions only after the local core is stable.
 
-See `roadmap.md`, `v0.1-scope-lock.md`, and `docs/agents/v0.1-pilot-test-plan.md` for details.
+The public repo currently ships the v0.1 skill pack, install scripts, and install guide. Internal planning and pilot notes are intentionally not part of the public surface.
