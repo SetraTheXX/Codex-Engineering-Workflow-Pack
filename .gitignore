@@ -1,0 +1,66 @@
+# OS and editor noise
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python/cache/build artifacts
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
+
+# Node/cache artifacts
+node_modules/
+.npm/
+.pnpm-store/
+.yarn/
+coverage/
+
+# Logs and local temp output
+*.log
+logs/
+tmp/
+temp/
+.cache/
+
+# Local env and secrets
+.env
+.env.*
+!.env.example
+config/api_keys.json
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+
+# Local virtual environments
+.venv/
+venv/
+env/
+
+# Internal planning and validation docs
+docs/agents/
+docs/adr/
+CONTEXT.md
+source-analysis.md
+porting-matrix.md
+v0.1-scope-lock.md
+codex-skill-standard.md
+roadmap.md
+prd.md
+
+# Keep the public product files tracked:
+# - .agents/skills/
+# - README.md
+# - docs/install.md
+# - install.ps1
+# - install.sh

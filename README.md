@@ -1,0 +1,163 @@
+# Codex Engineering Workflow Pack
+
+Local-first engineering workflow skills for Codex.
+
+This repo is not a clone of `mattpocock/skills`. It is a Codex-focused workflow pack inspired by real engineering routines: setup, diagnosis, TDD, PRD writing, issue slicing, handoff, and architecture analysis.
+
+## What Problem It Solves
+
+Codex is strongest when a repo gives it clear local context, small implementation slices, explicit verification commands, and durable handoff notes. This pack turns those habits into reusable repo-scoped skills.
+
+The goal is to reduce:
+
+- vague feature scope,
+- missing test feedback loops,
+- large hard-to-check changes,
+- lost domain language,
+- weak session handoff,
+- accidental remote-first issue workflow assumptions.
+
+## v0.1 Skills
+
+1. `setup-codex-engineering-workflow` - establish local docs, issues, ADRs, tests, package manager, and handoff paths.
+2. `diagnose` - reproduce and debug bugs, regressions, flaky behavior, and performance surprises.
+3. `tdd` - implement features or fixes through red-green-refactor vertical slices.
+4. `grill-with-docs` - clarify unclear plans against repo docs, domain language, ADRs, and code.
+5. `to-prd` - convert a conversation or plan into a local-first PRD.
+6. `to-issues` - split a PRD or plan into implementable local markdown issues.
+7. `handoff` - create concise continuation notes for a later Codex session.
+8. `zoom-out` - map an unfamiliar code area before edits begin.
+9. `prototype` - run approved throwaway experiments before production implementation.
+10. `improve-codebase-architecture` - audit architecture friction and sequence small refactors.
+
+## Install Modes
+
+### Repo Install
+
+Copies the 10 v0.1 skills into a target project's repo-scoped skill folder:
+
+```txt
+<target-repo>/.agents/skills/
+```
+
+Use this when a project should carry its own workflow instructions.
+
+### Global Install
+
+Copies the 10 v0.1 skills into:
+
+```txt
+$HOME/.agents/skills/
+```
+
+Use this when you want the pack available across local projects.
+
+### Manual Install
+
+Copy the folders under this repo's `.agents/skills/` into either:
+
+```txt
+<target-repo>/.agents/skills/
+$HOME/.agents/skills/
+```
+
+Do not copy unrelated docs if you only want the skills.
+
+## Windows PowerShell Install
+
+Repo-scoped:
+
+```powershell
+.\install.ps1 -Mode repo -Target "C:\path\to\your\repo"
+```
+
+Global:
+
+```powershell
+.\install.ps1 -Mode global
+```
+
+Overwrite existing installed skill files without deleting extra target files:
+
+```powershell
+.\install.ps1 -Mode repo -Target "C:\path\to\your\repo" -Force
+```
+
+## Unix Shell Install
+
+Repo-scoped:
+
+```bash
+./install.sh --mode repo --target "/path/to/your/repo"
+```
+
+Global:
+
+```bash
+./install.sh --mode global
+```
+
+Overwrite existing installed skill files without deleting extra target files:
+
+```bash
+./install.sh --mode repo --target "/path/to/your/repo" --force
+```
+
+## Usage Examples
+
+After installation, ask Codex to use the workflow by name or by intent:
+
+```txt
+Use setup-codex-engineering-workflow for this repo.
+```
+
+```txt
+Use to-prd to turn this feature idea into a local PRD.
+```
+
+```txt
+Use to-issues to split this PRD into vertical slice issues.
+```
+
+```txt
+Use tdd to implement the first issue with a failing regression test first.
+```
+
+```txt
+Use diagnose to debug this failing test.
+```
+
+## Local-first Approach
+
+The pack defaults to local markdown and repo-local context:
+
+- PRDs under `docs/agents/prds/` or a repo convention.
+- Issues under `docs/agents/issues/`.
+- Handoffs under `docs/agents/handoff/`.
+- Architecture reports under `docs/agents/architecture/`.
+- ADRs under `docs/adr/`.
+- Domain language in `CONTEXT.md` or `docs/agents/domain.md`.
+
+GitHub publishing is optional and requires an explicit user request.
+
+## Pilot Status
+
+v0.1 has passed local validation and early pilot use. It is not production-ready yet. Treat this as a pilot-ready workflow pack and run it against real repos before relying on it for public or team-wide distribution.
+
+## Security Notes
+
+- Install scripts copy only the approved 10 v0.1 skill folders.
+- Install scripts do not read or copy `.env`, `config/api_keys.json`, `*.pem`, or `*.key` files.
+- Existing installed skills are skipped unless `-Force` or `--force` is provided.
+- Force mode overwrites copied files but does not delete the target skill directory first.
+- GitHub publish is not part of installation.
+
+## Roadmap Summary
+
+- v0.1: local-first engineering workflow core.
+- Pilot 0: self-dogfooding on this repo.
+- Pilot 1: small real repo feature/fix slice.
+- Pilot 2: larger repo architecture and prototype workflow.
+- v0.2: additional workflow extensions only after the local core is stable.
+
+See `roadmap.md`, `v0.1-scope-lock.md`, and `docs/agents/v0.1-pilot-test-plan.md` for details.
