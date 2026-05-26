@@ -2,6 +2,8 @@
 
 Codex Engineering Workflow Pack is a local-first skill pack for structured engineering workflows in Codex.
 
+This is an unofficial local-first skill pack for Codex.
+
 It provides reusable workflows for setup, diagnosis, TDD, PRD writing, issue slicing, handoff, and architecture analysis.
 
 ## What Problem It Solves
@@ -39,13 +41,13 @@ The npm CLI is the v0.2 MVP install path. The `npx` command will work after the 
 Repo-scoped install into the current directory:
 
 ```bash
-npx @setrathexx/codex-engineering-workflow-pack init
+npx @setrathex/codex-engineering-workflow-pack init
 ```
 
 After global npm install:
 
 ```bash
-npm install -g @setrathexx/codex-engineering-workflow-pack
+npm install -g @setrathex/codex-engineering-workflow-pack
 cewp init
 ```
 

@@ -17,13 +17,13 @@ The npm CLI is the v0.2 MVP install path. The `npx` command will work after the 
 Repo-scoped install into the current directory:
 
 ```bash
-npx @setrathexx/codex-engineering-workflow-pack init
+npx @setrathex/codex-engineering-workflow-pack init
 ```
 
 After global npm install:
 
 ```bash
-npm install -g @setrathexx/codex-engineering-workflow-pack
+npm install -g @setrathex/codex-engineering-workflow-pack
 cewp init
 ```
 
