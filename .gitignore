@@ -64,3 +64,6 @@ prd.md
 # - docs/install.md
 # - install.ps1
 # - install.sh
+
+# Local MCP/tool cache
+.ctxo/
