@@ -219,7 +219,7 @@ Repo mode must know where to install:
 ./install.sh --mode repo --target "/path/to/target-repo"
 ```
 
-If the target path does not exist, create or clone the repo first, then rerun the installer.
+If the target path does not exist, create or download the repo first, then rerun the installer.
 
 ### Codex does not show the skills
 

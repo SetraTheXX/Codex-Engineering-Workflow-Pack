@@ -1,8 +1,8 @@
 # Codex Engineering Workflow Pack
 
-Local-first engineering workflow skills for Codex.
+Codex Engineering Workflow Pack is a local-first skill pack for structured engineering workflows in Codex.
 
-This repo is not a clone of `mattpocock/skills`. It is a Codex-focused workflow pack inspired by real engineering routines: setup, diagnosis, TDD, PRD writing, issue slicing, handoff, and architecture analysis.
+It provides reusable workflows for setup, diagnosis, TDD, PRD writing, issue slicing, handoff, and architecture analysis.
 
 ## What Problem It Solves
 
