@@ -9,8 +9,6 @@ This is an unofficial local-first skill pack for Codex.
 
 It provides reusable workflows for setup, diagnosis, TDD, PRD writing, issue slicing, handoff, and architecture analysis.
 
-NPM package: [@setrathex/codex-engineering-workflow-pack](https://www.npmjs.com/package/@setrathex/codex-engineering-workflow-pack)
-
 ## What Problem It Solves
 
 Codex is strongest when a repo gives it clear local context, small implementation slices, explicit verification commands, and durable handoff notes. This pack turns those habits into reusable repo-scoped skills.
