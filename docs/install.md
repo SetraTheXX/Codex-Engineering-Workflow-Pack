@@ -12,7 +12,7 @@ It does not install new dependencies and does not touch secrets or project confi
 
 ## CLI Install
 
-The npm CLI is the v0.2 MVP install path. The `npx` command will work after the npm package is published.
+Use `npx` for a one-time repo-scoped install, or install the CLI globally if you use the pack across many projects.
 
 Repo-scoped install into the current directory:
 

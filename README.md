@@ -32,11 +32,9 @@ The goal is to reduce:
 9. `prototype` - run approved throwaway experiments before production implementation.
 10. `improve-codebase-architecture` - audit architecture friction and sequence small refactors.
 
-## Install Modes
-
 ## Quick Install
 
-The npm CLI is the v0.2 MVP install path. The `npx` command will work after the npm package is published.
+Use `npx` for a one-time repo-scoped install, or install the CLI globally if you use the pack across many projects.
 
 Repo-scoped install into the current directory:
 
@@ -73,6 +71,8 @@ Planned CLI commands:
 - `cewp uninstall`
 - interactive mode
 - symlink/shared setup
+
+## Install Modes
 
 ### Repo Install
 
