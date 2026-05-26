@@ -1,6 +1,6 @@
 {
   "name": "@setrathex/codex-engineering-workflow-pack",
-  "version": "0.2.0-mvp.0",
+  "version": "0.1.0-beta.0",
   "description": "Local-first Codex engineering workflow skills with a minimal CLI installer.",
   "license": "MIT",
   "bin": {
