@@ -1,8 +1,16 @@
 {
   "name": "@setrathex/codex-engineering-workflow-pack",
-  "version": "0.1.0-beta.2",
-  "description": "Local-first Codex engineering workflow skills with a minimal CLI installer.",
+  "version": "0.1.0-beta.3",
+  "description": "Local-first engineering workflow skills for Codex.",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SetraTheXX/Codex-Engineering-Workflow-Pack.git"
+  },
+  "homepage": "https://github.com/SetraTheXX/Codex-Engineering-Workflow-Pack#readme",
+  "bugs": {
+    "url": "https://github.com/SetraTheXX/Codex-Engineering-Workflow-Pack/issues"
+  },
   "bin": {
     "cewp": "bin/cewp.js",
     "codex-engineering-workflow-pack": "bin/cewp.js"
@@ -13,7 +21,8 @@
     "README.md",
     "docs/install.md",
     "install.ps1",
-    "install.sh"
+    "install.sh",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=18"
@@ -24,8 +33,14 @@
   "keywords": [
     "codex",
     "skills",
+    "codex-skills",
+    "ai-coding",
+    "developer-tools",
     "workflow",
     "engineering",
+    "software-engineering",
+    "tdd",
+    "debugging",
     "local-first"
   ]
 }

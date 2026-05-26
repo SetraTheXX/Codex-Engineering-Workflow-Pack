@@ -1,10 +1,15 @@
 # Codex Engineering Workflow Pack
 
+[![npm version](https://img.shields.io/npm/v/@setrathex/codex-engineering-workflow-pack?tag=latest)](https://www.npmjs.com/package/@setrathex/codex-engineering-workflow-pack)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 Codex Engineering Workflow Pack is a local-first skill pack for structured engineering workflows in Codex.
 
 This is an unofficial local-first skill pack for Codex.
 
 It provides reusable workflows for setup, diagnosis, TDD, PRD writing, issue slicing, handoff, and architecture analysis.
+
+NPM package: [@setrathex/codex-engineering-workflow-pack](https://www.npmjs.com/package/@setrathex/codex-engineering-workflow-pack)
 
 ## What Problem It Solves
 
