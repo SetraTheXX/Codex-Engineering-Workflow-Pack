@@ -42,6 +42,7 @@ function parseArgs(argv) {
     command: argv[0],
     mode: "repo",
     target: undefined,
+    targetProvided: false,
     force: false,
     help: false,
   };
@@ -67,7 +68,12 @@ function parseArgs(argv) {
     }
 
     if (arg === "--target") {
-      args.target = argv[index + 1];
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--target requires a path argument.");
+      }
+      args.target = value;
+      args.targetProvided = true;
       index += 1;
       continue;
     }
@@ -115,6 +121,10 @@ function init(options) {
   }
 
   const repoTarget = path.resolve(options.target || process.cwd());
+
+  if (options.mode === "repo" && !options.targetProvided) {
+    console.log(`No --target provided. Installing into current directory: ${repoTarget}`);
+  }
 
   if (options.mode === "repo" && !fs.existsSync(repoTarget)) {
     throw new Error(`Target repo path does not exist: ${repoTarget}`);

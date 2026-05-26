@@ -77,6 +77,10 @@ Add this line:
 
 This keeps the public repo surface clean while allowing local repo-scoped skills.
 
+## Search Tool Note
+
+Some skills prefer ripgrep (`rg`) when available for fast repo search. It is recommended but not required. If `rg` is unavailable, Codex can use IDE search, PowerShell `Get-ChildItem`, `git grep`, or normal file search.
+
 ## Skill Set
 
 - `setup-codex-engineering-workflow`

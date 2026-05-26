@@ -29,13 +29,20 @@ The goal is to reduce:
 1. `setup-codex-engineering-workflow` - establish local docs, issues, ADRs, tests, package manager, and handoff paths.
 2. `diagnose` - reproduce and debug bugs, regressions, flaky behavior, and performance surprises.
 3. `tdd` - implement features or fixes through red-green-refactor vertical slices.
-4. `grill-with-docs` - clarify unclear plans against repo docs, domain language, ADRs, and code.
+4. `grill-with-docs` - clarify and challenge a fuzzy plan against existing docs, domain language, and ADRs.
 5. `to-prd` - convert a conversation or plan into a local-first PRD.
 6. `to-issues` - split a PRD or plan into implementable local markdown issues.
 7. `handoff` - create concise continuation notes for a later Codex session.
 8. `zoom-out` - map an unfamiliar code area before edits begin.
 9. `prototype` - run approved throwaway experiments before production implementation.
 10. `improve-codebase-architecture` - audit architecture friction and sequence small refactors.
+
+## Workflow Recipes
+
+- New feature: `setup-codex-engineering-workflow` -> `grill-with-docs` -> `to-prd` -> `to-issues` -> `tdd` -> `handoff`
+- Bug or regression: `zoom-out` -> `diagnose` -> `tdd` -> `handoff`
+- Architecture cleanup: `zoom-out` -> `improve-codebase-architecture` -> `to-issues` -> `tdd`
+- Small safe change: use `tdd` directly; PRD/issue docs are not required.
 
 ## Quick Install
 
@@ -179,6 +186,10 @@ Use tdd to implement the first issue with a failing regression test first.
 ```txt
 Use diagnose to debug this failing test.
 ```
+
+## Search Tools
+
+Some skills prefer ripgrep (`rg`) when available for fast repo search. It is recommended but not required. If `rg` is unavailable, Codex can use IDE search, PowerShell `Get-ChildItem`, `git grep`, or normal file search.
 
 ## Local-first Approach
 
