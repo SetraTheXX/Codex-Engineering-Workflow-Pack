@@ -107,6 +107,8 @@ Pane 3: Worker B Codex
 Pane 4: Reviewer Codex
 ```
 
+Each pane is a separate Codex session. Paste the matching generated prompt into each pane, let the Manager assign and track tasks through the run files, and have each Worker report back through its own report and event log.
+
 Print prompt locations and paste commands:
 
 ```bash
