@@ -28,11 +28,12 @@ Usage:
   cewp run status
   cewp run prompts
   cewp run prompt <manager|worker-a|worker-b|reviewer>
+  cewp run worktrees plan
   cewp --help
 
 Defaults:
   repo mode defaults to the current working directory when --target is omitted
-  run commands default to the current working directory and latest run
+  run commands default to the current working directory and latest run unless --run <id> is provided
 
 Examples:
   cewp init
@@ -45,8 +46,10 @@ Examples:
   cewp doctor --mode repo --target "/path/to/repo"
   cewp run init --workers 2 --reviewer
   cewp run status
+  cewp run status --run 20260528-232250
   cewp run prompts
-  cewp run prompt manager
+  cewp run prompt manager --run 20260528-232250
+  cewp run worktrees plan --run 20260528-232250
 `);
 }
 
@@ -55,6 +58,8 @@ function parseArgs(argv) {
     command: argv[0],
     subcommand: argv[1],
     role: argv[2],
+    action: argv[2],
+    runId: undefined,
     mode: "repo",
     target: undefined,
     targetProvided: false,
@@ -77,6 +82,11 @@ function parseArgs(argv) {
 
     if (args.command === "run" && args.subcommand === "prompt" && index === 2) {
       args.role = arg;
+      continue;
+    }
+
+    if (args.command === "run" && args.subcommand === "worktrees" && index === 2) {
+      args.action = arg;
       continue;
     }
 
@@ -126,6 +136,16 @@ function parseArgs(argv) {
 
     if (args.command === "run" && arg === "--reviewer") {
       args.reviewer = true;
+      continue;
+    }
+
+    if (args.command === "run" && arg === "--run") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--run requires a run id.");
+      }
+      args.runId = value;
+      index += 1;
       continue;
     }
 
@@ -182,6 +202,12 @@ function getRunsRoot(repoRoot = process.cwd()) {
   return path.join(path.resolve(repoRoot), ".cewp", "runs");
 }
 
+function validateRunId(runId) {
+  if (!/^\d{8}-\d{6}$/.test(runId)) {
+    throw new Error(`Invalid run id: ${runId}. Expected format: YYYYMMDD-HHMMSS.`);
+  }
+}
+
 function writeJson(filePath, value) {
   fs.writeFileSync(`${filePath}`, `${JSON.stringify(value, null, 2)}\n`);
 }
@@ -228,6 +254,113 @@ function findLatestRun(repoRoot = process.cwd()) {
     runId,
     runRoot: path.join(runsRoot, runId),
   };
+}
+
+function findRun(options = {}, repoRoot = process.cwd()) {
+  if (!options.runId) {
+    return findLatestRun(repoRoot);
+  }
+
+  validateRunId(options.runId);
+
+  const runsRoot = getRunsRoot(repoRoot);
+  const runRoot = path.join(runsRoot, options.runId);
+
+  if (!fs.existsSync(runRoot)) {
+    throw new Error(`CEWP run not found: ${options.runId}`);
+  }
+
+  return {
+    runId: options.runId,
+    runRoot,
+  };
+}
+
+function getRepoName(repoRoot = process.cwd()) {
+  return path.basename(path.resolve(repoRoot));
+}
+
+function quote(value) {
+  return `"${String(value).replace(/"/g, '\\"')}"`;
+}
+
+function isSafeBranchName(branch) {
+  if (!branch || typeof branch !== "string") {
+    return false;
+  }
+
+  if (
+    branch.startsWith("-") ||
+    branch.startsWith("/") ||
+    branch.endsWith("/") ||
+    branch.includes("..") ||
+    branch.includes("@{") ||
+    branch.endsWith(".lock") ||
+    /[\s\\~^:?\*[\x00-\x1f]/.test(branch)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function getTaskBranch(task, runId) {
+  const branch = task.branch || `cewp/${runId}/${task.id}`;
+
+  if (!isSafeBranchName(branch)) {
+    throw new Error(`Unsafe branch name for ${task.id}: ${branch}`);
+  }
+
+  return branch;
+}
+
+function isUnsafeWorktreePath(worktreePath) {
+  if (!worktreePath || typeof worktreePath !== "string") {
+    return true;
+  }
+
+  if (worktreePath.includes("\0")) {
+    return true;
+  }
+
+  const normalized = worktreePath.replace(/\\/g, "/");
+  const segments = normalized.split("/");
+
+  if (normalized.startsWith("../.cewp-worktrees/")) {
+    return segments.slice(2).some((segment) => segment === "..");
+  }
+
+  return segments.some((segment) => segment === "..");
+}
+
+function getTaskWorktreePath(task, runId, repoRoot) {
+  const repoName = getRepoName(repoRoot);
+  const worktreePath = task.targetWorktree || `../.cewp-worktrees/${repoName}/${runId}/${task.id}`;
+
+  if (isUnsafeWorktreePath(worktreePath)) {
+    throw new Error(`Unsafe targetWorktree for ${task.id}: ${worktreePath}`);
+  }
+
+  return worktreePath;
+}
+
+function resolveWorktreePath(worktreePath, repoRoot = process.cwd()) {
+  return path.resolve(repoRoot, worktreePath);
+}
+
+function readTaskFile(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    throw new Error(`Invalid task JSON: ${filePath}. ${error.message}`);
+  }
+}
+
+function readTasks(runRoot) {
+  return listFiles(path.join(runRoot, "tasks"), ".json").map((filePath) => ({
+    filePath,
+    task: readTaskFile(filePath),
+  }));
 }
 
 function makePlanTemplate(runId) {
@@ -668,8 +801,8 @@ function chooseLatestEvent(entries) {
     .at(-1);
 }
 
-function runStatus() {
-  const { runId, runRoot } = findLatestRun();
+function runStatus(options = {}) {
+  const { runId, runRoot } = findRun(options);
   const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
   const boardJson = readJsonIfExists(path.join(runRoot, "board.json"));
   const taskFiles = listFiles(path.join(runRoot, "tasks"), ".json");
@@ -723,8 +856,8 @@ function runStatus() {
   }
 }
 
-function runPrompts() {
-  const { runId, runRoot } = findLatestRun();
+function runPrompts(options = {}) {
+  const { runId, runRoot } = findRun(options);
   const promptsRoot = path.join(runRoot, "prompts");
 
   console.log("CEWP Coordinator Mode prompts");
@@ -748,14 +881,14 @@ function runPrompts() {
   console.log("    cewp run prompt reviewer");
 }
 
-function runPrompt(role) {
+function runPrompt(role, options = {}) {
   const supportedRoles = ["manager", "worker-a", "worker-b", "reviewer"];
 
   if (!supportedRoles.includes(role)) {
     throw new Error(`Unsupported run prompt role: ${role || "(missing)"}. Supported roles: ${supportedRoles.join(", ")}.`);
   }
 
-  const { runRoot } = findLatestRun();
+  const { runRoot } = findRun(options);
   const promptFile = path.join(runRoot, "prompts", `${role}-prompt.md`);
 
   if (!fs.existsSync(promptFile)) {
@@ -763,6 +896,69 @@ function runPrompt(role) {
   }
 
   process.stdout.write(fs.readFileSync(promptFile, "utf8"));
+}
+
+function formatList(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    return "none";
+  }
+
+  return value.join(", ");
+}
+
+function runWorktreesPlan(options = {}) {
+  const { runId, runRoot } = findRun(options);
+  const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
+  const repoRoot = (runJson && runJson.repoRoot) || process.cwd();
+  const taskEntries = readTasks(runRoot);
+
+  console.log("CEWP Coordinator Mode worktree plan");
+  console.log(`Run ID: ${runId}`);
+  console.log(`Run root: ${runRoot}`);
+  console.log(`Task count: ${taskEntries.length}`);
+  console.log("");
+
+  if (taskEntries.length === 0) {
+    console.log("No task files found. Ask the Manager to create tasks first.");
+    return;
+  }
+
+  const plans = taskEntries.map(({ task }) => {
+    if (!task.id) {
+      throw new Error("Task file is missing required field: id.");
+    }
+
+    const branch = getTaskBranch(task, runId);
+    const targetWorktree = getTaskWorktreePath(task, runId, repoRoot);
+    const resolvedPath = resolveWorktreePath(targetWorktree, repoRoot);
+
+    return {
+      task,
+      branch,
+      targetWorktree,
+      resolvedPath,
+      targetExists: fs.existsSync(resolvedPath),
+    };
+  });
+
+  for (const plan of plans) {
+    console.log(`Task: ${plan.task.id}`);
+    console.log(`  Title: ${plan.task.title || "(untitled)"}`);
+    console.log(`  Assigned role: ${plan.task.assignedRole || "unassigned"}`);
+    console.log(`  Status: ${plan.task.status || "unknown"}`);
+    console.log(`  Branch: ${plan.branch}`);
+    console.log(`  Target worktree: ${plan.targetWorktree}`);
+    console.log(`  Resolved path: ${plan.resolvedPath}`);
+    console.log(`  Allowed files: ${formatList(plan.task.allowedFiles)}`);
+    console.log(`  Forbidden files: ${formatList(plan.task.forbiddenFiles)}`);
+    console.log(`  Target path exists: ${plan.targetExists ? "yes" : "no"}`);
+    console.log("");
+  }
+
+  console.log("Suggested manual commands:");
+  for (const plan of plans) {
+    console.log(`  git worktree add ${quote(plan.resolvedPath)} -b ${quote(plan.branch)}`);
+  }
 }
 
 function runCommand(options) {
@@ -777,17 +973,22 @@ function runCommand(options) {
   }
 
   if (options.subcommand === "status") {
-    runStatus();
+    runStatus(options);
     return;
   }
 
   if (options.subcommand === "prompts") {
-    runPrompts();
+    runPrompts(options);
     return;
   }
 
   if (options.subcommand === "prompt") {
-    runPrompt(options.role);
+    runPrompt(options.role, options);
+    return;
+  }
+
+  if (options.subcommand === "worktrees" && options.action === "plan") {
+    runWorktreesPlan(options);
     return;
   }
 

@@ -79,6 +79,22 @@ cewp run prompts
 cewp run status
 ```
 
+Run commands use the latest run by default. Use `--run <id>` to inspect a specific run:
+
+```bash
+cewp run status --run 20260528-232250
+cewp run prompts --run 20260528-232250
+```
+
+After a Manager creates task files, `cewp run worktrees plan` can preview suggested manual worktrees:
+
+```bash
+cewp run worktrees plan
+cewp run worktrees plan --run 20260528-232250
+```
+
+This command only prints suggested `git worktree add` commands. It does not create worktrees or run Codex.
+
 Runtime state is written under:
 
 ```txt
