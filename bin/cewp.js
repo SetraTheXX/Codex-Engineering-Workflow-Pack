@@ -685,7 +685,8 @@ function runStatus() {
   console.log("CEWP Coordinator Mode status");
   console.log(`Run ID: ${runId}`);
   console.log(`Run root: ${runRoot}`);
-  console.log(`Run status: ${(runJson && runJson.status) || (boardJson && boardJson.status) || "unknown"}`);
+  console.log(`Run status: ${(runJson && runJson.status) || "unknown"}`);
+  console.log(`Board status: ${(boardJson && boardJson.status) || "unknown"}`);
   console.log("");
   console.log("Role status:");
 
@@ -728,6 +729,7 @@ function runPrompts() {
 
   console.log("CEWP Coordinator Mode prompts");
   console.log(`Run ID: ${runId}`);
+  console.log("Paste each prompt into its matching Warp pane.");
   console.log("");
   console.log("Recommended Warp panes:");
   console.log("  Pane 1: Manager");
