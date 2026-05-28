@@ -67,6 +67,28 @@ Planned commands:
 - interactive mode
 - symlink/shared setup
 
+## Coordinator Mode Runtime
+
+Coordinator Mode is separate from installing the 10 workflow skills. Skill install copies reusable Codex instructions into `.agents/skills/`; Coordinator Mode creates local runtime files for a manual multi-pane coordination session.
+
+Start a local coordination run from a repo:
+
+```bash
+cewp run init --workers 2 --reviewer
+cewp run prompts
+cewp run status
+```
+
+Runtime state is written under:
+
+```txt
+.cewp/runs/<run-id>/
+```
+
+This folder contains local board, task, prompt, report, review, event, and handoff files. It is not package content and should not be committed. Add `.cewp/` to the project `.gitignore` for repos that use Coordinator Mode.
+
+Coordinator Mode v0.2 is manual orchestration only. It does not spawn Codex processes, automate terminal input, merge, push, publish, or create worktrees.
+
 ## Repo Sharing vs Local-only
 
 If `.agents/skills/` should be shared with the project or team, commit it to the repo.

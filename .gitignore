@@ -31,6 +31,9 @@ tmp/
 temp/
 .cache/
 
+# CEWP local runtime state
+.cewp/
+
 # Local env and secrets
 .env
 .env.*
