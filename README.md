@@ -88,6 +88,64 @@ Planned CLI commands:
 - interactive mode
 - symlink/shared setup
 
+## Coordinator Mode
+
+Coordinator Mode is a v0.2 CLI skeleton for manual multi-pane orchestration. It helps a Manager Codex, Worker Codex sessions, and a Reviewer/Debugger Codex coordinate through local files while the user stays in control.
+
+Start a local run:
+
+```bash
+cewp run init --workers 2 --reviewer
+```
+
+Then open Warp or another terminal with separate panes:
+
+```txt
+Pane 1: Manager Codex
+Pane 2: Worker A Codex
+Pane 3: Worker B Codex
+Pane 4: Reviewer Codex
+```
+
+Print prompt locations and paste commands:
+
+```bash
+cewp run prompts
+cewp run prompt manager
+cewp run prompt worker-a
+cewp run prompt worker-b
+cewp run prompt reviewer
+```
+
+Check the latest run:
+
+```bash
+cewp run status
+```
+
+Runtime state lives under:
+
+```txt
+.cewp/runs/<run-id>/
+```
+
+This directory is local runtime state and should not be committed. `board.json` is Manager/CLI-owned, not a multi-writer file. Workers read board/tasks and write only their own report and event files. The reviewer writes only review files and its own event log.
+
+v0.2 non-goals:
+
+- no Codex process spawning,
+- no terminal input automation,
+- no auto merge,
+- no auto push,
+- no same-working-tree parallel worker edits,
+- no automatic worktree creation.
+
+Parallel workers must not edit the same working tree. v0.2 only recommends worktree paths such as:
+
+```txt
+../.cewp-worktrees/<repo-name>/<run-id>/<task-id>/
+```
+
 ## Install Modes
 
 ### Repo Install
