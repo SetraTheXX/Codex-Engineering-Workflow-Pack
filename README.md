@@ -67,6 +67,13 @@ cewp init --mode repo --target "/path/to/your/repo"
 cewp init --mode repo --target "/path/to/your/repo" --force
 ```
 
+Check an install:
+
+```bash
+cewp doctor
+cewp list
+```
+
 Global skill install:
 
 ```bash
@@ -76,7 +83,6 @@ cewp init --mode global --force
 
 Planned CLI commands:
 
-- `cewp link`
 - `cewp update`
 - `cewp uninstall`
 - interactive mode
@@ -183,6 +189,12 @@ Use tdd to implement the first issue with a failing regression test first.
 
 ```txt
 Use diagnose to debug this failing test.
+```
+
+Check whether the pack is installed correctly:
+
+```txt
+Run cewp doctor in this repo.
 ```
 
 ## Search Tools

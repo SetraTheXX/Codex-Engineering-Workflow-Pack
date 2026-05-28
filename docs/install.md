@@ -35,6 +35,13 @@ cewp init --mode repo --target "/path/to/target-repo"
 cewp init --mode repo --target "/path/to/target-repo" --force
 ```
 
+Check an install:
+
+```bash
+cewp doctor
+cewp list
+```
+
 Global skill install:
 
 ```bash
@@ -50,10 +57,11 @@ MVP supported commands:
 - `cewp init --mode repo --target "<path>"`
 - `cewp init --mode repo --target "<path>" --force`
 - `cewp init --mode global --force`
+- `cewp doctor`
+- `cewp list`
 
 Planned commands:
 
-- `cewp link`
 - `cewp update`
 - `cewp uninstall`
 - interactive mode
@@ -239,6 +247,12 @@ If using global install, confirm the skills exist under:
 
 ```txt
 $HOME/.agents/skills/<skill-name>/SKILL.md
+```
+
+You can also run:
+
+```bash
+cewp doctor
 ```
 
 ### Permission denied on install.sh

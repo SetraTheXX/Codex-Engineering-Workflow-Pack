@@ -22,10 +22,12 @@ function usage() {
 
 Usage:
   cewp init [--mode repo|global] [--target <path>] [--force]
+  cewp list [--mode repo|global] [--target <path>]
+  cewp doctor [--mode repo|global] [--target <path>]
   cewp --help
 
 Defaults:
-  cewp init = cewp init --mode repo --target <current working directory>
+  repo mode defaults to the current working directory when --target is omitted
 
 Examples:
   cewp init
@@ -34,6 +36,8 @@ Examples:
   cewp init --mode repo --target "/path/to/repo" --force
   cewp init --mode global
   cewp init --mode global --force
+  cewp list
+  cewp doctor --mode repo --target "/path/to/repo"
 `);
 }
 
@@ -62,7 +66,11 @@ function parseArgs(argv) {
     }
 
     if (arg === "--mode") {
-      args.mode = argv[index + 1];
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--mode requires repo or global.");
+      }
+      args.mode = value;
       index += 1;
       continue;
     }
@@ -104,7 +112,7 @@ function copySkill(sourceSkill, targetSkill, force) {
   return "copied";
 }
 
-function init(options) {
+function resolveTarget(options, { announceDefault = false } = {}) {
   if (options.mode !== "repo" && options.mode !== "global") {
     throw new Error("--mode must be repo or global.");
   }
@@ -113,16 +121,9 @@ function init(options) {
     throw new Error("--target is only supported with --mode repo.");
   }
 
-  const packageRoot = path.resolve(__dirname, "..");
-  const sourceRoot = path.join(packageRoot, ".agents", "skills");
-
-  if (!fs.existsSync(sourceRoot)) {
-    throw new Error(`Source skills folder not found: ${sourceRoot}`);
-  }
-
   const repoTarget = path.resolve(options.target || process.cwd());
 
-  if (options.mode === "repo" && !options.targetProvided) {
+  if (options.mode === "repo" && !options.targetProvided && announceDefault) {
     console.log(`No --target provided. Installing into current directory: ${repoTarget}`);
   }
 
@@ -130,10 +131,20 @@ function init(options) {
     throw new Error(`Target repo path does not exist: ${repoTarget}`);
   }
 
-  const targetRoot =
-    options.mode === "global"
-      ? path.join(os.homedir(), ".agents", "skills")
-      : path.join(repoTarget, ".agents", "skills");
+  return options.mode === "global"
+    ? path.join(os.homedir(), ".agents", "skills")
+    : path.join(repoTarget, ".agents", "skills");
+}
+
+function init(options) {
+  const packageRoot = path.resolve(__dirname, "..");
+  const sourceRoot = path.join(packageRoot, ".agents", "skills");
+
+  if (!fs.existsSync(sourceRoot)) {
+    throw new Error(`Source skills folder not found: ${sourceRoot}`);
+  }
+
+  const targetRoot = resolveTarget(options, { announceDefault: true });
 
   fs.mkdirSync(targetRoot, { recursive: true });
 
@@ -170,6 +181,70 @@ function init(options) {
   console.log("Restart or reload Codex so it can discover installed skills.");
 }
 
+function getSkillStatus(targetRoot) {
+  return SKILLS.map((skill) => {
+    const skillRoot = path.join(targetRoot, skill);
+    const skillFile = path.join(skillRoot, "SKILL.md");
+    return {
+      skill,
+      hasDirectory: fs.existsSync(skillRoot),
+      hasSkillFile: fs.existsSync(skillFile),
+    };
+  });
+}
+
+function list(options) {
+  const targetRoot = resolveTarget(options);
+  const statuses = getSkillStatus(targetRoot);
+
+  console.log(`Skills target: ${targetRoot}`);
+  console.log("");
+
+  for (const status of statuses) {
+    const state = status.hasDirectory && status.hasSkillFile ? "OK" : "MISSING";
+    console.log(`[${state}] ${status.skill}`);
+  }
+}
+
+function doctor(options) {
+  const targetRoot = resolveTarget(options);
+  const statuses = getSkillStatus(targetRoot);
+  const missing = statuses.filter((status) => !status.hasDirectory || !status.hasSkillFile);
+
+  console.log("Codex Engineering Workflow Pack doctor");
+  console.log(`Mode: ${options.mode}`);
+  console.log(`Target: ${targetRoot}`);
+  console.log("");
+
+  if (!fs.existsSync(targetRoot)) {
+    console.log("Status: FAIL");
+    console.log("Reason: target skills directory does not exist.");
+    console.log("");
+    console.log("Run `cewp init` for repo install or `cewp init --mode global` for global install.");
+    process.exitCode = 1;
+    return;
+  }
+
+  for (const status of statuses) {
+    const state = status.hasDirectory && status.hasSkillFile ? "OK" : "MISSING";
+    console.log(`[${state}] ${status.skill}`);
+  }
+
+  console.log("");
+
+  if (missing.length > 0) {
+    console.log("Status: FAIL");
+    console.log(`Missing or incomplete skills: ${missing.map((status) => status.skill).join(", ")}`);
+    console.log("Run `cewp init --force` to reinstall missing skill files.");
+    process.exitCode = 1;
+    return;
+  }
+
+  console.log("Status: PASS");
+  console.log("All 10 skills are installed with SKILL.md files.");
+  console.log("Restart or reload Codex if newly installed skills are not visible.");
+}
+
 function main() {
   try {
     const args = parseArgs(process.argv.slice(2));
@@ -179,11 +254,24 @@ function main() {
       return;
     }
 
-    if (args.command !== "init") {
-      throw new Error(`Unsupported command: ${args.command}`);
+    if (args.command === "init") {
+      init(args);
+      return;
     }
 
-    init(args);
+    if (args.command === "list") {
+      list(args);
+      return;
+    }
+
+    if (args.command === "doctor") {
+      doctor(args);
+      return;
+    }
+
+    if (!["init", "list", "doctor"].includes(args.command)) {
+      throw new Error(`Unsupported command: ${args.command}`);
+    }
   } catch (error) {
     console.error(`Error: ${error.message}`);
     console.error("");
