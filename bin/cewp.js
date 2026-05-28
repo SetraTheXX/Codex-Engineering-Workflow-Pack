@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const childProcess = require("node:child_process");
 
 const SKILLS = [
   "setup-codex-engineering-workflow",
@@ -29,6 +30,7 @@ Usage:
   cewp run prompts
   cewp run prompt <manager|worker-a|worker-b|reviewer>
   cewp run worktrees plan
+  cewp run worktrees create [--dry-run]
   cewp --help
 
 Defaults:
@@ -50,6 +52,7 @@ Examples:
   cewp run prompts
   cewp run prompt manager --run 20260528-232250
   cewp run worktrees plan --run 20260528-232250
+  cewp run worktrees create --run 20260528-232250 --dry-run
 `);
 }
 
@@ -65,6 +68,7 @@ function parseArgs(argv) {
     targetProvided: false,
     force: false,
     help: false,
+    dryRun: false,
     workers: undefined,
     reviewer: false,
   };
@@ -118,6 +122,11 @@ function parseArgs(argv) {
 
     if (arg === "--force") {
       args.force = true;
+      continue;
+    }
+
+    if (args.command === "run" && arg === "--dry-run") {
+      args.dryRun = true;
       continue;
     }
 
@@ -361,6 +370,79 @@ function readTasks(runRoot) {
     filePath,
     task: readTaskFile(filePath),
   }));
+}
+
+function runGit(args, cwd) {
+  return childProcess.spawnSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    shell: false,
+  });
+}
+
+function getGitOutput(args, cwd) {
+  const result = runGit(args, cwd);
+
+  if (result.error) {
+    throw new Error(`Failed to run git ${args.join(" ")}: ${result.error.message}`);
+  }
+
+  return result;
+}
+
+function isRepoDirty(repoRoot) {
+  const result = getGitOutput(["status", "--porcelain"], repoRoot);
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to inspect git status: ${(result.stderr || result.stdout || "").trim()}`);
+  }
+
+  return result.stdout.trim().length > 0;
+}
+
+function branchExists(repoRoot, branch) {
+  const result = getGitOutput(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], repoRoot);
+  return result.status === 0;
+}
+
+function buildWorktreePlans(runId, runRoot) {
+  const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
+  const repoRoot = (runJson && runJson.repoRoot) || process.cwd();
+  const taskEntries = readTasks(runRoot);
+
+  const plans = taskEntries.map(({ task }) => {
+    if (!task.id) {
+      throw new Error("Task file is missing required field: id.");
+    }
+
+    const branch = getTaskBranch(task, runId);
+    const targetWorktree = getTaskWorktreePath(task, runId, repoRoot);
+    const resolvedPath = resolveWorktreePath(targetWorktree, repoRoot);
+
+    return {
+      task,
+      branch,
+      targetWorktree,
+      resolvedPath,
+      targetExists: fs.existsSync(resolvedPath),
+      branchExists: branchExists(repoRoot, branch),
+    };
+  });
+
+  return {
+    repoRoot,
+    taskEntries,
+    plans,
+  };
+}
+
+function appendRunEvent(runRoot, role, event) {
+  const eventsRoot = path.join(runRoot, "events");
+  fs.mkdirSync(eventsRoot, { recursive: true });
+  fs.appendFileSync(
+    path.join(eventsRoot, `${role}.jsonl`),
+    `${JSON.stringify({ timestamp: new Date().toISOString(), role, ...event })}\n`,
+  );
 }
 
 function makePlanTemplate(runId) {
@@ -908,9 +990,7 @@ function formatList(value) {
 
 function runWorktreesPlan(options = {}) {
   const { runId, runRoot } = findRun(options);
-  const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
-  const repoRoot = (runJson && runJson.repoRoot) || process.cwd();
-  const taskEntries = readTasks(runRoot);
+  const { taskEntries, plans } = buildWorktreePlans(runId, runRoot);
 
   console.log("CEWP Coordinator Mode worktree plan");
   console.log(`Run ID: ${runId}`);
@@ -923,24 +1003,6 @@ function runWorktreesPlan(options = {}) {
     return;
   }
 
-  const plans = taskEntries.map(({ task }) => {
-    if (!task.id) {
-      throw new Error("Task file is missing required field: id.");
-    }
-
-    const branch = getTaskBranch(task, runId);
-    const targetWorktree = getTaskWorktreePath(task, runId, repoRoot);
-    const resolvedPath = resolveWorktreePath(targetWorktree, repoRoot);
-
-    return {
-      task,
-      branch,
-      targetWorktree,
-      resolvedPath,
-      targetExists: fs.existsSync(resolvedPath),
-    };
-  });
-
   for (const plan of plans) {
     console.log(`Task: ${plan.task.id}`);
     console.log(`  Title: ${plan.task.title || "(untitled)"}`);
@@ -952,6 +1014,7 @@ function runWorktreesPlan(options = {}) {
     console.log(`  Allowed files: ${formatList(plan.task.allowedFiles)}`);
     console.log(`  Forbidden files: ${formatList(plan.task.forbiddenFiles)}`);
     console.log(`  Target path exists: ${plan.targetExists ? "yes" : "no"}`);
+    console.log(`  Branch exists: ${plan.branchExists ? "yes" : "no"}`);
     console.log("");
   }
 
@@ -959,6 +1022,155 @@ function runWorktreesPlan(options = {}) {
   for (const plan of plans) {
     console.log(`  git worktree add ${quote(plan.resolvedPath)} -b ${quote(plan.branch)}`);
   }
+}
+
+function getWorktreePreflightErrors(plans) {
+  const errors = [];
+  const seenPaths = new Map();
+  const seenBranches = new Map();
+
+  for (const plan of plans) {
+    const pathKey = process.platform === "win32" ? plan.resolvedPath.toLowerCase() : plan.resolvedPath;
+
+    if (seenPaths.has(pathKey)) {
+      errors.push(`${plan.task.id}: duplicate target path also used by ${seenPaths.get(pathKey)}: ${plan.resolvedPath}`);
+    } else {
+      seenPaths.set(pathKey, plan.task.id);
+    }
+
+    if (seenBranches.has(plan.branch)) {
+      errors.push(`${plan.task.id}: duplicate branch also used by ${seenBranches.get(plan.branch)}: ${plan.branch}`);
+    } else {
+      seenBranches.set(plan.branch, plan.task.id);
+    }
+
+    if (plan.targetExists) {
+      errors.push(`${plan.task.id}: target path already exists: ${plan.resolvedPath}`);
+    }
+
+    if (plan.branchExists) {
+      errors.push(`${plan.task.id}: branch already exists: ${plan.branch}`);
+    }
+  }
+
+  return errors;
+}
+
+function printWorktreeCreatePlan({ runId, runRoot, repoRoot, plans, dryRun }) {
+  console.log("CEWP Coordinator Mode worktree create");
+  console.log(`Run ID: ${runId}`);
+  console.log(`Run root: ${runRoot}`);
+  console.log(`Repo root: ${repoRoot}`);
+  console.log(`Mode: ${dryRun ? "dry-run" : "create"}`);
+  console.log(`Task count: ${plans.length}`);
+  console.log("");
+
+  for (const plan of plans) {
+    console.log(`Task: ${plan.task.id}`);
+    console.log(`  Branch: ${plan.branch}`);
+    console.log(`  Path: ${plan.resolvedPath}`);
+    console.log(`  Target path exists: ${plan.targetExists ? "yes" : "no"}`);
+    console.log(`  Branch exists: ${plan.branchExists ? "yes" : "no"}`);
+    console.log(`  Command: git worktree add ${quote(plan.resolvedPath)} -b ${quote(plan.branch)}`);
+    console.log("");
+  }
+}
+
+function writeWorktreesRegistry(runRoot, runId, created) {
+  writeJson(path.join(runRoot, "worktrees.json"), {
+    schemaVersion: 1,
+    runId,
+    createdAt: new Date().toISOString(),
+    worktrees: created.map((entry) => ({
+      taskId: entry.task.id,
+      assignedRole: entry.task.assignedRole || "unassigned",
+      branch: entry.branch,
+      path: entry.resolvedPath,
+      status: "created",
+    })),
+  });
+}
+
+function runWorktreesCreate(options = {}) {
+  const { runId, runRoot } = findRun(options);
+  const { repoRoot, taskEntries, plans } = buildWorktreePlans(runId, runRoot);
+
+  printWorktreeCreatePlan({
+    runId,
+    runRoot,
+    repoRoot,
+    plans,
+    dryRun: options.dryRun,
+  });
+
+  if (taskEntries.length === 0) {
+    console.log("No task files found. Ask the Manager to create tasks first.");
+    return;
+  }
+
+  const preflightErrors = getWorktreePreflightErrors(plans);
+
+  if (options.dryRun) {
+    console.log(`Main repo dirty: ${isRepoDirty(repoRoot) ? "yes" : "no"}`);
+    console.log("");
+
+    if (preflightErrors.length > 0) {
+      console.log("Preflight issues:");
+      for (const error of preflightErrors) {
+        console.log(`  - ${error}`);
+      }
+    } else {
+      console.log("Dry run only. No worktrees created and no registry written.");
+    }
+
+    return;
+  }
+
+  if (isRepoDirty(repoRoot)) {
+    throw new Error("Cannot create worktrees while main repo has uncommitted changes.");
+  }
+
+  if (preflightErrors.length > 0) {
+    throw new Error(`Worktree preflight failed:\n${preflightErrors.map((error) => `- ${error}`).join("\n")}`);
+  }
+
+  const created = [];
+
+  for (const plan of plans) {
+    const result = getGitOutput(["worktree", "add", plan.resolvedPath, "-b", plan.branch], repoRoot);
+
+    if (result.status !== 0) {
+      const details = (result.stderr || result.stdout || "").trim();
+      throw new Error(
+        `Failed to create worktree for ${plan.task.id}. Created before failure: ${created.length}. ${details}`,
+      );
+    }
+
+    created.push(plan);
+  }
+
+  writeWorktreesRegistry(runRoot, runId, created);
+  appendRunEvent(runRoot, "cli", {
+    event: "worktrees-created",
+    runId,
+    count: created.length,
+    worktrees: created.map((plan) => ({
+      taskId: plan.task.id,
+      branch: plan.branch,
+      path: plan.resolvedPath,
+    })),
+  });
+
+  console.log(`Created worktree count: ${created.length}`);
+  for (const plan of created) {
+    console.log(`  ${plan.task.id}: created`);
+    console.log(`    branch: ${plan.branch}`);
+    console.log(`    path: ${plan.resolvedPath}`);
+  }
+  console.log("");
+  console.log("Next:");
+  console.log("  cewp run worktrees plan");
+  console.log("  cewp run worktrees status (planned)");
 }
 
 function runCommand(options) {
@@ -989,6 +1201,11 @@ function runCommand(options) {
 
   if (options.subcommand === "worktrees" && options.action === "plan") {
     runWorktreesPlan(options);
+    return;
+  }
+
+  if (options.subcommand === "worktrees" && options.action === "create") {
+    runWorktreesCreate(options);
     return;
   }
 

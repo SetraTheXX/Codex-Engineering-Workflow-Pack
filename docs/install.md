@@ -95,6 +95,19 @@ cewp run worktrees plan --run 20260528-232250
 
 This command only prints suggested `git worktree add` commands. It does not create worktrees or run Codex.
 
+`cewp run worktrees create` is also part of Coordinator Mode runtime. It prepares git worktree directories for worker sessions, but it does not start worker agents, merge, push, or publish:
+
+```bash
+cewp run worktrees create --dry-run
+cewp run worktrees create --run 20260528-232250
+```
+
+Cleanup is still manual in this slice:
+
+```bash
+git worktree remove "<path>"
+```
+
 Runtime state is written under:
 
 ```txt
@@ -103,7 +116,7 @@ Runtime state is written under:
 
 This folder contains generated board, task, prompt, report, review, event, and handoff files for one coordination run. These files are runtime artifacts, not installed skills or package content, and should not be committed. Add `.cewp/` to the project `.gitignore` for repos that use Coordinator Mode.
 
-Coordinator Mode v0.2 is manual orchestration only. It does not spawn Codex processes, automate terminal input, merge, push, publish, or create worktrees.
+Coordinator Mode remains manual orchestration. It does not spawn Codex processes, automate terminal input, merge, push, or publish.
 
 ## Repo Sharing vs Local-only
 

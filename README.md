@@ -141,6 +141,15 @@ cewp run worktrees plan --run 20260528-232250
 
 `worktrees plan` only reads task files and prints suggested `git worktree add` commands. It does not create worktrees, merge, push, or run Codex.
 
+Create the planned git worktrees after reviewing the plan:
+
+```bash
+cewp run worktrees create --dry-run
+cewp run worktrees create --run 20260528-232250
+```
+
+`worktrees create` only prepares git worktree directories for worker sessions. It does not start Codex, merge, push, or publish.
+
 Runtime state lives under:
 
 ```txt
