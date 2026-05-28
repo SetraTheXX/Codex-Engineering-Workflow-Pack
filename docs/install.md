@@ -102,7 +102,15 @@ cewp run worktrees create --dry-run
 cewp run worktrees create --run 20260528-232250
 ```
 
-Cleanup is still manual in this slice:
+After `create`, inspect registered worktrees with:
+
+```bash
+cewp run worktrees status
+```
+
+This helper reads `worktrees.json`, reports clean/dirty state, and warns when changed files fall outside `allowedFiles` or match `forbiddenFiles`. It does not merge, push, publish, or remove worktrees.
+
+Cleanup is still manual until the cleanup helper slice:
 
 ```bash
 git worktree remove "<path>"

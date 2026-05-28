@@ -31,6 +31,7 @@ Usage:
   cewp run prompt <manager|worker-a|worker-b|reviewer>
   cewp run worktrees plan
   cewp run worktrees create [--dry-run]
+  cewp run worktrees status
   cewp --help
 
 Defaults:
@@ -53,6 +54,7 @@ Examples:
   cewp run prompt manager --run 20260528-232250
   cewp run worktrees plan --run 20260528-232250
   cewp run worktrees create --run 20260528-232250 --dry-run
+  cewp run worktrees status --run 20260528-232250
 `);
 }
 
@@ -372,6 +374,14 @@ function readTasks(runRoot) {
   }));
 }
 
+function readJsonFile(filePath, label) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    throw new Error(`Invalid ${label} JSON: ${filePath}. ${error.message}`);
+  }
+}
+
 function runGit(args, cwd) {
   return childProcess.spawnSync("git", args, {
     cwd,
@@ -403,6 +413,34 @@ function isRepoDirty(repoRoot) {
 function branchExists(repoRoot, branch) {
   const result = getGitOutput(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], repoRoot);
   return result.status === 0;
+}
+
+function getGitStatusShort(worktreePath) {
+  const result = getGitOutput(["status", "--short"], worktreePath);
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to inspect git status for ${worktreePath}: ${(result.stderr || result.stdout || "").trim()}`);
+  }
+
+  return result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter(Boolean);
+}
+
+function getGitBranchName(worktreePath) {
+  const result = getGitOutput(["branch", "--show-current"], worktreePath);
+
+  if (result.status !== 0) {
+    return "unknown";
+  }
+
+  return result.stdout.trim() || "detached";
+}
+
+function isGitWorktreePath(worktreePath) {
+  const result = getGitOutput(["rev-parse", "--is-inside-work-tree"], worktreePath);
+  return result.status === 0 && result.stdout.trim() === "true";
 }
 
 function buildWorktreePlans(runId, runRoot) {
@@ -1091,6 +1129,152 @@ function writeWorktreesRegistry(runRoot, runId, created) {
   });
 }
 
+function readWorktreesRegistry(runRoot) {
+  const registryPath = path.join(runRoot, "worktrees.json");
+
+  if (!fs.existsSync(registryPath)) {
+    return undefined;
+  }
+
+  const registry = readJsonFile(registryPath, "worktrees registry");
+
+  if (!Array.isArray(registry.worktrees)) {
+    throw new Error(`Invalid worktrees registry: ${registryPath}. Missing worktrees array.`);
+  }
+
+  return registry;
+}
+
+function getTaskMap(runRoot) {
+  return new Map(readTasks(runRoot).map(({ task }) => [task.id, task]));
+}
+
+function parseChangedFile(statusLine) {
+  const rawPath = statusLine.slice(3).trim();
+  const renameParts = rawPath.split(" -> ");
+  return renameParts[renameParts.length - 1].replace(/\\/g, "/");
+}
+
+function pathMatchesPattern(filePath, pattern) {
+  const normalizedFile = filePath.replace(/\\/g, "/");
+  const normalizedPattern = String(pattern).replace(/\\/g, "/");
+
+  if (normalizedPattern.endsWith("/**")) {
+    const prefix = normalizedPattern.slice(0, -3);
+    return normalizedFile === prefix || normalizedFile.startsWith(`${prefix}/`);
+  }
+
+  return normalizedFile === normalizedPattern;
+}
+
+function findScopeWarnings(taskId, changedFiles, task) {
+  const warnings = [];
+  const allowedFiles = Array.isArray(task.allowedFiles) ? task.allowedFiles : [];
+  const forbiddenFiles = Array.isArray(task.forbiddenFiles) ? task.forbiddenFiles : [];
+
+  for (const filePath of changedFiles) {
+    if (allowedFiles.length > 0 && !allowedFiles.some((pattern) => pathMatchesPattern(filePath, pattern))) {
+      warnings.push(`${taskId} changed file outside allowedFiles: ${filePath}`);
+    }
+
+    if (forbiddenFiles.some((pattern) => pathMatchesPattern(filePath, pattern))) {
+      warnings.push(`${taskId} changed forbidden file: ${filePath}`);
+    }
+  }
+
+  return warnings;
+}
+
+function runWorktreesStatus(options = {}) {
+  const { runId, runRoot } = findRun(options);
+  const registry = readWorktreesRegistry(runRoot);
+
+  if (!registry) {
+    throw new Error("No worktrees.json found. Run cewp run worktrees create first.");
+  }
+
+  const taskMap = getTaskMap(runRoot);
+  const warnings = [];
+
+  console.log("CEWP Coordinator Mode worktree status");
+  console.log(`Run ID: ${runId}`);
+  console.log(`Run root: ${runRoot}`);
+  console.log("");
+  console.log(`Worktrees: ${registry.worktrees.length}`);
+  console.log("");
+
+  for (const entry of registry.worktrees) {
+    const taskId = entry.taskId || "unknown-task";
+    const task = taskMap.get(taskId);
+    const assignedRole = (task && task.assignedRole) || entry.assignedRole || "unassigned";
+    const exists = Boolean(entry.path && fs.existsSync(entry.path));
+    const isGitWorktree = exists ? isGitWorktreePath(entry.path) : false;
+
+    console.log(`${taskId} / ${assignedRole}`);
+    console.log(`  Branch: ${entry.branch || "unknown"}`);
+    console.log(`  Path: ${entry.path || "unknown"}`);
+    console.log(`  Exists: ${exists ? "yes" : "no"}`);
+    console.log(`  Git worktree: ${isGitWorktree ? "yes" : "no"}`);
+
+    if (!task) {
+      warnings.push(`${taskId} has no matching task JSON.`);
+    } else {
+      console.log(`  Task status: ${task.status || "unknown"}`);
+      console.log(`  Allowed files: ${formatList(task.allowedFiles)}`);
+      console.log(`  Forbidden files: ${formatList(task.forbiddenFiles)}`);
+    }
+
+    if (!exists) {
+      console.log("  Git status: missing");
+      console.log("  Changed files: none");
+      console.log("  Scope: WARN");
+      warnings.push(`${taskId} worktree path is missing: ${entry.path || "unknown"}`);
+      console.log("");
+      continue;
+    }
+
+    if (!isGitWorktree) {
+      console.log("  Git status: not a git worktree");
+      console.log("  Changed files: none");
+      console.log("  Scope: WARN");
+      warnings.push(`${taskId} path is not a git worktree: ${entry.path}`);
+      console.log("");
+      continue;
+    }
+
+    const branchName = getGitBranchName(entry.path);
+    const statusLines = getGitStatusShort(entry.path);
+    const changedFiles = statusLines.map(parseChangedFile);
+    const scopeWarnings = task ? findScopeWarnings(taskId, changedFiles, task) : [];
+    warnings.push(...scopeWarnings);
+
+    console.log(`  Current branch: ${branchName}`);
+    console.log(`  Git status: ${statusLines.length === 0 ? "clean" : "dirty"}`);
+
+    if (statusLines.length === 0) {
+      console.log("  Changed files: none");
+    } else {
+      console.log("  Changed files:");
+      for (const line of statusLines) {
+        console.log(`    ${line}`);
+      }
+    }
+
+    console.log(`  Scope: ${scopeWarnings.length === 0 ? "OK" : "WARN"}`);
+    console.log("");
+  }
+
+  console.log("Warnings:");
+
+  if (warnings.length === 0) {
+    console.log("  none");
+  } else {
+    for (const warning of warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
 function runWorktreesCreate(options = {}) {
   const { runId, runRoot } = findRun(options);
   const { repoRoot, taskEntries, plans } = buildWorktreePlans(runId, runRoot);
@@ -1170,7 +1354,7 @@ function runWorktreesCreate(options = {}) {
   console.log("");
   console.log("Next:");
   console.log("  cewp run worktrees plan");
-  console.log("  cewp run worktrees status (planned)");
+  console.log("  cewp run worktrees status");
 }
 
 function runCommand(options) {
@@ -1206,6 +1390,11 @@ function runCommand(options) {
 
   if (options.subcommand === "worktrees" && options.action === "create") {
     runWorktreesCreate(options);
+    return;
+  }
+
+  if (options.subcommand === "worktrees" && options.action === "status") {
+    runWorktreesStatus(options);
     return;
   }
 

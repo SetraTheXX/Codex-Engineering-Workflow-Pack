@@ -150,6 +150,15 @@ cewp run worktrees create --run 20260528-232250
 
 `worktrees create` only prepares git worktree directories for worker sessions. It does not start Codex, merge, push, or publish.
 
+Inspect registered worktrees:
+
+```bash
+cewp run worktrees status
+cewp run worktrees status --run 20260528-232250
+```
+
+`worktrees status` reports clean/dirty state and allowed/forbidden file warnings. It is read-only and does not merge, push, publish, or remove worktrees.
+
 Runtime state lives under:
 
 ```txt
