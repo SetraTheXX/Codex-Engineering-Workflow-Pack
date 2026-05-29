@@ -231,6 +231,14 @@ cewp run dispatch exec workers --adapter codex-exec --yes --timeout 120
 
 `workers` runs `worker-a` then `worker-b`. It is not parallel, does not run the reviewer, and stops before `worker-b` if `worker-a` fails.
 
+Run the guarded sequential dispatch pipeline:
+
+```bash
+cewp run dispatch pipeline --adapter codex-exec --yes --timeout 120
+```
+
+`pipeline` runs dispatch check, refreshes dispatch prompts, executes workers sequentially, collects a review packet, and executes the reviewer. It does not finalize, clean up, merge, push, or publish; finalize remains a separate user command.
+
 Collect reviewer context into one local packet:
 
 ```bash
