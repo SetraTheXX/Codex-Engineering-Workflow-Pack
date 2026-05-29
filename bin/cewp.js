@@ -33,6 +33,7 @@ Usage:
   cewp run worktrees create [--dry-run]
   cewp run worktrees status
   cewp run dispatch plan
+  cewp run dispatch check
   cewp run collect
   cewp run finalize [--dry-run]
   cewp run cleanup [--yes]
@@ -60,6 +61,7 @@ Examples:
   cewp run worktrees create --run 20260528-232250 --dry-run
   cewp run worktrees status --run 20260528-232250
   cewp run dispatch plan --run 20260528-232250
+  cewp run dispatch check --run 20260528-232250
   cewp run collect --run 20260528-232250
   cewp run finalize --run 20260528-232250 --dry-run
   cewp run cleanup --run 20260528-232250
@@ -1264,6 +1266,289 @@ function runDispatchPlan(options = {}) {
   }
 }
 
+function checkLabel(level) {
+  if (level === "fail") {
+    return "FAIL";
+  }
+
+  if (level === "warn") {
+    return "WARN";
+  }
+
+  return "OK";
+}
+
+function overallDispatchStatus(checks) {
+  if (checks.some((check) => check.level === "fail")) {
+    return "FAIL";
+  }
+
+  if (checks.some((check) => check.level === "warn")) {
+    return "WARN";
+  }
+
+  return "PASS";
+}
+
+function addDispatchCheck(checks, level, message) {
+  checks.push({ level, message });
+}
+
+function getTaskReadinessStatus(levels) {
+  if (levels.includes("fail")) {
+    return "FAIL";
+  }
+
+  if (levels.includes("warn")) {
+    return "WARN";
+  }
+
+  return "PASS";
+}
+
+function runDispatchCheck(options = {}) {
+  const { runId, runRoot } = findRun(options);
+  const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
+  const boardJson = readJsonIfExists(path.join(runRoot, "board.json"));
+  const taskEntries = readTasks(runRoot);
+  const worktreesRegistry = readWorktreesRegistry(runRoot);
+  const checks = [];
+  const taskReadiness = [];
+  const supportedWorkers = ["worker-a", "worker-b"];
+
+  if (runJson) {
+    addDispatchCheck(checks, "ok", "run.json found");
+  } else {
+    addDispatchCheck(checks, "fail", "run.json missing");
+  }
+
+  if (boardJson) {
+    addDispatchCheck(checks, "ok", "board.json found");
+  } else {
+    addDispatchCheck(checks, "fail", "board.json missing");
+  }
+
+  if (taskEntries.length > 0) {
+    addDispatchCheck(checks, "ok", `tasks found: ${taskEntries.length}`);
+  } else {
+    addDispatchCheck(checks, "fail", "tasks not found. Ask the Manager to create tasks first.");
+  }
+
+  if (worktreesRegistry) {
+    addDispatchCheck(checks, "ok", "worktrees registry found");
+  } else {
+    addDispatchCheck(checks, "fail", "worktrees.json missing. Run cewp run worktrees create before dispatch.");
+  }
+
+  if ((runJson && runJson.reviewer) || (boardJson && boardJson.roles && boardJson.roles.reviewer)) {
+    addDispatchCheck(checks, "ok", "reviewer role configured");
+  } else {
+    addDispatchCheck(checks, "fail", "reviewer role missing from run/board state");
+  }
+
+  for (const role of supportedWorkers) {
+    const promptPath = getPromptPath(runRoot, role);
+    addDispatchCheck(
+      checks,
+      fs.existsSync(promptPath) ? "ok" : "fail",
+      `${role} prompt ${fs.existsSync(promptPath) ? "found" : `missing: ${relativeRunPath(runRoot, promptPath)}`}`,
+    );
+  }
+
+  const reviewerPromptPath = getPromptPath(runRoot, "reviewer");
+  addDispatchCheck(
+    checks,
+    fs.existsSync(reviewerPromptPath) ? "ok" : "fail",
+    `reviewer prompt ${fs.existsSync(reviewerPromptPath) ? "found" : `missing: ${relativeRunPath(runRoot, reviewerPromptPath)}`}`,
+  );
+
+  const reviewPacketPath = path.join(runRoot, "review-packets", "review-packet.md");
+  addDispatchCheck(
+    checks,
+    fs.existsSync(reviewPacketPath) ? "ok" : "warn",
+    fs.existsSync(reviewPacketPath)
+      ? "review packet found"
+      : `review packet missing: ${relativeRunPath(runRoot, reviewPacketPath)}`,
+  );
+
+  const reviewerReportPath = path.join(runRoot, "reviews", "reviewer-report.md");
+  const reviewerEventPath = path.join(runRoot, "events", "reviewer.jsonl");
+  addDispatchCheck(checks, "ok", `reviewer output path ready: ${relativeRunPath(runRoot, reviewerReportPath)}`);
+  addDispatchCheck(checks, "ok", `reviewer event path ready: ${relativeRunPath(runRoot, reviewerEventPath)}`);
+
+  for (const { task } of taskEntries) {
+    const taskId = task.id || "unknown-task";
+    const levels = [];
+    const addTaskLevel = (level) => levels.push(level);
+    const worktree = getDispatchWorktree(worktreesRegistry, task.id);
+    const assignedRole = task.assignedRole;
+
+    if (task.id) {
+      addDispatchCheck(checks, "ok", `${taskId} task id found`);
+      addTaskLevel("ok");
+    } else {
+      addDispatchCheck(checks, "fail", "task file missing required id");
+      addTaskLevel("fail");
+    }
+
+    if (assignedRole) {
+      addDispatchCheck(checks, "ok", `${taskId} assignedRole: ${assignedRole}`);
+      addTaskLevel("ok");
+    } else {
+      addDispatchCheck(checks, "fail", `${taskId} assignedRole missing`);
+      addTaskLevel("fail");
+    }
+
+    if (assignedRole && supportedWorkers.includes(assignedRole)) {
+      addDispatchCheck(checks, "ok", `${taskId} assignedRole supported`);
+      addTaskLevel("ok");
+    } else if (assignedRole) {
+      addDispatchCheck(checks, "fail", `${taskId} assignedRole unsupported: ${assignedRole}`);
+      addTaskLevel("fail");
+    }
+
+    try {
+      const branch = task.id ? getTaskBranch(task, runId) : undefined;
+      if (branch) {
+        addDispatchCheck(checks, "ok", `${taskId} branch ready: ${branch}`);
+        addTaskLevel("ok");
+      }
+    } catch (error) {
+      addDispatchCheck(checks, "fail", `${taskId} branch invalid: ${error.message}`);
+      addTaskLevel("fail");
+    }
+
+    if (worktree) {
+      addDispatchCheck(checks, "ok", `${taskId} matching worktree registry entry found`);
+      addTaskLevel("ok");
+    } else {
+      addDispatchCheck(checks, "fail", `${taskId} matching worktree registry entry missing`);
+      addTaskLevel("fail");
+    }
+
+    if (worktree && worktree.path) {
+      addDispatchCheck(checks, "ok", `${taskId} worktree path registered`);
+      addTaskLevel("ok");
+
+      if (fs.existsSync(worktree.path)) {
+        addDispatchCheck(checks, "ok", `${taskId} worktree path exists`);
+        addTaskLevel("ok");
+
+        if (isGitWorktreePath(worktree.path)) {
+          addDispatchCheck(checks, "ok", `${taskId} path is a git worktree`);
+          addTaskLevel("ok");
+
+          const statusLines = getGitStatusShort(worktree.path);
+          if (statusLines.length > 0) {
+            addDispatchCheck(checks, "warn", `${taskId} worktree is dirty`);
+            addTaskLevel("warn");
+          } else {
+            addDispatchCheck(checks, "ok", `${taskId} worktree is clean`);
+            addTaskLevel("ok");
+          }
+        } else {
+          addDispatchCheck(checks, "fail", `${taskId} path is not a git worktree: ${worktree.path}`);
+          addTaskLevel("fail");
+        }
+      } else {
+        addDispatchCheck(checks, "fail", `${taskId} worktree path missing: ${worktree.path}`);
+        addTaskLevel("fail");
+      }
+    } else if (worktree) {
+      addDispatchCheck(checks, "fail", `${taskId} worktree path missing`);
+      addTaskLevel("fail");
+    }
+
+    const promptPath = assignedRole ? getPromptPath(runRoot, assignedRole) : undefined;
+    if (promptPath && fs.existsSync(promptPath)) {
+      addDispatchCheck(checks, "ok", `${taskId} prompt file found`);
+      addTaskLevel("ok");
+    } else {
+      addDispatchCheck(checks, "fail", `${taskId} prompt file missing`);
+      addTaskLevel("fail");
+    }
+
+    const reportPath = assignedRole ? path.join(runRoot, "reports", `${assignedRole}-report.md`) : undefined;
+    const eventPath = assignedRole ? path.join(runRoot, "events", `${assignedRole}.jsonl`) : undefined;
+    addDispatchCheck(checks, reportPath ? "ok" : "fail", `${taskId} report path ${reportPath ? "ready" : "not computable"}`);
+    addDispatchCheck(checks, eventPath ? "ok" : "fail", `${taskId} event path ${eventPath ? "ready" : "not computable"}`);
+    addTaskLevel(reportPath ? "ok" : "fail");
+    addTaskLevel(eventPath ? "ok" : "fail");
+
+    if (Array.isArray(task.allowedFiles) && task.allowedFiles.length > 0) {
+      addDispatchCheck(checks, "ok", `${taskId} allowedFiles configured`);
+      addTaskLevel("ok");
+    } else {
+      addDispatchCheck(checks, "warn", `${taskId} allowedFiles is empty`);
+      addTaskLevel("warn");
+    }
+
+    if (Array.isArray(task.forbiddenFiles) && task.forbiddenFiles.length > 0) {
+      addDispatchCheck(checks, "ok", `${taskId} forbiddenFiles configured`);
+      addTaskLevel("ok");
+    } else {
+      addDispatchCheck(checks, "warn", `${taskId} forbiddenFiles is empty`);
+      addTaskLevel("warn");
+    }
+
+    taskReadiness.push({
+      taskId,
+      assignedRole: assignedRole || "unassigned",
+      status: getTaskReadinessStatus(levels),
+    });
+  }
+
+  const reviewerLevels = [];
+  reviewerLevels.push(fs.existsSync(reviewerPromptPath) ? "ok" : "fail");
+  reviewerLevels.push(fs.existsSync(reviewPacketPath) ? "ok" : "warn");
+  reviewerLevels.push(reviewerReportPath ? "ok" : "fail");
+  reviewerLevels.push(reviewerEventPath ? "ok" : "fail");
+
+  const status = overallDispatchStatus(checks);
+
+  console.log("CEWP Coordinator Mode dispatch check");
+  console.log(`Run ID: ${runId}`);
+  console.log(`Run root: ${runRoot}`);
+  console.log("");
+  console.log(`Status: ${status}`);
+  console.log("");
+
+  console.log("Checks:");
+  for (const check of checks) {
+    console.log(`  [${checkLabel(check.level)}] ${check.message}`);
+  }
+  console.log("");
+
+  console.log("Task readiness:");
+  if (taskReadiness.length === 0) {
+    console.log("  none");
+  } else {
+    for (const task of taskReadiness) {
+      console.log(`  ${task.taskId} / ${task.assignedRole}: ${task.status}`);
+    }
+  }
+  console.log("");
+
+  console.log("Reviewer readiness:");
+  console.log(`  reviewer: ${getTaskReadinessStatus(reviewerLevels)}`);
+  console.log(`    Output: ${relativeRunPath(runRoot, reviewerReportPath)}`);
+  console.log(`    Event log: ${relativeRunPath(runRoot, reviewerEventPath)}`);
+  console.log("");
+
+  console.log("Next:");
+  if (status === "FAIL") {
+    console.log("  Fix FAIL checks before worker dispatch.");
+  } else {
+    console.log("  If PASS, worker dispatch can be considered after user approval.");
+    console.log("  WARN items should be reviewed before dispatch.");
+  }
+  console.log("  This command did not start agents.");
+
+  if (status === "FAIL") {
+    process.exitCode = 1;
+  }
+}
+
 function getWorktreePreflightErrors(plans) {
   const errors = [];
   const seenPaths = new Map();
@@ -2284,6 +2569,11 @@ function runCommand(options) {
 
   if (options.subcommand === "dispatch" && options.action === "plan") {
     runDispatchPlan(options);
+    return;
+  }
+
+  if (options.subcommand === "dispatch" && options.action === "check") {
+    runDispatchCheck(options);
     return;
   }
 

@@ -168,6 +168,15 @@ cewp run dispatch plan --run 20260528-232250
 
 `dispatch plan` maps tasks to registered worktrees, role prompts, report paths, and event logs. It is read-only, does not start Codex or `codex exec`, and gives the user an approval gate before worker execution.
 
+Check dispatch readiness:
+
+```bash
+cewp run dispatch check
+cewp run dispatch check --run 20260528-232250
+```
+
+`dispatch check` is a read-only preflight for worker/reviewer dispatch. It reports PASS/WARN/FAIL, does not start agents, and does not mutate run state.
+
 Collect reviewer context into one local packet:
 
 ```bash

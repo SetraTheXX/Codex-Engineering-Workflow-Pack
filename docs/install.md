@@ -118,6 +118,14 @@ cewp run dispatch plan
 
 It maps tasks, registered worktrees, prompts, reports, and event logs before worker execution. It does not spawn processes, run `codex exec`, merge, push, or publish.
 
+`cewp run dispatch check` verifies readiness before dispatch:
+
+```bash
+cewp run dispatch check
+```
+
+It reports PASS/WARN/FAIL for task, worktree, prompt, and reviewer readiness. It is a preflight for the user approval gate and does not spawn processes or mutate runtime state.
+
 `cewp run collect` creates a reviewer packet from local run state:
 
 ```bash
