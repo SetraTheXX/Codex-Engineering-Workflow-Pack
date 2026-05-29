@@ -110,6 +110,14 @@ cewp run worktrees status
 
 This helper reads `worktrees.json`, reports clean/dirty state, and warns when changed files fall outside `allowedFiles` or match `forbiddenFiles`. It does not merge, push, publish, or remove worktrees.
 
+`cewp run dispatch plan` previews task-to-agent dispatch:
+
+```bash
+cewp run dispatch plan
+```
+
+It maps tasks, registered worktrees, prompts, reports, and event logs before worker execution. It does not spawn processes, run `codex exec`, merge, push, or publish.
+
 `cewp run collect` creates a reviewer packet from local run state:
 
 ```bash

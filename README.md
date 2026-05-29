@@ -159,6 +159,15 @@ cewp run worktrees status --run 20260528-232250
 
 `worktrees status` reports clean/dirty state and allowed/forbidden file warnings. It is read-only and does not merge, push, publish, or remove worktrees.
 
+Preview agent dispatch without starting agents:
+
+```bash
+cewp run dispatch plan
+cewp run dispatch plan --run 20260528-232250
+```
+
+`dispatch plan` maps tasks to registered worktrees, role prompts, report paths, and event logs. It is read-only, does not start Codex or `codex exec`, and gives the user an approval gate before worker execution.
+
 Collect reviewer context into one local packet:
 
 ```bash
