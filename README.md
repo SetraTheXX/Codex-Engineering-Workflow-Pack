@@ -168,6 +168,15 @@ cewp run collect --run 20260528-232250
 
 `collect` writes `.cewp/runs/<run-id>/review-packets/review-packet.md` for reviewer handoff. It does not merge, push, publish, or mutate board/task JSON.
 
+Finalize a PASSed run:
+
+```bash
+cewp run finalize --dry-run
+cewp run finalize --run 20260528-232250
+```
+
+`finalize` requires `Decision: PASS` in the latest reviewer report, then marks run/board/tasks completed under `.cewp/`. It does not merge, push, publish, or clean up worktrees.
+
 Runtime state lives under:
 
 ```txt

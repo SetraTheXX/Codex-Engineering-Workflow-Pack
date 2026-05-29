@@ -118,6 +118,14 @@ cewp run collect
 
 The packet is written under `.cewp/runs/<run-id>/review-packets/`. It is Coordinator Mode runtime state, not installed skill content or package content.
 
+`cewp run finalize` closes Coordinator Mode runtime state after reviewer approval:
+
+```bash
+cewp run finalize --dry-run
+```
+
+It requires `Decision: PASS`, marks run/board/tasks completed under `.cewp/`, and does not merge source code, publish, release, or remove worktrees. Source integration and release still require explicit user approval.
+
 Cleanup is still manual until the cleanup helper slice:
 
 ```bash
