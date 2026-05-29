@@ -1599,6 +1599,8 @@ function createWorkerDispatchPrompt({ runId, runRoot, runJson, task, worktree })
   const assignedRole = task.assignedRole || "unassigned";
   const reportPath = path.join(runRoot, "reports", `${assignedRole}-report.md`);
   const eventPath = path.join(runRoot, "events", `${assignedRole}.jsonl`);
+  const workerOutputReport = `.cewp-worker-output/${assignedRole}-report.md`;
+  const workerOutputEvents = `.cewp-worker-output/${assignedRole}-events.jsonl`;
 
   return `# CEWP Dispatch Prompt - Worker
 
@@ -1638,8 +1640,15 @@ ${markdownArray(task.verification)}
 - Do not automate terminal input.
 
 ## Required Outputs
+Write inside your assigned worktree:
+- ${workerOutputReport}
+- ${workerOutputEvents}
+
+Do not write directly to:
 - ${relativeRunPath(runRoot, reportPath)}
 - ${relativeRunPath(runRoot, eventPath)}
+
+The CLI will copy worker output into the run directory after execution.
 
 ## Report Template
 \`\`\`md
@@ -2162,6 +2171,11 @@ function getDispatchExecPreview(options) {
       console.log(`  ${relativeRunPath(runRoot, preview.promptPath)}`);
       console.log("");
       console.log("Expected outputs:");
+      if (preview.task && preview.cwd) {
+        const workerOutput = getWorkerOutputPaths(preview.cwd, preview.role);
+        console.log(`  Worker report source: ${path.relative(preview.cwd, workerOutput.reportPath).replace(/\\/g, "/")}`);
+        console.log(`  Worker events source: ${path.relative(preview.cwd, workerOutput.eventsPath).replace(/\\/g, "/")}`);
+      }
       console.log(`  Report: ${relativeRunPath(runRoot, preview.reportPath)}`);
       console.log(`  Event log: ${relativeRunPath(runRoot, preview.eventPath)}`);
       console.log(`  Last message: ${relativeRunPath(runRoot, preview.outputLastMessagePath)}`);
@@ -2203,6 +2217,43 @@ function getDispatchExecPreview(options) {
 
 function writeAdapterLog(filePath, value) {
   fs.writeFileSync(filePath, value || "");
+}
+
+function getWorkerOutputPaths(worktreePath, role) {
+  const outputRoot = path.join(worktreePath, ".cewp-worker-output");
+  return {
+    outputRoot,
+    reportPath: path.join(outputRoot, `${role}-report.md`),
+    eventsPath: path.join(outputRoot, `${role}-events.jsonl`),
+  };
+}
+
+function copyWorkerOutputToRun({ runRoot, role, localReportPath, localEventsPath }) {
+  const reportPath = path.join(runRoot, "reports", `${role}-report.md`);
+  const eventPath = path.join(runRoot, "events", `${role}.jsonl`);
+  const copied = {
+    report: false,
+    events: false,
+    reportPath,
+    eventPath,
+  };
+
+  if (fs.existsSync(localReportPath)) {
+    fs.mkdirSync(path.dirname(reportPath), { recursive: true });
+    fs.copyFileSync(localReportPath, reportPath);
+    copied.report = true;
+  }
+
+  if (fs.existsSync(localEventsPath)) {
+    const eventContent = fs.readFileSync(localEventsPath, "utf8");
+    if (eventContent.trim().length > 0) {
+      fs.mkdirSync(path.dirname(eventPath), { recursive: true });
+      fs.appendFileSync(eventPath, eventContent.endsWith("\n") ? eventContent : `${eventContent}\n`);
+      copied.events = true;
+    }
+  }
+
+  return copied;
 }
 
 function runCodexExec({ worktreePath, promptPath, outputLastMessagePath, timeoutSeconds }) {
@@ -2276,16 +2327,27 @@ function runDispatchExecActual(options = {}) {
   writeAdapterLog(stdoutPath, execResult.stdout);
   writeAdapterLog(stderrPath, execResult.stderr);
 
+  const workerOutput = getWorkerOutputPaths(preview.cwd, options.role);
+  const copiedOutput = copyWorkerOutputToRun({
+    runRoot,
+    role: options.role,
+    localReportPath: workerOutput.reportPath,
+    localEventsPath: workerOutput.eventsPath,
+  });
   const statusLines = getGitStatusShort(preview.cwd);
   const changedFiles = statusLines.map(parseChangedFile);
+  const runtimeOutputFiles = changedFiles.filter(isWorkerRuntimeOutputPath);
   const scopeWarnings = findScopeWarnings(preview.task.id || "unknown-task", changedFiles, preview.task);
   const forbiddenWarnings = scopeWarnings.filter((warning) => warning.includes("changed forbidden file"));
   const outsideAllowedWarnings = scopeWarnings.filter((warning) => warning.includes("outside allowedFiles"));
   const reportExists = fs.existsSync(preview.reportPath);
+  const localReportExists = fs.existsSync(workerOutput.reportPath);
+  const localEventsExist = fs.existsSync(workerOutput.eventsPath);
   const lastMessageExists = fs.existsSync(preview.outputLastMessagePath);
   const timedOut = Boolean(execResult.error && execResult.error.code === "ETIMEDOUT");
   const exitCode = typeof execResult.status === "number" ? execResult.status : 1;
   const failuresAfterExec = [];
+  const warningsAfterExec = [];
 
   if (timedOut) {
     failuresAfterExec.push(`codex exec timed out after ${options.timeoutSeconds}s.`);
@@ -2298,8 +2360,14 @@ function runDispatchExecActual(options = {}) {
   failuresAfterExec.push(...outsideAllowedWarnings);
   failuresAfterExec.push(...forbiddenWarnings);
 
-  if (!reportExists) {
-    failuresAfterExec.push(`report missing: ${relativeRunPath(runRoot, preview.reportPath)}`);
+  if (!localReportExists) {
+    failuresAfterExec.push(`worker output report missing: ${path.relative(preview.cwd, workerOutput.reportPath).replace(/\\/g, "/")}`);
+  } else if (!reportExists) {
+    failuresAfterExec.push(`report copy missing: ${relativeRunPath(runRoot, preview.reportPath)}`);
+  }
+
+  if (!localEventsExist) {
+    warningsAfterExec.push(`worker output events missing: ${path.relative(preview.cwd, workerOutput.eventsPath).replace(/\\/g, "/")}`);
   }
 
   if (!lastMessageExists) {
@@ -2315,6 +2383,8 @@ function runDispatchExecActual(options = {}) {
     exitCode,
     status,
     taskId: preview.task.id,
+    copiedReport: copiedOutput.report,
+    copiedEvents: copiedOutput.events,
   });
 
   console.log("");
@@ -2333,13 +2403,25 @@ function runDispatchExecActual(options = {}) {
     console.log("  none");
   } else {
     for (const filePath of changedFiles) {
-      console.log(`  ${filePath}`);
+      console.log(`  ${filePath}${isWorkerRuntimeOutputPath(filePath) ? " (runtime output)" : ""}`);
     }
   }
   console.log("");
+  console.log("Runtime output:");
+  if (runtimeOutputFiles.length === 0) {
+    console.log("  none tracked by git status");
+  } else {
+    for (const filePath of runtimeOutputFiles) {
+      console.log(`  ${filePath}`);
+    }
+  }
+  console.log(`Worker report source: ${localReportExists ? path.relative(preview.cwd, workerOutput.reportPath).replace(/\\/g, "/") : "missing"}`);
+  console.log(`Worker events source: ${localEventsExist ? path.relative(preview.cwd, workerOutput.eventsPath).replace(/\\/g, "/") : "missing"}`);
+  console.log("");
   console.log(`Scope: ${outsideAllowedWarnings.length === 0 ? "OK" : "FAIL"}`);
   console.log(`Forbidden files: ${forbiddenWarnings.length === 0 ? "OK" : "FAIL"}`);
-  console.log(`Report: ${reportExists ? `found ${relativeRunPath(runRoot, preview.reportPath)}` : `missing ${relativeRunPath(runRoot, preview.reportPath)}`}`);
+  console.log(`Report: ${reportExists ? `copied to ${relativeRunPath(runRoot, preview.reportPath)}` : `missing ${relativeRunPath(runRoot, preview.reportPath)}`}`);
+  console.log(`Worker events: ${copiedOutput.events ? `appended to ${relativeRunPath(runRoot, preview.eventPath)}` : "not provided"}`);
   console.log(`Last message: ${lastMessageExists ? relativeRunPath(runRoot, preview.outputLastMessagePath) : "missing"}`);
   console.log(`Stdout log: ${relativeRunPath(runRoot, stdoutPath)}`);
   console.log(`Stderr log: ${relativeRunPath(runRoot, stderrPath)}`);
@@ -2350,6 +2432,13 @@ function runDispatchExecActual(options = {}) {
     console.log("Reasons:");
     for (const failure of failuresAfterExec) {
       console.log(`  - ${failure}`);
+    }
+  }
+
+  if (warningsAfterExec.length > 0) {
+    console.log("Warnings:");
+    for (const warning of warningsAfterExec) {
+      console.log(`  - ${warning}`);
     }
   }
 
@@ -2486,13 +2575,22 @@ function pathMatchesPattern(filePath, pattern) {
   return normalizedFile === normalizedPattern;
 }
 
+function isWorkerRuntimeOutputPath(filePath) {
+  const normalizedFile = filePath.replace(/\\/g, "/");
+  return normalizedFile === ".cewp-worker-output" || normalizedFile.startsWith(".cewp-worker-output/");
+}
+
 function findScopeWarnings(taskId, changedFiles, task) {
   const warnings = [];
   const allowedFiles = Array.isArray(task.allowedFiles) ? task.allowedFiles : [];
   const forbiddenFiles = Array.isArray(task.forbiddenFiles) ? task.forbiddenFiles : [];
 
   for (const filePath of changedFiles) {
-    if (allowedFiles.length > 0 && !allowedFiles.some((pattern) => pathMatchesPattern(filePath, pattern))) {
+    if (
+      allowedFiles.length > 0 &&
+      !isWorkerRuntimeOutputPath(filePath) &&
+      !allowedFiles.some((pattern) => pathMatchesPattern(filePath, pattern))
+    ) {
       warnings.push(`${taskId} changed file outside allowedFiles: ${filePath}`);
     }
 
