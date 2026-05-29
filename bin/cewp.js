@@ -38,6 +38,7 @@ Usage:
   cewp run dispatch start --dry-run
   cewp run dispatch exec <role> --adapter codex-exec --dry-run
   cewp run dispatch exec <role> --adapter codex-exec --yes [--timeout <seconds>]
+  cewp run dispatch exec workers --adapter codex-exec --yes [--timeout <seconds>]
   cewp run collect
   cewp run finalize [--dry-run]
   cewp run cleanup [--yes]
@@ -70,6 +71,7 @@ Examples:
   cewp run dispatch start --run 20260528-232250 --dry-run
   cewp run dispatch exec worker-a --run 20260528-232250 --adapter codex-exec --dry-run
   cewp run dispatch exec worker-a --run 20260528-232250 --adapter codex-exec --yes --timeout 120
+  cewp run dispatch exec workers --run 20260528-232250 --adapter codex-exec --yes --timeout 120
   cewp run dispatch exec reviewer --run 20260528-232250 --adapter codex-exec --yes --timeout 120
   cewp run collect --run 20260528-232250
   cewp run finalize --run 20260528-232250 --dry-run
@@ -2309,7 +2311,7 @@ function runDispatchReviewerExecActual(options, preflight) {
     console.log("No processes were started.");
     console.log("No merge/push/publish was performed.");
     process.exitCode = 1;
-    return;
+    return "FAIL";
   }
 
   const repoRoot = (runJson && runJson.repoRoot) || process.cwd();
@@ -2420,6 +2422,8 @@ function runDispatchReviewerExecActual(options, preflight) {
   if (status === "FAIL") {
     process.exitCode = 1;
   }
+
+  return status;
 }
 
 function runDispatchExecActual(options = {}) {
@@ -2435,8 +2439,7 @@ function runDispatchExecActual(options = {}) {
   const { runId, runRoot, failures, warnings, preview } = result;
 
   if (options.role === "reviewer") {
-    runDispatchReviewerExecActual(options, result);
-    return;
+    return runDispatchReviewerExecActual(options, result);
   }
 
   if (failures.length > 0) {
@@ -2454,7 +2457,7 @@ function runDispatchExecActual(options = {}) {
     console.log("No processes were started.");
     console.log("No merge/push/publish was performed.");
     process.exitCode = 1;
-    return;
+    return "FAIL";
   }
 
   const adapterOutputRoot = path.join(runRoot, "adapter-output");
@@ -2595,6 +2598,101 @@ function runDispatchExecActual(options = {}) {
   if (status === "FAIL") {
     process.exitCode = 1;
   }
+
+  return status;
+}
+
+function runDispatchExecWorkersDryRun(options = {}) {
+  const roles = ["worker-a", "worker-b"];
+  let hasFailure = false;
+
+  console.log("CEWP Coordinator Mode codex-exec workers dry-run");
+  console.log("Mode: sequential preview");
+  console.log("");
+  console.log("Worker order:");
+  console.log("  1. worker-a");
+  console.log("  2. worker-b");
+  console.log("");
+
+  for (const role of roles) {
+    const result = getDispatchExecPreview({ ...options, role, dryRun: true });
+    if (result.failures.length > 0) {
+      hasFailure = true;
+    }
+    console.log("");
+  }
+
+  console.log("No processes were started.");
+  console.log("No files were changed.");
+
+  if (hasFailure) {
+    process.exitCode = 1;
+  }
+}
+
+function runDispatchExecWorkersActual(options = {}) {
+  if (!options.adapter) {
+    throw new Error("dispatch exec requires --adapter codex-exec.");
+  }
+
+  if (options.adapter !== "codex-exec") {
+    throw new Error(`Unsupported dispatch adapter: ${options.adapter}. Supported adapter: codex-exec.`);
+  }
+
+  const { runId } = findRun(options);
+  const results = [];
+
+  console.log("CEWP Coordinator Mode codex-exec workers execution");
+  console.log(`Run ID: ${runId}`);
+  console.log("Adapter: codex-exec");
+  console.log("Mode: sequential");
+  console.log("");
+  console.log("Worker order:");
+  console.log("  1. worker-a");
+  console.log("  2. worker-b");
+  console.log("");
+
+  for (const role of ["worker-a", "worker-b"]) {
+    const previousExitCode = process.exitCode;
+    process.exitCode = undefined;
+    const status = runDispatchExecActual({ ...options, role, yes: true, dryRun: false });
+    results.push({ role, status: status || "FAIL" });
+
+    if (status !== "PASS") {
+      process.exitCode = 1;
+      if (role === "worker-a") {
+        results.push({ role: "worker-b", status: "SKIPPED" });
+      }
+      if (previousExitCode) {
+        process.exitCode = previousExitCode;
+      }
+      break;
+    }
+  }
+
+  const overall = results.some((result) => result.status === "FAIL") ? "FAIL" : "PASS";
+
+  console.log("");
+  console.log("CEWP Coordinator Mode codex-exec workers summary");
+  for (const result of results) {
+    console.log(`${result.role}: ${result.status}`);
+  }
+  console.log("");
+  console.log(`Overall: ${overall}`);
+
+  if (overall === "PASS") {
+    console.log("");
+    console.log("Next:");
+    console.log(`  cewp run collect --run ${runId}`);
+    console.log(`  cewp run dispatch exec reviewer --run ${runId} --adapter codex-exec --yes`);
+  } else {
+    const failed = results.find((result) => result.status === "FAIL");
+    console.log(`Reason: ${failed ? `${failed.role} failed post-check` : "worker execution failed"}`);
+    process.exitCode = 1;
+  }
+
+  console.log("");
+  console.log("No reviewer execution, merge, push, or publish was performed.");
 }
 
 function runDispatchExec(options = {}) {
@@ -2604,6 +2702,16 @@ function runDispatchExec(options = {}) {
 
   if (!options.dryRun && !options.yes) {
     throw new Error("dispatch exec requires --dry-run or --yes.");
+  }
+
+  if (options.role === "workers") {
+    if (options.dryRun) {
+      runDispatchExecWorkersDryRun(options);
+      return;
+    }
+
+    runDispatchExecWorkersActual(options);
+    return;
   }
 
   if (options.dryRun) {

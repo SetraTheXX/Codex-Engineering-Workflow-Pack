@@ -223,6 +223,14 @@ cewp run dispatch exec reviewer --adapter codex-exec --yes --timeout 120
 
 The reviewer runs inside `.cewp/runs/<run-id>/`, must write `reviews/reviewer-report.md`, and the report must contain `Decision: PASS | REQUEST_CHANGES | BLOCK`. It still does not merge, push, or publish.
 
+Run both workers sequentially:
+
+```bash
+cewp run dispatch exec workers --adapter codex-exec --yes --timeout 120
+```
+
+`workers` runs `worker-a` then `worker-b`. It is not parallel, does not run the reviewer, and stops before `worker-b` if `worker-a` fails.
+
 Collect reviewer context into one local packet:
 
 ```bash

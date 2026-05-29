@@ -168,6 +168,14 @@ cewp run dispatch exec reviewer --adapter codex-exec --yes --timeout 120
 
 Run `cewp run collect` first. The reviewer runs inside `.cewp/runs/<run-id>/`, writes `reviews/reviewer-report.md`, and must include `Decision: PASS | REQUEST_CHANGES | BLOCK`. It does not merge, push, or publish.
 
+To run both workers sequentially:
+
+```bash
+cewp run dispatch exec workers --adapter codex-exec --yes --timeout 120
+```
+
+This runs `worker-a` then `worker-b`, never in parallel. If `worker-a` fails, `worker-b` is skipped. Reviewer execution remains a separate command.
+
 `cewp run collect` creates a reviewer packet from local run state:
 
 ```bash
