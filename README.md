@@ -125,6 +125,67 @@ Check the latest run:
 cewp run status
 ```
 
+Run commands use the latest run by default. To inspect a specific run:
+
+```bash
+cewp run status --run 20260528-232250
+cewp run prompt manager --run 20260528-232250
+```
+
+Preview suggested manual worktrees for Manager-created task files:
+
+```bash
+cewp run worktrees plan
+cewp run worktrees plan --run 20260528-232250
+```
+
+`worktrees plan` only reads task files and prints suggested `git worktree add` commands. It does not create worktrees, merge, push, or run Codex.
+
+Create the planned git worktrees after reviewing the plan:
+
+```bash
+cewp run worktrees create --dry-run
+cewp run worktrees create --run 20260528-232250
+```
+
+`worktrees create` only prepares git worktree directories for worker sessions. It does not start Codex, merge, push, or publish.
+
+Inspect registered worktrees:
+
+```bash
+cewp run worktrees status
+cewp run worktrees status --run 20260528-232250
+```
+
+`worktrees status` reports clean/dirty state and allowed/forbidden file warnings. It is read-only and does not merge, push, publish, or remove worktrees.
+
+Collect reviewer context into one local packet:
+
+```bash
+cewp run collect
+cewp run collect --run 20260528-232250
+```
+
+`collect` writes `.cewp/runs/<run-id>/review-packets/review-packet.md` for reviewer handoff. It does not merge, push, publish, or mutate board/task JSON.
+
+Finalize a PASSed run:
+
+```bash
+cewp run finalize --dry-run
+cewp run finalize --run 20260528-232250
+```
+
+`finalize` requires `Decision: PASS` in the latest reviewer report, then marks run/board/tasks completed under `.cewp/`. It does not merge, push, publish, or clean up worktrees.
+
+Clean up registered worktrees:
+
+```bash
+cewp run cleanup
+cewp run cleanup --run 20260528-232250 --yes
+```
+
+`cleanup` is dry-run by default. With `--yes`, it removes only clean registered worktrees under `.cewp-worktrees/`; dirty worktrees are skipped. It does not delete `.cewp/runs/<run-id>/`, merge, push, or publish.
+
 Runtime state lives under:
 
 ```txt

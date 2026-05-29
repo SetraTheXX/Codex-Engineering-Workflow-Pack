@@ -79,6 +79,62 @@ cewp run prompts
 cewp run status
 ```
 
+Run commands use the latest run by default. Use `--run <id>` to inspect a specific run:
+
+```bash
+cewp run status --run 20260528-232250
+cewp run prompts --run 20260528-232250
+```
+
+After a Manager creates task files, `cewp run worktrees plan` can preview suggested manual worktrees:
+
+```bash
+cewp run worktrees plan
+cewp run worktrees plan --run 20260528-232250
+```
+
+This command only prints suggested `git worktree add` commands. It does not create worktrees or run Codex.
+
+`cewp run worktrees create` is also part of Coordinator Mode runtime. It prepares git worktree directories for worker sessions, but it does not start worker agents, merge, push, or publish:
+
+```bash
+cewp run worktrees create --dry-run
+cewp run worktrees create --run 20260528-232250
+```
+
+After `create`, inspect registered worktrees with:
+
+```bash
+cewp run worktrees status
+```
+
+This helper reads `worktrees.json`, reports clean/dirty state, and warns when changed files fall outside `allowedFiles` or match `forbiddenFiles`. It does not merge, push, publish, or remove worktrees.
+
+`cewp run collect` creates a reviewer packet from local run state:
+
+```bash
+cewp run collect
+```
+
+The packet is written under `.cewp/runs/<run-id>/review-packets/`. It is Coordinator Mode runtime state, not installed skill content or package content.
+
+`cewp run finalize` closes Coordinator Mode runtime state after reviewer approval:
+
+```bash
+cewp run finalize --dry-run
+```
+
+It requires `Decision: PASS`, marks run/board/tasks completed under `.cewp/`, and does not merge source code, publish, release, or remove worktrees. Source integration and release still require explicit user approval.
+
+`cewp run cleanup` removes registered worker worktrees after review:
+
+```bash
+cewp run cleanup
+cewp run cleanup --yes
+```
+
+Cleanup is dry-run by default. With `--yes`, it removes only clean registered worktrees under `.cewp-worktrees/`, skips dirty worktrees, and keeps run history under `.cewp/runs/`. Source code merge/release still requires explicit user approval.
+
 Runtime state is written under:
 
 ```txt
@@ -87,7 +143,7 @@ Runtime state is written under:
 
 This folder contains generated board, task, prompt, report, review, event, and handoff files for one coordination run. These files are runtime artifacts, not installed skills or package content, and should not be committed. Add `.cewp/` to the project `.gitignore` for repos that use Coordinator Mode.
 
-Coordinator Mode v0.2 is manual orchestration only. It does not spawn Codex processes, automate terminal input, merge, push, publish, or create worktrees.
+Coordinator Mode remains manual orchestration. It does not spawn Codex processes, automate terminal input, merge, push, or publish.
 
 ## Repo Sharing vs Local-only
 

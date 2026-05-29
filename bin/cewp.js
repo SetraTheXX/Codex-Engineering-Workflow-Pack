@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
+const childProcess = require("node:child_process");
 
 const SKILLS = [
   "setup-codex-engineering-workflow",
@@ -28,11 +29,17 @@ Usage:
   cewp run status
   cewp run prompts
   cewp run prompt <manager|worker-a|worker-b|reviewer>
+  cewp run worktrees plan
+  cewp run worktrees create [--dry-run]
+  cewp run worktrees status
+  cewp run collect
+  cewp run finalize [--dry-run]
+  cewp run cleanup [--yes]
   cewp --help
 
 Defaults:
   repo mode defaults to the current working directory when --target is omitted
-  run commands default to the current working directory and latest run
+  run commands default to the current working directory and latest run unless --run <id> is provided
 
 Examples:
   cewp init
@@ -45,8 +52,15 @@ Examples:
   cewp doctor --mode repo --target "/path/to/repo"
   cewp run init --workers 2 --reviewer
   cewp run status
+  cewp run status --run 20260528-232250
   cewp run prompts
-  cewp run prompt manager
+  cewp run prompt manager --run 20260528-232250
+  cewp run worktrees plan --run 20260528-232250
+  cewp run worktrees create --run 20260528-232250 --dry-run
+  cewp run worktrees status --run 20260528-232250
+  cewp run collect --run 20260528-232250
+  cewp run finalize --run 20260528-232250 --dry-run
+  cewp run cleanup --run 20260528-232250
 `);
 }
 
@@ -55,11 +69,15 @@ function parseArgs(argv) {
     command: argv[0],
     subcommand: argv[1],
     role: argv[2],
+    action: argv[2],
+    runId: undefined,
     mode: "repo",
     target: undefined,
     targetProvided: false,
     force: false,
     help: false,
+    dryRun: false,
+    yes: false,
     workers: undefined,
     reviewer: false,
   };
@@ -77,6 +95,11 @@ function parseArgs(argv) {
 
     if (args.command === "run" && args.subcommand === "prompt" && index === 2) {
       args.role = arg;
+      continue;
+    }
+
+    if (args.command === "run" && args.subcommand === "worktrees" && index === 2) {
+      args.action = arg;
       continue;
     }
 
@@ -111,6 +134,16 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (args.command === "run" && arg === "--dry-run") {
+      args.dryRun = true;
+      continue;
+    }
+
+    if (args.command === "run" && arg === "--yes") {
+      args.yes = true;
+      continue;
+    }
+
     if (args.command === "run" && arg === "--workers") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
@@ -126,6 +159,16 @@ function parseArgs(argv) {
 
     if (args.command === "run" && arg === "--reviewer") {
       args.reviewer = true;
+      continue;
+    }
+
+    if (args.command === "run" && arg === "--run") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--run requires a run id.");
+      }
+      args.runId = value;
+      index += 1;
       continue;
     }
 
@@ -182,6 +225,12 @@ function getRunsRoot(repoRoot = process.cwd()) {
   return path.join(path.resolve(repoRoot), ".cewp", "runs");
 }
 
+function validateRunId(runId) {
+  if (!/^\d{8}-\d{6}$/.test(runId)) {
+    throw new Error(`Invalid run id: ${runId}. Expected format: YYYYMMDD-HHMMSS.`);
+  }
+}
+
 function writeJson(filePath, value) {
   fs.writeFileSync(`${filePath}`, `${JSON.stringify(value, null, 2)}\n`);
 }
@@ -228,6 +277,257 @@ function findLatestRun(repoRoot = process.cwd()) {
     runId,
     runRoot: path.join(runsRoot, runId),
   };
+}
+
+function findRun(options = {}, repoRoot = process.cwd()) {
+  if (!options.runId) {
+    return findLatestRun(repoRoot);
+  }
+
+  validateRunId(options.runId);
+
+  const runsRoot = getRunsRoot(repoRoot);
+  const runRoot = path.join(runsRoot, options.runId);
+
+  if (!fs.existsSync(runRoot)) {
+    throw new Error(`CEWP run not found: ${options.runId}`);
+  }
+
+  return {
+    runId: options.runId,
+    runRoot,
+  };
+}
+
+function getRepoName(repoRoot = process.cwd()) {
+  return path.basename(path.resolve(repoRoot));
+}
+
+function quote(value) {
+  return `"${String(value).replace(/"/g, '\\"')}"`;
+}
+
+function isSafeBranchName(branch) {
+  if (!branch || typeof branch !== "string") {
+    return false;
+  }
+
+  if (
+    branch.startsWith("-") ||
+    branch.startsWith("/") ||
+    branch.endsWith("/") ||
+    branch.includes("..") ||
+    branch.includes("@{") ||
+    branch.endsWith(".lock") ||
+    /[\s\\~^:?\*[\x00-\x1f]/.test(branch)
+  ) {
+    return false;
+  }
+
+  return true;
+}
+
+function getTaskBranch(task, runId) {
+  const branch = task.branch || `cewp/${runId}/${task.id}`;
+
+  if (!isSafeBranchName(branch)) {
+    throw new Error(`Unsafe branch name for ${task.id}: ${branch}`);
+  }
+
+  return branch;
+}
+
+function isUnsafeWorktreePath(worktreePath) {
+  if (!worktreePath || typeof worktreePath !== "string") {
+    return true;
+  }
+
+  if (worktreePath.includes("\0")) {
+    return true;
+  }
+
+  const normalized = worktreePath.replace(/\\/g, "/");
+  const segments = normalized.split("/");
+
+  if (normalized.startsWith("../.cewp-worktrees/")) {
+    return segments.slice(2).some((segment) => segment === "..");
+  }
+
+  return segments.some((segment) => segment === "..");
+}
+
+function getTaskWorktreePath(task, runId, repoRoot) {
+  const repoName = getRepoName(repoRoot);
+  const worktreePath = task.targetWorktree || `../.cewp-worktrees/${repoName}/${runId}/${task.id}`;
+
+  if (isUnsafeWorktreePath(worktreePath)) {
+    throw new Error(`Unsafe targetWorktree for ${task.id}: ${worktreePath}`);
+  }
+
+  return worktreePath;
+}
+
+function resolveWorktreePath(worktreePath, repoRoot = process.cwd()) {
+  return path.resolve(repoRoot, worktreePath);
+}
+
+function readTaskFile(filePath) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    throw new Error(`Invalid task JSON: ${filePath}. ${error.message}`);
+  }
+}
+
+function readTasks(runRoot) {
+  return listFiles(path.join(runRoot, "tasks"), ".json").map((filePath) => ({
+    filePath,
+    task: readTaskFile(filePath),
+  }));
+}
+
+function readJsonFile(filePath, label) {
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    throw new Error(`Invalid ${label} JSON: ${filePath}. ${error.message}`);
+  }
+}
+
+function runGit(args, cwd) {
+  return childProcess.spawnSync("git", args, {
+    cwd,
+    encoding: "utf8",
+    shell: false,
+  });
+}
+
+function getGitOutput(args, cwd) {
+  const result = runGit(args, cwd);
+
+  if (result.error) {
+    throw new Error(`Failed to run git ${args.join(" ")}: ${result.error.message}`);
+  }
+
+  return result;
+}
+
+function isRepoDirty(repoRoot) {
+  const result = getGitOutput(["status", "--porcelain"], repoRoot);
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to inspect git status: ${(result.stderr || result.stdout || "").trim()}`);
+  }
+
+  return result.stdout.trim().length > 0;
+}
+
+function branchExists(repoRoot, branch) {
+  const result = getGitOutput(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], repoRoot);
+  return result.status === 0;
+}
+
+function getGitStatusShort(worktreePath) {
+  const result = getGitOutput(["status", "--short"], worktreePath);
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to inspect git status for ${worktreePath}: ${(result.stderr || result.stdout || "").trim()}`);
+  }
+
+  return result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter(Boolean);
+}
+
+function getGitBranchName(worktreePath) {
+  const result = getGitOutput(["branch", "--show-current"], worktreePath);
+
+  if (result.status !== 0) {
+    return "unknown";
+  }
+
+  return result.stdout.trim() || "detached";
+}
+
+function isGitWorktreePath(worktreePath) {
+  if (!fs.existsSync(worktreePath) || !fs.statSync(worktreePath).isDirectory()) {
+    return false;
+  }
+
+  const result = getGitOutput(["rev-parse", "--is-inside-work-tree"], worktreePath);
+  return result.status === 0 && result.stdout.trim() === "true";
+}
+
+function getGitDiffStat(worktreePath) {
+  const result = getGitOutput(["diff", "--stat"], worktreePath);
+
+  if (result.status !== 0) {
+    return "(failed to read git diff --stat)";
+  }
+
+  return result.stdout.trim() || "(no diff stat)";
+}
+
+function isPathUnderCewpWorktrees(worktreePath) {
+  const normalized = path.resolve(worktreePath).replace(/\\/g, "/").toLowerCase();
+  return normalized.includes("/.cewp-worktrees/");
+}
+
+function removeGitWorktree(repoRoot, worktreePath) {
+  const result = getGitOutput(["worktree", "remove", worktreePath], repoRoot);
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to remove worktree ${worktreePath}: ${(result.stderr || result.stdout || "").trim()}`);
+  }
+}
+
+function pruneGitWorktrees(repoRoot) {
+  const result = getGitOutput(["worktree", "prune"], repoRoot);
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to prune git worktrees: ${(result.stderr || result.stdout || "").trim()}`);
+  }
+}
+
+function buildWorktreePlans(runId, runRoot) {
+  const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
+  const repoRoot = (runJson && runJson.repoRoot) || process.cwd();
+  const taskEntries = readTasks(runRoot);
+
+  const plans = taskEntries.map(({ task }) => {
+    if (!task.id) {
+      throw new Error("Task file is missing required field: id.");
+    }
+
+    const branch = getTaskBranch(task, runId);
+    const targetWorktree = getTaskWorktreePath(task, runId, repoRoot);
+    const resolvedPath = resolveWorktreePath(targetWorktree, repoRoot);
+
+    return {
+      task,
+      branch,
+      targetWorktree,
+      resolvedPath,
+      targetExists: fs.existsSync(resolvedPath),
+      branchExists: branchExists(repoRoot, branch),
+    };
+  });
+
+  return {
+    repoRoot,
+    taskEntries,
+    plans,
+  };
+}
+
+function appendRunEvent(runRoot, role, event) {
+  const eventsRoot = path.join(runRoot, "events");
+  fs.mkdirSync(eventsRoot, { recursive: true });
+  fs.appendFileSync(
+    path.join(eventsRoot, `${role}.jsonl`),
+    `${JSON.stringify({ timestamp: new Date().toISOString(), role, ...event })}\n`,
+  );
 }
 
 function makePlanTemplate(runId) {
@@ -668,8 +968,8 @@ function chooseLatestEvent(entries) {
     .at(-1);
 }
 
-function runStatus() {
-  const { runId, runRoot } = findLatestRun();
+function runStatus(options = {}) {
+  const { runId, runRoot } = findRun(options);
   const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
   const boardJson = readJsonIfExists(path.join(runRoot, "board.json"));
   const taskFiles = listFiles(path.join(runRoot, "tasks"), ".json");
@@ -723,8 +1023,8 @@ function runStatus() {
   }
 }
 
-function runPrompts() {
-  const { runId, runRoot } = findLatestRun();
+function runPrompts(options = {}) {
+  const { runId, runRoot } = findRun(options);
   const promptsRoot = path.join(runRoot, "prompts");
 
   console.log("CEWP Coordinator Mode prompts");
@@ -748,14 +1048,14 @@ function runPrompts() {
   console.log("    cewp run prompt reviewer");
 }
 
-function runPrompt(role) {
+function runPrompt(role, options = {}) {
   const supportedRoles = ["manager", "worker-a", "worker-b", "reviewer"];
 
   if (!supportedRoles.includes(role)) {
     throw new Error(`Unsupported run prompt role: ${role || "(missing)"}. Supported roles: ${supportedRoles.join(", ")}.`);
   }
 
-  const { runRoot } = findLatestRun();
+  const { runRoot } = findRun(options);
   const promptFile = path.join(runRoot, "prompts", `${role}-prompt.md`);
 
   if (!fs.existsSync(promptFile)) {
@@ -763,6 +1063,1012 @@ function runPrompt(role) {
   }
 
   process.stdout.write(fs.readFileSync(promptFile, "utf8"));
+}
+
+function formatList(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    return "none";
+  }
+
+  return value.join(", ");
+}
+
+function runWorktreesPlan(options = {}) {
+  const { runId, runRoot } = findRun(options);
+  const { taskEntries, plans } = buildWorktreePlans(runId, runRoot);
+
+  console.log("CEWP Coordinator Mode worktree plan");
+  console.log(`Run ID: ${runId}`);
+  console.log(`Run root: ${runRoot}`);
+  console.log(`Task count: ${taskEntries.length}`);
+  console.log("");
+
+  if (taskEntries.length === 0) {
+    console.log("No task files found. Ask the Manager to create tasks first.");
+    return;
+  }
+
+  for (const plan of plans) {
+    console.log(`Task: ${plan.task.id}`);
+    console.log(`  Title: ${plan.task.title || "(untitled)"}`);
+    console.log(`  Assigned role: ${plan.task.assignedRole || "unassigned"}`);
+    console.log(`  Status: ${plan.task.status || "unknown"}`);
+    console.log(`  Branch: ${plan.branch}`);
+    console.log(`  Target worktree: ${plan.targetWorktree}`);
+    console.log(`  Resolved path: ${plan.resolvedPath}`);
+    console.log(`  Allowed files: ${formatList(plan.task.allowedFiles)}`);
+    console.log(`  Forbidden files: ${formatList(plan.task.forbiddenFiles)}`);
+    console.log(`  Target path exists: ${plan.targetExists ? "yes" : "no"}`);
+    console.log(`  Branch exists: ${plan.branchExists ? "yes" : "no"}`);
+    console.log("");
+  }
+
+  console.log("Suggested manual commands:");
+  for (const plan of plans) {
+    console.log(`  git worktree add ${quote(plan.resolvedPath)} -b ${quote(plan.branch)}`);
+  }
+}
+
+function getWorktreePreflightErrors(plans) {
+  const errors = [];
+  const seenPaths = new Map();
+  const seenBranches = new Map();
+
+  for (const plan of plans) {
+    const pathKey = process.platform === "win32" ? plan.resolvedPath.toLowerCase() : plan.resolvedPath;
+
+    if (seenPaths.has(pathKey)) {
+      errors.push(`${plan.task.id}: duplicate target path also used by ${seenPaths.get(pathKey)}: ${plan.resolvedPath}`);
+    } else {
+      seenPaths.set(pathKey, plan.task.id);
+    }
+
+    if (seenBranches.has(plan.branch)) {
+      errors.push(`${plan.task.id}: duplicate branch also used by ${seenBranches.get(plan.branch)}: ${plan.branch}`);
+    } else {
+      seenBranches.set(plan.branch, plan.task.id);
+    }
+
+    if (plan.targetExists) {
+      errors.push(`${plan.task.id}: target path already exists: ${plan.resolvedPath}`);
+    }
+
+    if (plan.branchExists) {
+      errors.push(`${plan.task.id}: branch already exists: ${plan.branch}`);
+    }
+  }
+
+  return errors;
+}
+
+function printWorktreeCreatePlan({ runId, runRoot, repoRoot, plans, dryRun }) {
+  console.log("CEWP Coordinator Mode worktree create");
+  console.log(`Run ID: ${runId}`);
+  console.log(`Run root: ${runRoot}`);
+  console.log(`Repo root: ${repoRoot}`);
+  console.log(`Mode: ${dryRun ? "dry-run" : "create"}`);
+  console.log(`Task count: ${plans.length}`);
+  console.log("");
+
+  for (const plan of plans) {
+    console.log(`Task: ${plan.task.id}`);
+    console.log(`  Branch: ${plan.branch}`);
+    console.log(`  Path: ${plan.resolvedPath}`);
+    console.log(`  Target path exists: ${plan.targetExists ? "yes" : "no"}`);
+    console.log(`  Branch exists: ${plan.branchExists ? "yes" : "no"}`);
+    console.log(`  Command: git worktree add ${quote(plan.resolvedPath)} -b ${quote(plan.branch)}`);
+    console.log("");
+  }
+}
+
+function writeWorktreesRegistry(runRoot, runId, created) {
+  writeJson(path.join(runRoot, "worktrees.json"), {
+    schemaVersion: 1,
+    runId,
+    createdAt: new Date().toISOString(),
+    worktrees: created.map((entry) => ({
+      taskId: entry.task.id,
+      assignedRole: entry.task.assignedRole || "unassigned",
+      branch: entry.branch,
+      path: entry.resolvedPath,
+      status: "created",
+    })),
+  });
+}
+
+function readWorktreesRegistry(runRoot) {
+  const registryPath = path.join(runRoot, "worktrees.json");
+
+  if (!fs.existsSync(registryPath)) {
+    return undefined;
+  }
+
+  const registry = readJsonFile(registryPath, "worktrees registry");
+
+  if (!Array.isArray(registry.worktrees)) {
+    throw new Error(`Invalid worktrees registry: ${registryPath}. Missing worktrees array.`);
+  }
+
+  return registry;
+}
+
+function getTaskMap(runRoot) {
+  return new Map(readTasks(runRoot).map(({ task }) => [task.id, task]));
+}
+
+function parseChangedFile(statusLine) {
+  const rawPath = statusLine.slice(3).trim();
+  const renameParts = rawPath.split(" -> ");
+  return renameParts[renameParts.length - 1].replace(/\\/g, "/");
+}
+
+function pathMatchesPattern(filePath, pattern) {
+  const normalizedFile = filePath.replace(/\\/g, "/");
+  const normalizedPattern = String(pattern).replace(/\\/g, "/");
+
+  if (normalizedPattern.endsWith("/**")) {
+    const prefix = normalizedPattern.slice(0, -3);
+    return normalizedFile === prefix || normalizedFile.startsWith(`${prefix}/`);
+  }
+
+  return normalizedFile === normalizedPattern;
+}
+
+function findScopeWarnings(taskId, changedFiles, task) {
+  const warnings = [];
+  const allowedFiles = Array.isArray(task.allowedFiles) ? task.allowedFiles : [];
+  const forbiddenFiles = Array.isArray(task.forbiddenFiles) ? task.forbiddenFiles : [];
+
+  for (const filePath of changedFiles) {
+    if (allowedFiles.length > 0 && !allowedFiles.some((pattern) => pathMatchesPattern(filePath, pattern))) {
+      warnings.push(`${taskId} changed file outside allowedFiles: ${filePath}`);
+    }
+
+    if (forbiddenFiles.some((pattern) => pathMatchesPattern(filePath, pattern))) {
+      warnings.push(`${taskId} changed forbidden file: ${filePath}`);
+    }
+  }
+
+  return warnings;
+}
+
+function markdownList(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    return "none";
+  }
+
+  return value.map((item) => `\`${item}\``).join(", ");
+}
+
+function getTaskStatusCountsFromTasks(tasks) {
+  return tasks.reduce((counts, task) => {
+    const status = task.status || "unknown";
+    counts[status] = (counts[status] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function getWorktreeSnapshot(entry, taskMap) {
+  const taskId = entry.taskId || "unknown-task";
+  const task = taskMap.get(taskId);
+  const assignedRole = (task && task.assignedRole) || entry.assignedRole || "unassigned";
+  const exists = Boolean(entry.path && fs.existsSync(entry.path));
+  const isGitWorktree = exists ? isGitWorktreePath(entry.path) : false;
+  const warnings = [];
+  let branchName = "unknown";
+  let statusLines = [];
+  let diffStat = "(not collected)";
+  let gitStatus = "missing";
+
+  if (!task) {
+    warnings.push(`${taskId} has no matching task JSON.`);
+  }
+
+  if (!exists) {
+    warnings.push(`${taskId} worktree path is missing: ${entry.path || "unknown"}`);
+  } else if (!isGitWorktree) {
+    gitStatus = "not a git worktree";
+    warnings.push(`${taskId} path is not a git worktree: ${entry.path}`);
+  } else {
+    branchName = getGitBranchName(entry.path);
+    statusLines = getGitStatusShort(entry.path);
+    diffStat = getGitDiffStat(entry.path);
+    gitStatus = statusLines.length === 0 ? "clean" : "dirty";
+
+    if (task) {
+      warnings.push(...findScopeWarnings(taskId, statusLines.map(parseChangedFile), task));
+    }
+  }
+
+  return {
+    taskId,
+    task,
+    assignedRole,
+    branch: entry.branch || "unknown",
+    branchName,
+    path: entry.path || "unknown",
+    exists,
+    isGitWorktree,
+    gitStatus,
+    statusLines,
+    changedFiles: statusLines.map(parseChangedFile),
+    diffStat,
+    warnings,
+  };
+}
+
+function getReportExcerpt(filePath, maxLines = 24) {
+  const content = fs.readFileSync(filePath, "utf8");
+  const lines = content.split(/\r?\n/);
+  const excerpt = lines.slice(0, maxLines).join("\n").trim();
+  const suffix = lines.length > maxLines ? "\n\n...(truncated)" : "";
+  return `${excerpt || "(empty report)"}${suffix}`;
+}
+
+function findReviewerDecision(filePath) {
+  const content = fs.readFileSync(filePath, "utf8");
+  const match = content.match(/\b(PASS|REQUEST_CHANGES|BLOCK)\b/);
+  return match ? match[1] : "not found";
+}
+
+function findReviewerDecisionStrict(filePath) {
+  const content = fs.readFileSync(filePath, "utf8");
+  const match = content.match(/^\s*Decision\s*:\s*(PASS|REQUEST_CHANGES|BLOCK)\b/im);
+  return match ? match[1] : undefined;
+}
+
+function getLatestReviewerDecision(runRoot) {
+  const reviewFiles = listFiles(path.join(runRoot, "reviews"), ".md");
+
+  if (reviewFiles.length === 0) {
+    throw new Error("Cannot finalize: no reviewer report found.");
+  }
+
+  const latestReviewFile = reviewFiles
+    .map((filePath) => ({
+      filePath,
+      mtimeMs: getFileMtimeMs(filePath),
+    }))
+    .sort((left, right) => {
+      if (left.mtimeMs !== right.mtimeMs) {
+        return left.mtimeMs - right.mtimeMs;
+      }
+
+      return left.filePath.localeCompare(right.filePath);
+    })
+    .at(-1).filePath;
+  const decision = findReviewerDecisionStrict(latestReviewFile);
+
+  if (!decision) {
+    throw new Error("Cannot finalize: reviewer decision not found.");
+  }
+
+  if (decision !== "PASS") {
+    throw new Error(`Cannot finalize: reviewer decision is ${decision}.`);
+  }
+
+  return {
+    decision,
+    filePath: latestReviewFile,
+  };
+}
+
+function getRecentEvents(runRoot, warnings, limit = 10) {
+  const eventFiles = listFiles(path.join(runRoot, "events"), ".jsonl");
+  const events = [];
+
+  for (const filePath of eventFiles) {
+    const lines = fs
+      .readFileSync(filePath, "utf8")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    for (const line of lines) {
+      try {
+        const value = JSON.parse(line);
+        events.push({
+          file: path.basename(filePath),
+          value,
+          timeMs: getEventTimeMs(value) || 0,
+        });
+      } catch {
+        warnings.push(`Invalid event JSONL line in ${path.basename(filePath)}: ${line}`);
+      }
+    }
+  }
+
+  return events
+    .sort((left, right) => left.timeMs - right.timeMs)
+    .slice(-limit);
+}
+
+function makeReviewPacket({
+  runId,
+  runRoot,
+  runJson,
+  boardJson,
+  tasks,
+  registry,
+  worktreeSnapshots,
+  reportFiles,
+  reviewFiles,
+  recentEvents,
+  warnings,
+}) {
+  const lines = [];
+  const roleStatuses = (boardJson && boardJson.roles) || {};
+  const statusCounts = getTaskStatusCountsFromTasks(tasks);
+
+  lines.push("# CEWP Review Packet", "");
+
+  lines.push("## Run Summary", "");
+  lines.push(`- Run ID: ${runId}`);
+  lines.push(`- Run status: ${(runJson && runJson.status) || "unknown"}`);
+  lines.push(`- Board status: ${(boardJson && boardJson.status) || "unknown"}`);
+  lines.push(`- Repo root: ${(runJson && runJson.repoRoot) || "unknown"}`);
+  lines.push(`- Created at: ${(runJson && runJson.createdAt) || "unknown"}`);
+  lines.push(`- Run root: ${runRoot}`, "");
+
+  lines.push("## Board Summary", "");
+  lines.push("Role statuses:");
+  if (Object.keys(roleStatuses).length === 0) {
+    lines.push("- none");
+  } else {
+    for (const role of Object.keys(roleStatuses).sort()) {
+      lines.push(`- ${role}: ${roleStatuses[role].status || "unknown"}`);
+    }
+  }
+  lines.push("");
+  lines.push("Task status counts:");
+  if (Object.keys(statusCounts).length === 0) {
+    lines.push("- none");
+  } else {
+    for (const status of Object.keys(statusCounts).sort()) {
+      lines.push(`- ${status}: ${statusCounts[status]}`);
+    }
+  }
+  lines.push("");
+
+  lines.push("## Tasks", "");
+  if (tasks.length === 0) {
+    lines.push("- No task files found.", "");
+  } else {
+    for (const task of tasks) {
+      lines.push(`### ${task.id || "unknown-task"}`);
+      lines.push(`- Title: ${task.title || "(untitled)"}`);
+      lines.push(`- Assigned role: ${task.assignedRole || "unassigned"}`);
+      lines.push(`- Status: ${task.status || "unknown"}`);
+      lines.push(`- Branch: ${task.branch || "none"}`);
+      lines.push(`- Target worktree: ${task.targetWorktree || "none"}`);
+      lines.push(`- Allowed files: ${markdownList(task.allowedFiles)}`);
+      lines.push(`- Forbidden files: ${markdownList(task.forbiddenFiles)}`);
+      lines.push(`- Verification: ${markdownList(task.verification)}`);
+      lines.push("");
+    }
+  }
+
+  lines.push("## Worktrees", "");
+  if (!registry) {
+    lines.push("No worktrees.json found. Worktree diffs were not collected.", "");
+  } else if (worktreeSnapshots.length === 0) {
+    lines.push("No registered worktrees found.", "");
+  } else {
+    for (const snapshot of worktreeSnapshots) {
+      lines.push(`### ${snapshot.taskId} / ${snapshot.assignedRole}`);
+      lines.push(`- Branch: ${snapshot.branch}`);
+      lines.push(`- Current branch: ${snapshot.branchName}`);
+      lines.push(`- Path: ${snapshot.path}`);
+      lines.push(`- Path exists: ${snapshot.exists ? "yes" : "no"}`);
+      lines.push(`- Git worktree: ${snapshot.isGitWorktree ? "yes" : "no"}`);
+      lines.push(`- Git status: ${snapshot.gitStatus}`);
+      lines.push(`- Changed files: ${snapshot.changedFiles.length ? snapshot.changedFiles.join(", ") : "none"}`);
+      lines.push("");
+    }
+  }
+
+  lines.push("## Changed Files", "");
+  if (worktreeSnapshots.length === 0) {
+    lines.push("- none", "");
+  } else {
+    for (const snapshot of worktreeSnapshots) {
+      lines.push(`### ${snapshot.taskId}`);
+      if (snapshot.statusLines.length === 0) {
+        lines.push("- Changed files: none");
+      } else {
+        lines.push("Changed files:");
+        for (const line of snapshot.statusLines) {
+          lines.push(`- ${line}`);
+        }
+      }
+      lines.push("");
+      lines.push("Diff stat:");
+      lines.push("```txt");
+      lines.push(snapshot.diffStat);
+      lines.push("```", "");
+    }
+  }
+
+  lines.push("## Scope Warnings", "");
+  if (warnings.length === 0) {
+    lines.push("- none", "");
+  } else {
+    for (const warning of warnings) {
+      lines.push(`- ${warning}`);
+    }
+    lines.push("");
+  }
+
+  lines.push("## Worker Reports", "");
+  if (reportFiles.length === 0) {
+    lines.push("- No worker report files found.", "");
+  } else {
+    for (const filePath of reportFiles) {
+      lines.push(`### ${path.basename(filePath)}`);
+      lines.push("```md");
+      lines.push(getReportExcerpt(filePath));
+      lines.push("```", "");
+    }
+  }
+
+  lines.push("## Reviewer Reports", "");
+  if (reviewFiles.length === 0) {
+    lines.push("- No reviewer report files found.", "");
+  } else {
+    for (const filePath of reviewFiles) {
+      lines.push(`- ${path.basename(filePath)}: decision ${findReviewerDecision(filePath)}`);
+    }
+    lines.push("");
+  }
+
+  lines.push("## Recent Events", "");
+  if (recentEvents.length === 0) {
+    lines.push("- none", "");
+  } else {
+    for (const event of recentEvents) {
+      lines.push(`- ${event.file}: \`${JSON.stringify(event.value)}\``);
+    }
+    lines.push("");
+  }
+
+  lines.push("## Suggested Reviewer Checklist", "");
+  lines.push("- Compare changed files against allowedFiles.");
+  lines.push("- Check forbiddenFiles for every task.");
+  lines.push("- Compare worker reports against actual git diff output.");
+  lines.push("- Verify reported commands and test outputs.");
+  lines.push("- Check docs/code consistency.");
+  lines.push("- Decide: PASS / REQUEST_CHANGES / BLOCK.");
+  lines.push("");
+
+  lines.push("## Notes", "");
+  lines.push("- This packet is generated by `cewp run collect`.");
+  lines.push("- It does not merge, push, publish, mutate board/task JSON, create worktrees, or remove worktrees.");
+  lines.push("");
+
+  return `${lines.join("\n")}\n`;
+}
+
+function runCollect(options = {}) {
+  const { runId, runRoot } = findRun(options);
+  const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
+  const boardJson = readJsonIfExists(path.join(runRoot, "board.json"));
+  const taskEntries = readTasks(runRoot);
+  const tasks = taskEntries.map(({ task }) => task);
+  const taskMap = new Map(tasks.map((task) => [task.id, task]));
+  const registry = readWorktreesRegistry(runRoot);
+  const reportFiles = listFiles(path.join(runRoot, "reports"), ".md");
+  const reviewFiles = listFiles(path.join(runRoot, "reviews"), ".md");
+  const warnings = [];
+
+  if (tasks.length === 0) {
+    warnings.push("No task files found.");
+  }
+
+  if (!registry) {
+    warnings.push("No worktrees.json found. Worktree diffs were not collected.");
+  }
+
+  if (reportFiles.length === 0) {
+    warnings.push("No worker report files found.");
+  }
+
+  if (reviewFiles.length === 0) {
+    warnings.push("No reviewer report files found.");
+  }
+
+  const worktreeSnapshots = registry
+    ? registry.worktrees.map((entry) => getWorktreeSnapshot(entry, taskMap))
+    : [];
+  for (const snapshot of worktreeSnapshots) {
+    warnings.push(...snapshot.warnings);
+  }
+
+  const recentEvents = getRecentEvents(runRoot, warnings);
+  const packet = makeReviewPacket({
+    runId,
+    runRoot,
+    runJson,
+    boardJson,
+    tasks,
+    registry,
+    worktreeSnapshots,
+    reportFiles,
+    reviewFiles,
+    recentEvents,
+    warnings,
+  });
+  const packetRoot = path.join(runRoot, "review-packets");
+  const packetPath = path.join(packetRoot, "review-packet.md");
+
+  fs.mkdirSync(packetRoot, { recursive: true });
+  fs.writeFileSync(packetPath, packet);
+  appendRunEvent(runRoot, "cli", {
+    event: "collect_created",
+    runId,
+    packetPath,
+    warnings: warnings.length,
+  });
+
+  console.log("CEWP review packet created");
+  console.log(`Run ID: ${runId}`);
+  console.log(`Packet: ${packetPath}`);
+  console.log(`Warnings: ${warnings.length}`);
+}
+
+function readRequiredJson(filePath, label) {
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Missing ${label}: ${filePath}`);
+  }
+
+  return readJsonFile(filePath, label);
+}
+
+function getFinalizeTaskUpdates(taskEntries) {
+  return taskEntries.map(({ filePath, task }) => ({
+    filePath,
+    task,
+    from: task.status || "unknown",
+    to: "done",
+  }));
+}
+
+function printFinalizePlan({ runId, runRoot, decisionInfo, runJson, boardJson, taskUpdates, dryRun }) {
+  console.log("CEWP Coordinator Mode finalize");
+  console.log(`Run ID: ${runId}`);
+  console.log(`Run root: ${runRoot}`);
+  console.log(`Mode: ${dryRun ? "dry-run" : "finalize"}`);
+  console.log(`Reviewer decision: ${decisionInfo.decision}`);
+  console.log(`Reviewer report: ${decisionInfo.filePath}`);
+  console.log("");
+  console.log("Planned state changes:");
+  console.log(`  run.json: ${(runJson && runJson.status) || "unknown"} -> completed`);
+  console.log(`  board.json: ${(boardJson && boardJson.status) || "unknown"} -> completed`);
+  console.log("  roles:");
+
+  const roles = (boardJson && boardJson.roles) || {};
+  if (Object.keys(roles).length === 0) {
+    console.log("    none");
+  } else {
+    for (const role of Object.keys(roles).sort()) {
+      console.log(`    ${role}: ${(roles[role] && roles[role].status) || "unknown"} -> completed`);
+    }
+  }
+
+  console.log("  tasks:");
+  if (taskUpdates.length === 0) {
+    console.log("    none");
+  } else {
+    for (const update of taskUpdates) {
+      console.log(`    ${update.task.id || path.basename(update.filePath)}: ${update.from} -> ${update.to}`);
+    }
+  }
+  console.log("  event: events/cli.jsonl");
+  console.log("");
+}
+
+function runFinalize(options = {}) {
+  const { runId, runRoot } = findRun(options);
+  const decisionInfo = getLatestReviewerDecision(runRoot);
+  const runJsonPath = path.join(runRoot, "run.json");
+  const boardJsonPath = path.join(runRoot, "board.json");
+  const runJson = readRequiredJson(runJsonPath, "run.json");
+  const boardJson = readRequiredJson(boardJsonPath, "board.json");
+  const taskEntries = readTasks(runRoot);
+  const taskUpdates = getFinalizeTaskUpdates(taskEntries);
+
+  printFinalizePlan({
+    runId,
+    runRoot,
+    decisionInfo,
+    runJson,
+    boardJson,
+    taskUpdates,
+    dryRun: options.dryRun,
+  });
+
+  if (runJson.status === "completed" && boardJson.status === "completed") {
+    console.log("Run is already completed. Finalize is idempotent.");
+    if (options.dryRun) {
+      console.log("Dry run only. No files were changed.");
+    }
+  }
+
+  if (options.dryRun) {
+    console.log("Dry run only. No files were changed.");
+    console.log("No merge, push, publish, or cleanup was performed.");
+    return;
+  }
+
+  runJson.status = "completed";
+  boardJson.status = "completed";
+
+  if (boardJson.roles && typeof boardJson.roles === "object") {
+    for (const role of Object.keys(boardJson.roles)) {
+      boardJson.roles[role] = {
+        ...boardJson.roles[role],
+        status: "completed",
+      };
+    }
+  }
+
+  writeJson(runJsonPath, runJson);
+  writeJson(boardJsonPath, boardJson);
+
+  for (const update of taskUpdates) {
+    writeJson(update.filePath, {
+      ...update.task,
+      status: "done",
+    });
+  }
+
+  appendRunEvent(runRoot, "cli", {
+    event: "finalized",
+    runId,
+    decision: decisionInfo.decision,
+    taskCount: taskUpdates.length,
+  });
+
+  console.log("Updated:");
+  console.log("  run.json: completed");
+  console.log("  board.json: completed");
+  console.log(`  tasks: ${taskUpdates.length} done`);
+  console.log("  event: events/cli.jsonl");
+  console.log("");
+  console.log("No merge, push, publish, or cleanup was performed.");
+}
+
+function getCleanupSnapshots(registry) {
+  return registry.worktrees.map((entry) => {
+    const exists = Boolean(entry.path && fs.existsSync(entry.path));
+    const isDirectory = exists ? fs.statSync(entry.path).isDirectory() : false;
+    const isGitWorktree = exists && isDirectory ? isGitWorktreePath(entry.path) : false;
+    const safePath = Boolean(entry.path && isPathUnderCewpWorktrees(entry.path));
+    const statusLines = exists && isGitWorktree ? getGitStatusShort(entry.path) : [];
+    const dirty = statusLines.length > 0;
+    let action = "would remove";
+    let reason = "";
+
+    if (!entry.path) {
+      action = "skip";
+      reason = "missing path";
+    } else if (!safePath) {
+      action = "warn";
+      reason = "path outside .cewp-worktrees";
+    } else if (!exists) {
+      action = "skip";
+      reason = "missing path";
+    } else if (!isDirectory) {
+      action = "warn";
+      reason = "path is not a directory";
+    } else if (!isGitWorktree) {
+      action = "warn";
+      reason = "path is not a git worktree";
+    } else if (dirty) {
+      action = "skip";
+      reason = "dirty worktree";
+    }
+
+    return {
+      entry,
+      exists,
+      isDirectory,
+      isGitWorktree,
+      safePath,
+      statusLines,
+      dirty,
+      action,
+      reason,
+    };
+  });
+}
+
+function printCleanupPlan({ runId, runRoot, snapshots, yes }) {
+  console.log("CEWP Coordinator Mode cleanup");
+  console.log(`Run ID: ${runId}`);
+  console.log(`Run root: ${runRoot}`);
+  console.log(`Mode: ${yes ? "cleanup" : "dry-run"}`);
+  console.log("");
+  console.log(`Worktrees: ${snapshots.length}`);
+  console.log("");
+
+  for (const snapshot of snapshots) {
+    const entry = snapshot.entry;
+    const status = snapshot.exists
+      ? snapshot.isGitWorktree
+        ? snapshot.dirty ? "dirty" : "clean"
+        : snapshot.isDirectory ? "not a git worktree" : "not a directory"
+      : "missing";
+    const action = snapshot.action === "would remove" && yes
+      ? "remove"
+      : snapshot.action === "would remove"
+        ? "would remove"
+        : `${snapshot.action} ${snapshot.reason}`.trim();
+
+    console.log(`${entry.taskId || "unknown-task"}`);
+    console.log(`  Branch: ${entry.branch || "unknown"}`);
+    console.log(`  Path: ${entry.path || "unknown"}`);
+    console.log(`  Exists: ${snapshot.exists ? "yes" : "no"}`);
+    console.log(`  Git worktree: ${snapshot.isGitWorktree ? "yes" : "no"}`);
+    console.log(`  Status: ${status}`);
+    console.log(`  Action: ${action}`);
+    console.log("");
+  }
+
+  if (!yes) {
+    console.log("Run with --yes to remove clean registered worktrees.");
+  }
+}
+
+function runCleanup(options = {}) {
+  const { runId, runRoot } = findRun(options);
+  const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
+  const repoRoot = (runJson && runJson.repoRoot) || process.cwd();
+  const registry = readWorktreesRegistry(runRoot);
+
+  if (!registry) {
+    console.log("No worktrees.json found. Nothing to clean up.");
+    return;
+  }
+
+  const snapshots = getCleanupSnapshots(registry);
+  const removable = snapshots.filter((snapshot) => (
+    snapshot.safePath &&
+    snapshot.exists &&
+    snapshot.isGitWorktree &&
+    !snapshot.dirty
+  ));
+  const skipped = snapshots.filter((snapshot) => !removable.includes(snapshot));
+
+  printCleanupPlan({
+    runId,
+    runRoot,
+    snapshots,
+    yes: options.yes,
+  });
+
+  if (!options.yes) {
+    appendRunEvent(runRoot, "cli", {
+      event: "cleanup_dry_run",
+      runId,
+      removableCount: removable.length,
+      skippedCount: skipped.length,
+    });
+    return;
+  }
+
+  const removed = [];
+  const skippedMessages = [];
+
+  for (const snapshot of snapshots) {
+    if (removable.includes(snapshot)) {
+      removeGitWorktree(repoRoot, snapshot.entry.path);
+      removed.push(snapshot);
+    } else {
+      skippedMessages.push(`${snapshot.entry.taskId || "unknown-task"} -> ${snapshot.reason || "not removable"}`);
+    }
+  }
+
+  pruneGitWorktrees(repoRoot);
+  appendRunEvent(runRoot, "cli", {
+    event: "cleanup_completed",
+    runId,
+    removedCount: removed.length,
+    skippedCount: skippedMessages.length,
+  });
+
+  console.log("Removed:");
+  if (removed.length === 0) {
+    console.log("  none");
+  } else {
+    for (const snapshot of removed) {
+      console.log(`  ${snapshot.entry.taskId || "unknown-task"} -> ${snapshot.entry.path}`);
+    }
+  }
+
+  console.log("");
+  console.log("Skipped:");
+  if (skippedMessages.length === 0) {
+    console.log("  none");
+  } else {
+    for (const message of skippedMessages) {
+      console.log(`  ${message}`);
+    }
+  }
+
+  console.log("");
+  console.log("No merge, push, publish, or runtime history deletion was performed.");
+}
+
+function runWorktreesStatus(options = {}) {
+  const { runId, runRoot } = findRun(options);
+  const registry = readWorktreesRegistry(runRoot);
+
+  if (!registry) {
+    throw new Error("No worktrees.json found. Run cewp run worktrees create first.");
+  }
+
+  const taskMap = getTaskMap(runRoot);
+  const warnings = [];
+
+  console.log("CEWP Coordinator Mode worktree status");
+  console.log(`Run ID: ${runId}`);
+  console.log(`Run root: ${runRoot}`);
+  console.log("");
+  console.log(`Worktrees: ${registry.worktrees.length}`);
+  console.log("");
+
+  for (const entry of registry.worktrees) {
+    const taskId = entry.taskId || "unknown-task";
+    const task = taskMap.get(taskId);
+    const assignedRole = (task && task.assignedRole) || entry.assignedRole || "unassigned";
+    const exists = Boolean(entry.path && fs.existsSync(entry.path));
+    const isGitWorktree = exists ? isGitWorktreePath(entry.path) : false;
+
+    console.log(`${taskId} / ${assignedRole}`);
+    console.log(`  Branch: ${entry.branch || "unknown"}`);
+    console.log(`  Path: ${entry.path || "unknown"}`);
+    console.log(`  Exists: ${exists ? "yes" : "no"}`);
+    console.log(`  Git worktree: ${isGitWorktree ? "yes" : "no"}`);
+
+    if (!task) {
+      warnings.push(`${taskId} has no matching task JSON.`);
+    } else {
+      console.log(`  Task status: ${task.status || "unknown"}`);
+      console.log(`  Allowed files: ${formatList(task.allowedFiles)}`);
+      console.log(`  Forbidden files: ${formatList(task.forbiddenFiles)}`);
+    }
+
+    if (!exists) {
+      console.log("  Git status: missing");
+      console.log("  Changed files: none");
+      console.log("  Scope: WARN");
+      warnings.push(`${taskId} worktree path is missing: ${entry.path || "unknown"}`);
+      console.log("");
+      continue;
+    }
+
+    if (!isGitWorktree) {
+      console.log("  Git status: not a git worktree");
+      console.log("  Changed files: none");
+      console.log("  Scope: WARN");
+      warnings.push(`${taskId} path is not a git worktree: ${entry.path}`);
+      console.log("");
+      continue;
+    }
+
+    const branchName = getGitBranchName(entry.path);
+    const statusLines = getGitStatusShort(entry.path);
+    const changedFiles = statusLines.map(parseChangedFile);
+    const scopeWarnings = task ? findScopeWarnings(taskId, changedFiles, task) : [];
+    warnings.push(...scopeWarnings);
+
+    console.log(`  Current branch: ${branchName}`);
+    console.log(`  Git status: ${statusLines.length === 0 ? "clean" : "dirty"}`);
+
+    if (statusLines.length === 0) {
+      console.log("  Changed files: none");
+    } else {
+      console.log("  Changed files:");
+      for (const line of statusLines) {
+        console.log(`    ${line}`);
+      }
+    }
+
+    console.log(`  Scope: ${scopeWarnings.length === 0 ? "OK" : "WARN"}`);
+    console.log("");
+  }
+
+  console.log("Warnings:");
+
+  if (warnings.length === 0) {
+    console.log("  none");
+  } else {
+    for (const warning of warnings) {
+      console.log(`  ${warning}`);
+    }
+  }
+}
+
+function runWorktreesCreate(options = {}) {
+  const { runId, runRoot } = findRun(options);
+  const { repoRoot, taskEntries, plans } = buildWorktreePlans(runId, runRoot);
+
+  printWorktreeCreatePlan({
+    runId,
+    runRoot,
+    repoRoot,
+    plans,
+    dryRun: options.dryRun,
+  });
+
+  if (taskEntries.length === 0) {
+    console.log("No task files found. Ask the Manager to create tasks first.");
+    return;
+  }
+
+  const preflightErrors = getWorktreePreflightErrors(plans);
+
+  if (options.dryRun) {
+    console.log(`Main repo dirty: ${isRepoDirty(repoRoot) ? "yes" : "no"}`);
+    console.log("");
+
+    if (preflightErrors.length > 0) {
+      console.log("Preflight issues:");
+      for (const error of preflightErrors) {
+        console.log(`  - ${error}`);
+      }
+    } else {
+      console.log("Dry run only. No worktrees created and no registry written.");
+    }
+
+    return;
+  }
+
+  if (isRepoDirty(repoRoot)) {
+    throw new Error("Cannot create worktrees while main repo has uncommitted changes.");
+  }
+
+  if (preflightErrors.length > 0) {
+    throw new Error(`Worktree preflight failed:\n${preflightErrors.map((error) => `- ${error}`).join("\n")}`);
+  }
+
+  const created = [];
+
+  for (const plan of plans) {
+    const result = getGitOutput(["worktree", "add", plan.resolvedPath, "-b", plan.branch], repoRoot);
+
+    if (result.status !== 0) {
+      const details = (result.stderr || result.stdout || "").trim();
+      throw new Error(
+        `Failed to create worktree for ${plan.task.id}. Created before failure: ${created.length}. ${details}`,
+      );
+    }
+
+    created.push(plan);
+  }
+
+  writeWorktreesRegistry(runRoot, runId, created);
+  appendRunEvent(runRoot, "cli", {
+    event: "worktrees-created",
+    runId,
+    count: created.length,
+    worktrees: created.map((plan) => ({
+      taskId: plan.task.id,
+      branch: plan.branch,
+      path: plan.resolvedPath,
+    })),
+  });
+
+  console.log(`Created worktree count: ${created.length}`);
+  for (const plan of created) {
+    console.log(`  ${plan.task.id}: created`);
+    console.log(`    branch: ${plan.branch}`);
+    console.log(`    path: ${plan.resolvedPath}`);
+  }
+  console.log("");
+  console.log("Next:");
+  console.log("  cewp run worktrees plan");
+  console.log("  cewp run worktrees status");
 }
 
 function runCommand(options) {
@@ -777,17 +2083,47 @@ function runCommand(options) {
   }
 
   if (options.subcommand === "status") {
-    runStatus();
+    runStatus(options);
     return;
   }
 
   if (options.subcommand === "prompts") {
-    runPrompts();
+    runPrompts(options);
     return;
   }
 
   if (options.subcommand === "prompt") {
-    runPrompt(options.role);
+    runPrompt(options.role, options);
+    return;
+  }
+
+  if (options.subcommand === "collect") {
+    runCollect(options);
+    return;
+  }
+
+  if (options.subcommand === "finalize") {
+    runFinalize(options);
+    return;
+  }
+
+  if (options.subcommand === "cleanup") {
+    runCleanup(options);
+    return;
+  }
+
+  if (options.subcommand === "worktrees" && options.action === "plan") {
+    runWorktreesPlan(options);
+    return;
+  }
+
+  if (options.subcommand === "worktrees" && options.action === "create") {
+    runWorktreesCreate(options);
+    return;
+  }
+
+  if (options.subcommand === "worktrees" && options.action === "status") {
+    runWorktreesStatus(options);
     return;
   }
 
