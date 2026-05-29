@@ -186,6 +186,15 @@ cewp run dispatch prompts --run 20260528-232250
 
 `dispatch prompts` writes task/worktree-specific prompt bundles under `.cewp/runs/<run-id>/dispatch-prompts/`. It does not start agents; the user manually pastes each prompt into the matching Codex session.
 
+Preview dispatch execution:
+
+```bash
+cewp run dispatch start --dry-run
+cewp run dispatch start --run 20260528-232250 --dry-run
+```
+
+`dispatch start` is dry-run only in this slice. It prints manual execution steps for workers and reviewer, does not start agents, and does not run `codex exec`, merge, push, or publish.
+
 Collect reviewer context into one local packet:
 
 ```bash

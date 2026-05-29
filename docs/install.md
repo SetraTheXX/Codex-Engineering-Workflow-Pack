@@ -134,6 +134,14 @@ cewp run dispatch prompts
 
 The generated files live under `.cewp/runs/<run-id>/dispatch-prompts/`. They are Coordinator Mode runtime artifacts, should not be committed, and do not spawn processes or run agents.
 
+`cewp run dispatch start --dry-run` previews manual execution:
+
+```bash
+cewp run dispatch start --dry-run
+```
+
+In this slice dispatch start is dry-run only. It does not spawn processes, automate terminal input, run `codex exec`, merge, push, or publish.
+
 `cewp run collect` creates a reviewer packet from local run state:
 
 ```bash
