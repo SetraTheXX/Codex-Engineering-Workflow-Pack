@@ -159,6 +159,42 @@ cewp run worktrees status --run 20260528-232250
 
 `worktrees status` reports clean/dirty state and allowed/forbidden file warnings. It is read-only and does not merge, push, publish, or remove worktrees.
 
+Preview agent dispatch without starting agents:
+
+```bash
+cewp run dispatch plan
+cewp run dispatch plan --run 20260528-232250
+```
+
+`dispatch plan` maps tasks to registered worktrees, role prompts, report paths, and event logs. It is read-only, does not start Codex or `codex exec`, and gives the user an approval gate before worker execution.
+
+Check dispatch readiness:
+
+```bash
+cewp run dispatch check
+cewp run dispatch check --run 20260528-232250
+```
+
+`dispatch check` is a read-only preflight for worker/reviewer dispatch. It reports PASS/WARN/FAIL, does not start agents, and does not mutate run state.
+
+Create concrete dispatch prompt bundles:
+
+```bash
+cewp run dispatch prompts
+cewp run dispatch prompts --run 20260528-232250
+```
+
+`dispatch prompts` writes task/worktree-specific prompt bundles under `.cewp/runs/<run-id>/dispatch-prompts/`. It does not start agents; the user manually pastes each prompt into the matching Codex session.
+
+Preview dispatch execution:
+
+```bash
+cewp run dispatch start --dry-run
+cewp run dispatch start --run 20260528-232250 --dry-run
+```
+
+`dispatch start` is dry-run only in this slice. It prints manual execution steps for workers and reviewer, does not start agents, and does not run `codex exec`, merge, push, or publish.
+
 Collect reviewer context into one local packet:
 
 ```bash

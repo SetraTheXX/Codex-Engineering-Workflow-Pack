@@ -110,6 +110,38 @@ cewp run worktrees status
 
 This helper reads `worktrees.json`, reports clean/dirty state, and warns when changed files fall outside `allowedFiles` or match `forbiddenFiles`. It does not merge, push, publish, or remove worktrees.
 
+`cewp run dispatch plan` previews task-to-agent dispatch:
+
+```bash
+cewp run dispatch plan
+```
+
+It maps tasks, registered worktrees, prompts, reports, and event logs before worker execution. It does not spawn processes, run `codex exec`, merge, push, or publish.
+
+`cewp run dispatch check` verifies readiness before dispatch:
+
+```bash
+cewp run dispatch check
+```
+
+It reports PASS/WARN/FAIL for task, worktree, prompt, and reviewer readiness. It is a preflight for the user approval gate and does not spawn processes or mutate runtime state.
+
+`cewp run dispatch prompts` creates concrete prompt bundles:
+
+```bash
+cewp run dispatch prompts
+```
+
+The generated files live under `.cewp/runs/<run-id>/dispatch-prompts/`. They are Coordinator Mode runtime artifacts, should not be committed, and do not spawn processes or run agents.
+
+`cewp run dispatch start --dry-run` previews manual execution:
+
+```bash
+cewp run dispatch start --dry-run
+```
+
+In this slice dispatch start is dry-run only. It does not spawn processes, automate terminal input, run `codex exec`, merge, push, or publish.
+
 `cewp run collect` creates a reviewer packet from local run state:
 
 ```bash
