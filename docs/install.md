@@ -142,6 +142,48 @@ cewp run dispatch start --dry-run
 
 In this slice dispatch start is dry-run only. It does not spawn processes, automate terminal input, run `codex exec`, merge, push, or publish.
 
+`cewp run dispatch exec <role> --adapter codex-exec --dry-run` previews a future `codex exec` adapter command:
+
+```bash
+cewp run dispatch exec worker-a --adapter codex-exec --dry-run
+```
+
+This is a local Coordinator Mode runtime helper. It renders the command, prompt path, output path, and post-check plan only; it does not spawn processes, run `codex exec`, merge, push, or publish.
+
+With explicit user approval, the adapter can run one worker at a time:
+
+```bash
+cewp run dispatch exec worker-a --adapter codex-exec --yes --timeout 120
+```
+
+This guarded execution mode runs `codex exec` only for worker roles, captures adapter output under `.cewp/runs/<run-id>/adapter-output/`, and performs post-checks for changed files, forbidden files, report existence, and exit code. Reviewer execution is not implemented yet, and merge/push/publish remain separate user-approved steps.
+
+Worker reports are written inside the assigned worktree under `.cewp-worker-output/` so `codex exec` stays within its sandbox. After execution, the CLI copies `.cewp-worker-output/<role>-report.md` into `.cewp/runs/<run-id>/reports/` and appends `.cewp-worker-output/<role>-events.jsonl` when present. `.cewp-worker-output/` is runtime output and should not be committed.
+
+Reviewer execution is guarded too:
+
+```bash
+cewp run dispatch exec reviewer --adapter codex-exec --yes --timeout 120
+```
+
+Run `cewp run collect` first. The reviewer runs inside `.cewp/runs/<run-id>/`, writes `reviews/reviewer-report.md`, and must include `Decision: PASS | REQUEST_CHANGES | BLOCK`. It does not merge, push, or publish.
+
+To run both workers sequentially:
+
+```bash
+cewp run dispatch exec workers --adapter codex-exec --yes --timeout 120
+```
+
+This runs `worker-a` then `worker-b`, never in parallel. If `worker-a` fails, `worker-b` is skipped. Reviewer execution remains a separate command.
+
+The guarded sequential pipeline can run the manual dispatch chain:
+
+```bash
+cewp run dispatch pipeline --adapter codex-exec --yes --timeout 120
+```
+
+Pipeline runs check, prompts, sequential workers, collect, and reviewer execution. It does not auto-finalize, clean up, merge, push, or publish.
+
 `cewp run collect` creates a reviewer packet from local run state:
 
 ```bash

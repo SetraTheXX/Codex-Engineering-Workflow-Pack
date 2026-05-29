@@ -195,6 +195,50 @@ cewp run dispatch start --run 20260528-232250 --dry-run
 
 `dispatch start` is dry-run only in this slice. It prints manual execution steps for workers and reviewer, does not start agents, and does not run `codex exec`, merge, push, or publish.
 
+Preview a future `codex exec` adapter command:
+
+```bash
+cewp run dispatch exec worker-a --adapter codex-exec --dry-run
+cewp run dispatch exec worker-a --run 20260528-232250 --adapter codex-exec --dry-run
+```
+
+`dispatch exec` currently renders a safe command preview only. It does not run `codex exec`, start agents, write adapter output, merge, push, or publish.
+
+Run a single worker through the guarded `codex-exec` adapter:
+
+```bash
+cewp run dispatch exec worker-a --adapter codex-exec --yes
+cewp run dispatch exec worker-a --adapter codex-exec --yes --timeout 120
+```
+
+`--yes` is required for real execution and is currently limited to one worker role at a time. Reviewer execution is still manual/dry-run. After `codex exec` exits, CEWP checks changed files against `allowedFiles` and `forbiddenFiles`, verifies the worker report and adapter output, and still does not merge, push, or publish.
+
+For sandbox compatibility, worker reports are written inside the assigned worktree under `.cewp-worker-output/`. The CLI copies `.cewp-worker-output/<role>-report.md` into `.cewp/runs/<run-id>/reports/` after execution and appends `.cewp-worker-output/<role>-events.jsonl` when present. `.cewp-worker-output/` is runtime output and should not be committed.
+
+Reviewer execution is also supported after `cewp run collect` creates a review packet:
+
+```bash
+cewp run dispatch exec reviewer --adapter codex-exec --yes --timeout 120
+```
+
+The reviewer runs inside `.cewp/runs/<run-id>/`, must write `reviews/reviewer-report.md`, and the report must contain `Decision: PASS | REQUEST_CHANGES | BLOCK`. It still does not merge, push, or publish.
+
+Run both workers sequentially:
+
+```bash
+cewp run dispatch exec workers --adapter codex-exec --yes --timeout 120
+```
+
+`workers` runs `worker-a` then `worker-b`. It is not parallel, does not run the reviewer, and stops before `worker-b` if `worker-a` fails.
+
+Run the guarded sequential dispatch pipeline:
+
+```bash
+cewp run dispatch pipeline --adapter codex-exec --yes --timeout 120
+```
+
+`pipeline` runs dispatch check, refreshes dispatch prompts, executes workers sequentially, collects a review packet, and executes the reviewer. It does not finalize, clean up, merge, push, or publish; finalize remains a separate user command.
+
 Collect reviewer context into one local packet:
 
 ```bash
