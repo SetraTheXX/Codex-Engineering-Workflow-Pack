@@ -36,6 +36,7 @@ Usage:
   cewp run dispatch check
   cewp run dispatch prompts
   cewp run dispatch start --dry-run
+  cewp run dispatch exec <role> --adapter codex-exec --dry-run
   cewp run collect
   cewp run finalize [--dry-run]
   cewp run cleanup [--yes]
@@ -66,6 +67,7 @@ Examples:
   cewp run dispatch check --run 20260528-232250
   cewp run dispatch prompts --run 20260528-232250
   cewp run dispatch start --run 20260528-232250 --dry-run
+  cewp run dispatch exec worker-a --run 20260528-232250 --adapter codex-exec --dry-run
   cewp run collect --run 20260528-232250
   cewp run finalize --run 20260528-232250 --dry-run
   cewp run cleanup --run 20260528-232250
@@ -86,6 +88,7 @@ function parseArgs(argv) {
     help: false,
     dryRun: false,
     yes: false,
+    adapter: undefined,
     workers: undefined,
     reviewer: false,
   };
@@ -113,6 +116,11 @@ function parseArgs(argv) {
 
     if (args.command === "run" && args.subcommand === "dispatch" && index === 2) {
       args.action = arg;
+      continue;
+    }
+
+    if (args.command === "run" && args.subcommand === "dispatch" && args.action === "exec" && index === 3) {
+      args.role = arg;
       continue;
     }
 
@@ -181,6 +189,16 @@ function parseArgs(argv) {
         throw new Error("--run requires a run id.");
       }
       args.runId = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "run" && arg === "--adapter") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--adapter requires an adapter name.");
+      }
+      args.adapter = value;
       index += 1;
       continue;
     }
@@ -1937,6 +1955,231 @@ function runDispatchStart(options = {}) {
   }
 }
 
+function getWorkerTaskForRole(taskEntries, role) {
+  const matches = taskEntries
+    .map((entry) => entry.task)
+    .filter((task) => task.assignedRole === role);
+
+  if (matches.length === 0) {
+    throw new Error(`Cannot create codex-exec preview: no task assigned to ${role}.`);
+  }
+
+  if (matches.length > 1) {
+    throw new Error(`Cannot create codex-exec preview: multiple tasks assigned to ${role}; this slice supports one task per worker role.`);
+  }
+
+  return matches[0];
+}
+
+function getDispatchPromptPathForTask(runRoot, role, taskId) {
+  return path.join(runRoot, "dispatch-prompts", safeDispatchPromptFileName(role, taskId));
+}
+
+function printCodexExecPreview({ cwd, promptPath, outputPath, sandbox }) {
+  console.log("PowerShell preview:");
+  console.log(`  $prompt = Get-Content -Raw ${quote(promptPath)}`);
+  console.log(`  codex exec --cd ${quote(cwd)} --sandbox ${sandbox} --output-last-message ${quote(outputPath)} $prompt`);
+}
+
+function runDispatchExecDryRun(options = {}) {
+  const supportedRoles = ["worker-a", "worker-b", "reviewer"];
+
+  if (!options.dryRun) {
+    throw new Error("dispatch exec currently supports --dry-run only.");
+  }
+
+  if (!options.adapter) {
+    throw new Error("dispatch exec requires --adapter codex-exec.");
+  }
+
+  if (options.adapter !== "codex-exec") {
+    throw new Error(`Unsupported dispatch adapter: ${options.adapter}. Supported adapter: codex-exec.`);
+  }
+
+  if (!supportedRoles.includes(options.role)) {
+    throw new Error(`Unsupported dispatch exec role: ${options.role || "(missing)"}. Supported roles: worker-a, worker-b, reviewer.`);
+  }
+
+  const { runId, runRoot } = findRun(options);
+  const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
+  const boardJson = readJsonIfExists(path.join(runRoot, "board.json"));
+  const taskEntries = readTasks(runRoot);
+  const worktreesRegistry = readWorktreesRegistry(runRoot);
+  const dispatchPromptsRoot = path.join(runRoot, "dispatch-prompts");
+  const adapterOutputRoot = path.join(runRoot, "adapter-output");
+  const outputLastMessagePath = path.join(adapterOutputRoot, `${options.role}-last-message.md`);
+  const failures = [];
+  const warnings = [];
+  let preview;
+
+  if (!runJson) {
+    failures.push("run.json missing.");
+  }
+
+  if (!boardJson) {
+    failures.push("board.json missing.");
+  }
+
+  if (taskEntries.length === 0) {
+    failures.push("tasks not found. Ask the Manager to create tasks first.");
+  }
+
+  if (!worktreesRegistry) {
+    failures.push("worktrees.json missing. Run cewp run worktrees create first.");
+  }
+
+  if (!fs.existsSync(dispatchPromptsRoot)) {
+    failures.push(`dispatch-prompts directory missing. Run: cewp run dispatch prompts --run ${runId}`);
+  }
+
+  if (options.role === "reviewer") {
+    const promptPath = path.join(dispatchPromptsRoot, "reviewer-prompt.md");
+    const reviewPacketPath = path.join(runRoot, "review-packets", "review-packet.md");
+    const reportPath = path.join(runRoot, "reviews", "reviewer-report.md");
+    const eventPath = path.join(runRoot, "events", "reviewer.jsonl");
+    const workdir = (runJson && runJson.repoRoot) || process.cwd();
+
+    if (!fs.existsSync(promptPath)) {
+      failures.push(`reviewer dispatch prompt missing: ${relativeRunPath(runRoot, promptPath)}`);
+    }
+
+    if (!fs.existsSync(reviewPacketPath)) {
+      warnings.push(`review packet missing: ${relativeRunPath(runRoot, reviewPacketPath)}`);
+    }
+
+    if (!fs.existsSync(workdir)) {
+      failures.push(`reviewer working directory missing: ${workdir}`);
+    }
+
+    preview = {
+      role: options.role,
+      cwd: workdir,
+      promptPath,
+      reportPath,
+      eventPath,
+      outputLastMessagePath,
+      sandbox: "read-only",
+      reviewPacketPath,
+    };
+  } else if (taskEntries.length > 0) {
+    const task = getWorkerTaskForRole(taskEntries, options.role);
+    const taskId = task.id || "unknown-task";
+    const worktree = getDispatchWorktree(worktreesRegistry, task.id);
+    const promptPath = getDispatchPromptPathForTask(runRoot, options.role, taskId);
+    const reportPath = path.join(runRoot, "reports", `${options.role}-report.md`);
+    const eventPath = path.join(runRoot, "events", `${options.role}.jsonl`);
+
+    if (!task.id) {
+      failures.push("task file missing required id.");
+    }
+
+    if (!worktree) {
+      failures.push(`${taskId} matching worktree missing in worktrees.json.`);
+    } else if (!worktree.path) {
+      failures.push(`${taskId} worktree path missing.`);
+    } else if (!fs.existsSync(worktree.path)) {
+      failures.push(`${taskId} worktree path does not exist: ${worktree.path}`);
+    } else if (!isGitWorktreePath(worktree.path)) {
+      failures.push(`${taskId} path is not a git worktree: ${worktree.path}`);
+    }
+
+    if (!fs.existsSync(promptPath)) {
+      failures.push(`${taskId} dispatch prompt missing: ${relativeRunPath(runRoot, promptPath)}`);
+    }
+
+    preview = {
+      role: options.role,
+      task,
+      worktree,
+      cwd: worktree && worktree.path,
+      promptPath,
+      reportPath,
+      eventPath,
+      outputLastMessagePath,
+      sandbox: "workspace-write",
+    };
+  }
+
+  console.log("CEWP Coordinator Mode codex-exec adapter dry-run");
+  console.log(`Run ID: ${runId}`);
+  console.log(`Role: ${options.role}`);
+  console.log(`Adapter: ${options.adapter}`);
+  console.log("Mode: dry-run");
+  console.log("");
+  console.log(`Readiness: ${failures.length > 0 ? "FAIL" : warnings.length > 0 ? "WARN" : "PASS"}`);
+  console.log("");
+
+  if (failures.length > 0) {
+    console.log("Failures:");
+    for (const failure of failures) {
+      console.log(`  - ${failure}`);
+    }
+    console.log("");
+  }
+
+  if (warnings.length > 0) {
+    console.log("Warnings:");
+    for (const warning of warnings) {
+      console.log(`  - ${warning}`);
+    }
+    console.log("");
+  }
+
+  if (preview) {
+    if (preview.task) {
+      console.log("Task:");
+      console.log(`  ${preview.task.id || "unknown-task"} / ${preview.role}`);
+      console.log(`  Title: ${preview.task.title || "(untitled)"}`);
+      console.log(`  Branch: ${(preview.worktree && preview.worktree.branch) || preview.task.branch || "unknown"}`);
+      console.log("");
+      console.log("Worktree:");
+      console.log(`  ${preview.cwd || "missing"}`);
+      console.log("");
+    } else {
+      console.log("Reviewer:");
+      console.log(`  Workdir: ${preview.cwd}`);
+      console.log("  Sandbox: read-only");
+      console.log("  Note: reviewer report writing will require a future workspace-write execution mode.");
+      console.log(`  Review packet: ${relativeRunPath(runRoot, preview.reviewPacketPath)}`);
+      console.log("");
+    }
+
+    console.log("Prompt:");
+    console.log(`  ${relativeRunPath(runRoot, preview.promptPath)}`);
+    console.log("");
+    console.log("Expected outputs:");
+    console.log(`  Report: ${relativeRunPath(runRoot, preview.reportPath)}`);
+    console.log(`  Event log: ${relativeRunPath(runRoot, preview.eventPath)}`);
+    console.log(`  Last message: ${relativeRunPath(runRoot, preview.outputLastMessagePath)}`);
+    console.log("");
+    console.log("Recommended execution strategy:");
+    console.log("  Pass prompt content to codex exec from the dispatch prompt file.");
+    console.log("  Do not inline the full prompt in a shell command.");
+    console.log("");
+    printCodexExecPreview({
+      cwd: preview.cwd || "<missing-workdir>",
+      promptPath: preview.promptPath,
+      outputPath: preview.outputLastMessagePath,
+      sandbox: preview.sandbox,
+    });
+    console.log("");
+  }
+
+  console.log("Post-checks:");
+  console.log("  git status --short");
+  console.log("  allowedFiles / forbiddenFiles");
+  console.log("  report exists");
+  console.log("  adapter output exists");
+  console.log("  no merge/push/publish");
+  console.log("");
+  console.log("No processes were started.");
+  console.log("No files were changed.");
+
+  if (failures.length > 0) {
+    process.exitCode = 1;
+  }
+}
+
 function getWorktreePreflightErrors(plans) {
   const errors = [];
   const seenPaths = new Map();
@@ -2972,6 +3215,11 @@ function runCommand(options) {
 
   if (options.subcommand === "dispatch" && options.action === "start") {
     runDispatchStart(options);
+    return;
+  }
+
+  if (options.subcommand === "dispatch" && options.action === "exec") {
+    runDispatchExecDryRun(options);
     return;
   }
 

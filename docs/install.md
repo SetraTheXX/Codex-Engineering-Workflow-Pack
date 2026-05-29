@@ -142,6 +142,14 @@ cewp run dispatch start --dry-run
 
 In this slice dispatch start is dry-run only. It does not spawn processes, automate terminal input, run `codex exec`, merge, push, or publish.
 
+`cewp run dispatch exec <role> --adapter codex-exec --dry-run` previews a future `codex exec` adapter command:
+
+```bash
+cewp run dispatch exec worker-a --adapter codex-exec --dry-run
+```
+
+This is a local Coordinator Mode runtime helper. It renders the command, prompt path, output path, and post-check plan only; it does not spawn processes, run `codex exec`, merge, push, or publish.
+
 `cewp run collect` creates a reviewer packet from local run state:
 
 ```bash

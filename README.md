@@ -195,6 +195,15 @@ cewp run dispatch start --run 20260528-232250 --dry-run
 
 `dispatch start` is dry-run only in this slice. It prints manual execution steps for workers and reviewer, does not start agents, and does not run `codex exec`, merge, push, or publish.
 
+Preview a future `codex exec` adapter command:
+
+```bash
+cewp run dispatch exec worker-a --adapter codex-exec --dry-run
+cewp run dispatch exec worker-a --run 20260528-232250 --adapter codex-exec --dry-run
+```
+
+`dispatch exec` currently renders a safe command preview only. It does not run `codex exec`, start agents, write adapter output, merge, push, or publish.
+
 Collect reviewer context into one local packet:
 
 ```bash
