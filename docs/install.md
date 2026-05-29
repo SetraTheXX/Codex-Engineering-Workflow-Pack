@@ -110,6 +110,14 @@ cewp run worktrees status
 
 This helper reads `worktrees.json`, reports clean/dirty state, and warns when changed files fall outside `allowedFiles` or match `forbiddenFiles`. It does not merge, push, publish, or remove worktrees.
 
+`cewp run collect` creates a reviewer packet from local run state:
+
+```bash
+cewp run collect
+```
+
+The packet is written under `.cewp/runs/<run-id>/review-packets/`. It is Coordinator Mode runtime state, not installed skill content or package content.
+
 Cleanup is still manual until the cleanup helper slice:
 
 ```bash

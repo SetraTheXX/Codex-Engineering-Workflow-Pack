@@ -159,6 +159,15 @@ cewp run worktrees status --run 20260528-232250
 
 `worktrees status` reports clean/dirty state and allowed/forbidden file warnings. It is read-only and does not merge, push, publish, or remove worktrees.
 
+Collect reviewer context into one local packet:
+
+```bash
+cewp run collect
+cewp run collect --run 20260528-232250
+```
+
+`collect` writes `.cewp/runs/<run-id>/review-packets/review-packet.md` for reviewer handoff. It does not merge, push, publish, or mutate board/task JSON.
+
 Runtime state lives under:
 
 ```txt
