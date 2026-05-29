@@ -34,6 +34,7 @@ Usage:
   cewp run worktrees status
   cewp run dispatch plan
   cewp run dispatch check
+  cewp run dispatch prompts
   cewp run collect
   cewp run finalize [--dry-run]
   cewp run cleanup [--yes]
@@ -62,6 +63,7 @@ Examples:
   cewp run worktrees status --run 20260528-232250
   cewp run dispatch plan --run 20260528-232250
   cewp run dispatch check --run 20260528-232250
+  cewp run dispatch prompts --run 20260528-232250
   cewp run collect --run 20260528-232250
   cewp run finalize --run 20260528-232250 --dry-run
   cewp run cleanup --run 20260528-232250
@@ -1549,6 +1551,227 @@ function runDispatchCheck(options = {}) {
   }
 }
 
+function markdownArray(value) {
+  if (!Array.isArray(value) || value.length === 0) {
+    return "- none";
+  }
+
+  return value.map((item) => `- ${item}`).join("\n");
+}
+
+function createWorkerDispatchPrompt({ runId, runRoot, runJson, task, worktree }) {
+  const assignedRole = task.assignedRole || "unassigned";
+  const reportPath = path.join(runRoot, "reports", `${assignedRole}-report.md`);
+  const eventPath = path.join(runRoot, "events", `${assignedRole}.jsonl`);
+
+  return `# CEWP Dispatch Prompt - Worker
+
+Role: ${assignedRole}
+Task: ${task.id}
+Run ID: ${runId}
+Repo root: ${(runJson && runJson.repoRoot) || process.cwd()}
+Run root: ${runRoot}
+Worktree path: ${worktree.path}
+Branch: ${worktree.branch || task.branch || "unknown"}
+
+## Mission
+${task.mission || "Complete the assigned task exactly as described in the task metadata."}
+
+## Task Metadata
+- title: ${task.title || "(untitled)"}
+- status: ${task.status || "unknown"}
+- assignedRole: ${assignedRole}
+- dependsOn: ${Array.isArray(task.dependsOn) && task.dependsOn.length ? task.dependsOn.join(", ") : "none"}
+- allowedFiles:
+${markdownArray(task.allowedFiles)}
+- forbiddenFiles:
+${markdownArray(task.forbiddenFiles)}
+- verification:
+${markdownArray(task.verification)}
+
+## Hard Rules
+- Work only inside the assigned worktree.
+- Do not write board.json.
+- Do not edit tasks/*.json.
+- Do not edit files outside allowedFiles when allowedFiles is non-empty.
+- Do not touch forbiddenFiles.
+- Do not merge.
+- Do not push.
+- Do not publish.
+- Do not spawn Codex processes.
+- Do not automate terminal input.
+
+## Required Outputs
+- ${relativeRunPath(runRoot, reportPath)}
+- ${relativeRunPath(runRoot, eventPath)}
+
+## Report Template
+\`\`\`md
+# Worker Report
+
+Role: ${assignedRole}
+Task: ${task.id}
+Status: ready_for_review | blocked
+
+## Summary
+
+## Changed Files
+
+## Commands Run
+
+## Test Results
+
+## Risks
+
+## Handoff Notes
+\`\`\`
+`;
+}
+
+function createReviewerDispatchPrompt({ runId, runRoot, runJson, worktreesRegistry }) {
+  const reviewPacketPath = path.join(runRoot, "review-packets", "review-packet.md");
+  const reviewerReportPath = path.join(runRoot, "reviews", "reviewer-report.md");
+  const reviewerEventPath = path.join(runRoot, "events", "reviewer.jsonl");
+  const worktreeLines = worktreesRegistry.worktrees.length === 0
+    ? "- none"
+    : worktreesRegistry.worktrees
+      .map((entry) => `- ${entry.taskId || "unknown-task"} / ${entry.assignedRole || "unassigned"}: ${entry.path || "missing path"}`)
+      .join("\n");
+
+  return `# CEWP Dispatch Prompt - Reviewer
+
+Run ID: ${runId}
+Repo root: ${(runJson && runJson.repoRoot) || process.cwd()}
+Run root: ${runRoot}
+Review packet: ${reviewPacketPath}
+Worktrees:
+${worktreeLines}
+
+## Mission
+Review worker output without blindly trusting reports.
+
+## Inputs
+- board.json
+- tasks/*.json
+- reports/*.md
+- worktrees status
+- review-packets/review-packet.md
+
+## Required Output
+- ${relativeRunPath(runRoot, reviewerReportPath)}
+- ${relativeRunPath(runRoot, reviewerEventPath)}
+
+## Decision Format
+Decision: PASS | REQUEST_CHANGES | BLOCK
+
+## Reviewer Checklist
+- Compare worker reports against actual git diff output.
+- Check allowedFiles and forbiddenFiles for every task.
+- Check verification commands and test output claims.
+- Check scope creep and unexpected files.
+- Do not implement production feature work.
+- Do not merge, push, publish, spawn Codex processes, or automate terminal input.
+`;
+}
+
+function safeDispatchPromptFileName(role, taskId) {
+  return `${role}-${taskId}-prompt.md`.replace(/[^a-zA-Z0-9._-]/g, "-");
+}
+
+function runDispatchPrompts(options = {}) {
+  const { runId, runRoot } = findRun(options);
+  const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
+  const taskEntries = readTasks(runRoot);
+  const worktreesRegistry = readWorktreesRegistry(runRoot);
+  const warnings = [];
+
+  if (taskEntries.length === 0) {
+    throw new Error("Cannot create dispatch prompts: no task files found. Ask the Manager to create tasks first.");
+  }
+
+  if (!worktreesRegistry) {
+    throw new Error("Cannot create dispatch prompts: worktrees.json missing. Run cewp run worktrees create first.");
+  }
+
+  const outputRoot = path.join(runRoot, "dispatch-prompts");
+  fs.mkdirSync(outputRoot, { recursive: true });
+
+  const created = [];
+
+  for (const { task } of taskEntries) {
+    const taskId = task.id || "unknown-task";
+    const assignedRole = task.assignedRole || "unassigned";
+    const worktree = getDispatchWorktree(worktreesRegistry, task.id);
+    const basePromptPath = getPromptPath(runRoot, assignedRole);
+
+    if (!worktree) {
+      throw new Error(`Cannot create dispatch prompts: ${taskId} matching worktree missing in worktrees.json.`);
+    }
+
+    if (!worktree.path) {
+      throw new Error(`Cannot create dispatch prompts: ${taskId} worktree path missing.`);
+    }
+
+    if (!fs.existsSync(basePromptPath)) {
+      warnings.push(`${taskId} base prompt missing for ${assignedRole}; generated dispatch prompt from built-in template.`);
+    }
+
+    const filePath = path.join(outputRoot, safeDispatchPromptFileName(assignedRole, taskId));
+    fs.writeFileSync(filePath, createWorkerDispatchPrompt({
+      runId,
+      runRoot,
+      runJson,
+      task,
+      worktree,
+    }));
+    created.push(filePath);
+  }
+
+  const reviewerPromptPath = getPromptPath(runRoot, "reviewer");
+  const reviewPacketPath = path.join(runRoot, "review-packets", "review-packet.md");
+
+  if (!fs.existsSync(reviewerPromptPath)) {
+    warnings.push("reviewer base prompt missing; generated dispatch prompt from built-in template.");
+  }
+
+  if (!fs.existsSync(reviewPacketPath)) {
+    warnings.push("review packet missing; reviewer dispatch prompt was still created.");
+  }
+
+  const reviewerDispatchPath = path.join(outputRoot, "reviewer-prompt.md");
+  fs.writeFileSync(reviewerDispatchPath, createReviewerDispatchPrompt({
+    runId,
+    runRoot,
+    runJson,
+    worktreesRegistry,
+  }));
+  created.push(reviewerDispatchPath);
+
+  console.log("CEWP Coordinator Mode dispatch prompts");
+  console.log(`Run ID: ${runId}`);
+  console.log("");
+  console.log("Created:");
+  for (const filePath of created) {
+    console.log(`  ${relativeRunPath(runRoot, filePath)}`);
+  }
+  console.log("");
+
+  console.log("Warnings:");
+  if (warnings.length === 0) {
+    console.log("  none");
+  } else {
+    for (const warning of warnings) {
+      console.log(`  - ${warning}`);
+    }
+  }
+  console.log("");
+
+  console.log("Next:");
+  console.log(`  Review with: cewp run dispatch check --run ${runId}`);
+  console.log("  Paste each dispatch prompt into the matching Codex session manually.");
+  console.log("  This command did not start agents.");
+}
+
 function getWorktreePreflightErrors(plans) {
   const errors = [];
   const seenPaths = new Map();
@@ -2574,6 +2797,11 @@ function runCommand(options) {
 
   if (options.subcommand === "dispatch" && options.action === "check") {
     runDispatchCheck(options);
+    return;
+  }
+
+  if (options.subcommand === "dispatch" && options.action === "prompts") {
+    runDispatchPrompts(options);
     return;
   }
 

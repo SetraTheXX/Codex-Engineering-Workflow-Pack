@@ -177,6 +177,15 @@ cewp run dispatch check --run 20260528-232250
 
 `dispatch check` is a read-only preflight for worker/reviewer dispatch. It reports PASS/WARN/FAIL, does not start agents, and does not mutate run state.
 
+Create concrete dispatch prompt bundles:
+
+```bash
+cewp run dispatch prompts
+cewp run dispatch prompts --run 20260528-232250
+```
+
+`dispatch prompts` writes task/worktree-specific prompt bundles under `.cewp/runs/<run-id>/dispatch-prompts/`. It does not start agents; the user manually pastes each prompt into the matching Codex session.
+
 Collect reviewer context into one local packet:
 
 ```bash

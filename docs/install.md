@@ -126,6 +126,14 @@ cewp run dispatch check
 
 It reports PASS/WARN/FAIL for task, worktree, prompt, and reviewer readiness. It is a preflight for the user approval gate and does not spawn processes or mutate runtime state.
 
+`cewp run dispatch prompts` creates concrete prompt bundles:
+
+```bash
+cewp run dispatch prompts
+```
+
+The generated files live under `.cewp/runs/<run-id>/dispatch-prompts/`. They are Coordinator Mode runtime artifacts, should not be committed, and do not spawn processes or run agents.
+
 `cewp run collect` creates a reviewer packet from local run state:
 
 ```bash
