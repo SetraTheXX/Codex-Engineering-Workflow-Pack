@@ -150,6 +150,14 @@ cewp run dispatch exec worker-a --adapter codex-exec --dry-run
 
 This is a local Coordinator Mode runtime helper. It renders the command, prompt path, output path, and post-check plan only; it does not spawn processes, run `codex exec`, merge, push, or publish.
 
+With explicit user approval, the adapter can run one worker at a time:
+
+```bash
+cewp run dispatch exec worker-a --adapter codex-exec --yes --timeout 120
+```
+
+This guarded execution mode runs `codex exec` only for worker roles, captures adapter output under `.cewp/runs/<run-id>/adapter-output/`, and performs post-checks for changed files, forbidden files, report existence, and exit code. Reviewer execution is not implemented yet, and merge/push/publish remain separate user-approved steps.
+
 `cewp run collect` creates a reviewer packet from local run state:
 
 ```bash

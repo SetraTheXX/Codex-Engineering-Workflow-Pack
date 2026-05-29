@@ -204,6 +204,15 @@ cewp run dispatch exec worker-a --run 20260528-232250 --adapter codex-exec --dry
 
 `dispatch exec` currently renders a safe command preview only. It does not run `codex exec`, start agents, write adapter output, merge, push, or publish.
 
+Run a single worker through the guarded `codex-exec` adapter:
+
+```bash
+cewp run dispatch exec worker-a --adapter codex-exec --yes
+cewp run dispatch exec worker-a --adapter codex-exec --yes --timeout 120
+```
+
+`--yes` is required for real execution and is currently limited to one worker role at a time. Reviewer execution is still manual/dry-run. After `codex exec` exits, CEWP checks changed files against `allowedFiles` and `forbiddenFiles`, verifies the worker report and adapter output, and still does not merge, push, or publish.
+
 Collect reviewer context into one local packet:
 
 ```bash
