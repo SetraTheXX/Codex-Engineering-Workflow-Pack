@@ -215,6 +215,14 @@ cewp run dispatch exec worker-a --adapter codex-exec --yes --timeout 120
 
 For sandbox compatibility, worker reports are written inside the assigned worktree under `.cewp-worker-output/`. The CLI copies `.cewp-worker-output/<role>-report.md` into `.cewp/runs/<run-id>/reports/` after execution and appends `.cewp-worker-output/<role>-events.jsonl` when present. `.cewp-worker-output/` is runtime output and should not be committed.
 
+Reviewer execution is also supported after `cewp run collect` creates a review packet:
+
+```bash
+cewp run dispatch exec reviewer --adapter codex-exec --yes --timeout 120
+```
+
+The reviewer runs inside `.cewp/runs/<run-id>/`, must write `reviews/reviewer-report.md`, and the report must contain `Decision: PASS | REQUEST_CHANGES | BLOCK`. It still does not merge, push, or publish.
+
 Collect reviewer context into one local packet:
 
 ```bash

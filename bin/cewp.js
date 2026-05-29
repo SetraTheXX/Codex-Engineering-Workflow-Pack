@@ -70,6 +70,7 @@ Examples:
   cewp run dispatch start --run 20260528-232250 --dry-run
   cewp run dispatch exec worker-a --run 20260528-232250 --adapter codex-exec --dry-run
   cewp run dispatch exec worker-a --run 20260528-232250 --adapter codex-exec --yes --timeout 120
+  cewp run dispatch exec reviewer --run 20260528-232250 --adapter codex-exec --yes --timeout 120
   cewp run collect --run 20260528-232250
   cewp run finalize --run 20260528-232250 --dry-run
   cewp run cleanup --run 20260528-232250
@@ -2059,14 +2060,19 @@ function getDispatchExecPreview(options) {
     const reviewPacketPath = path.join(runRoot, "review-packets", "review-packet.md");
     const reportPath = path.join(runRoot, "reviews", "reviewer-report.md");
     const eventPath = path.join(runRoot, "events", "reviewer.jsonl");
-    const workdir = (runJson && runJson.repoRoot) || process.cwd();
+    const workdir = runRoot;
+    const reportFiles = listFiles(path.join(runRoot, "reports"), ".md");
 
     if (!fs.existsSync(promptPath)) {
       failures.push(`reviewer dispatch prompt missing: ${relativeRunPath(runRoot, promptPath)}`);
     }
 
     if (!fs.existsSync(reviewPacketPath)) {
-      warnings.push(`review packet missing: ${relativeRunPath(runRoot, reviewPacketPath)}`);
+      failures.push(`review packet missing: ${relativeRunPath(runRoot, reviewPacketPath)}. Run cewp run collect first.`);
+    }
+
+    if (reportFiles.length === 0) {
+      failures.push("worker reports missing. Run worker execution before reviewer execution.");
     }
 
     if (!fs.existsSync(workdir)) {
@@ -2080,8 +2086,9 @@ function getDispatchExecPreview(options) {
       reportPath,
       eventPath,
       outputLastMessagePath,
-      sandbox: "read-only",
+      sandbox: "workspace-write",
       reviewPacketPath,
+      reportFiles,
     };
   } else if (taskEntries.length > 0) {
     const task = getWorkerTaskForRole(taskEntries, options.role);
@@ -2161,9 +2168,9 @@ function getDispatchExecPreview(options) {
       } else {
         console.log("Reviewer:");
         console.log(`  Workdir: ${preview.cwd}`);
-        console.log("  Sandbox: read-only");
-        console.log("  Note: reviewer report writing will require a future workspace-write execution mode.");
+        console.log("  Sandbox: workspace-write");
         console.log(`  Review packet: ${relativeRunPath(runRoot, preview.reviewPacketPath)}`);
+        console.log(`  Worker reports: ${preview.reportFiles.length}`);
         console.log("");
       }
 
@@ -2256,14 +2263,14 @@ function copyWorkerOutputToRun({ runRoot, role, localReportPath, localEventsPath
   return copied;
 }
 
-function runCodexExec({ worktreePath, promptPath, outputLastMessagePath, timeoutSeconds }) {
+function runCodexExec({ worktreePath, promptPath, outputLastMessagePath, timeoutSeconds, sandbox = "workspace-write" }) {
   const prompt = fs.readFileSync(promptPath, "utf8");
   return childProcess.spawnSync("codex", [
     "exec",
     "--cd",
     worktreePath,
     "--sandbox",
-    "workspace-write",
+    sandbox,
     "--output-last-message",
     outputLastMessagePath,
     prompt,
@@ -2276,6 +2283,145 @@ function runCodexExec({ worktreePath, promptPath, outputLastMessagePath, timeout
   });
 }
 
+function getRepoStatusForReviewer(repoRoot) {
+  if (!repoRoot || !fs.existsSync(repoRoot) || !isGitWorktreePath(repoRoot)) {
+    return [];
+  }
+
+  return getGitStatusShort(repoRoot);
+}
+
+function runDispatchReviewerExecActual(options, preflight) {
+  const { runId, runRoot, runJson, failures, warnings, preview } = preflight;
+
+  if (failures.length > 0) {
+    console.log("CEWP Coordinator Mode codex-exec reviewer execution");
+    console.log(`Run ID: ${runId}`);
+    console.log("Role: reviewer");
+    console.log("Adapter: codex-exec");
+    console.log("");
+    console.log("Preflight: FAIL");
+    console.log("Failures:");
+    for (const failure of failures) {
+      console.log(`  - ${failure}`);
+    }
+    console.log("");
+    console.log("No processes were started.");
+    console.log("No merge/push/publish was performed.");
+    process.exitCode = 1;
+    return;
+  }
+
+  const repoRoot = (runJson && runJson.repoRoot) || process.cwd();
+  const repoStatusBefore = getRepoStatusForReviewer(repoRoot);
+  const adapterOutputRoot = path.join(runRoot, "adapter-output");
+  fs.mkdirSync(adapterOutputRoot, { recursive: true });
+
+  console.log("");
+  console.log("Executing codex exec reviewer...");
+  const execResult = runCodexExec({
+    worktreePath: preview.cwd,
+    promptPath: preview.promptPath,
+    outputLastMessagePath: preview.outputLastMessagePath,
+    timeoutSeconds: options.timeoutSeconds,
+    sandbox: "workspace-write",
+  });
+
+  const stdoutPath = path.join(adapterOutputRoot, "reviewer-stdout.log");
+  const stderrPath = path.join(adapterOutputRoot, "reviewer-stderr.log");
+  writeAdapterLog(stdoutPath, execResult.stdout);
+  writeAdapterLog(stderrPath, execResult.stderr);
+
+  const reportExists = fs.existsSync(preview.reportPath);
+  const lastMessageExists = fs.existsSync(preview.outputLastMessagePath);
+  const eventExists = fs.existsSync(preview.eventPath);
+  const decision = reportExists ? findReviewerDecisionStrict(preview.reportPath) : undefined;
+  const timedOut = Boolean(execResult.error && execResult.error.code === "ETIMEDOUT");
+  const exitCode = typeof execResult.status === "number" ? execResult.status : 1;
+  const repoStatusAfter = getRepoStatusForReviewer(repoRoot);
+  const repoChanged = repoStatusBefore.join("\n") !== repoStatusAfter.join("\n");
+  const failuresAfterExec = [];
+  const warningsAfterExec = [];
+
+  if (timedOut) {
+    failuresAfterExec.push(`codex exec timed out after ${options.timeoutSeconds}s.`);
+  }
+
+  if (exitCode !== 0) {
+    failuresAfterExec.push(`codex exec exited with code ${exitCode}.`);
+  }
+
+  if (!reportExists) {
+    failuresAfterExec.push(`reviewer report missing: ${relativeRunPath(runRoot, preview.reportPath)}`);
+  } else if (!decision) {
+    failuresAfterExec.push("reviewer report does not contain Decision: PASS | REQUEST_CHANGES | BLOCK");
+  }
+
+  if (!lastMessageExists) {
+    failuresAfterExec.push(`adapter output missing: ${relativeRunPath(runRoot, preview.outputLastMessagePath)}`);
+  }
+
+  if (repoChanged) {
+    failuresAfterExec.push("public repo git status changed during reviewer execution.");
+  }
+
+  if (!eventExists) {
+    warningsAfterExec.push(`reviewer event log missing: ${relativeRunPath(runRoot, preview.eventPath)}`);
+  }
+
+  const status = failuresAfterExec.length > 0 ? "FAIL" : "PASS";
+  appendRunEvent(runRoot, "cli", {
+    event: status === "PASS" ? "dispatch_exec_completed" : "dispatch_exec_failed",
+    runId,
+    adapter: "codex-exec",
+    role: "reviewer",
+    exitCode,
+    status,
+    decision: decision || "not_found",
+  });
+
+  console.log("");
+  console.log("CEWP Coordinator Mode codex-exec reviewer execution");
+  console.log(`Run ID: ${runId}`);
+  console.log("Role: reviewer");
+  console.log("Adapter: codex-exec");
+  console.log("");
+  console.log(`Preflight: ${warnings.length > 0 ? "WARN" : "PASS"}`);
+  console.log(`Execution: ${exitCode === 0 && !timedOut ? "PASS" : "FAIL"}`);
+  console.log(`Exit code: ${exitCode}`);
+  console.log(`Timeout: ${options.timeoutSeconds}s`);
+  console.log(`Decision: ${decision || "not found"}`);
+  console.log(`Report: ${reportExists ? `found ${relativeRunPath(runRoot, preview.reportPath)}` : `missing ${relativeRunPath(runRoot, preview.reportPath)}`}`);
+  console.log(`Event log: ${eventExists ? relativeRunPath(runRoot, preview.eventPath) : "not provided"}`);
+  console.log(`Last message: ${lastMessageExists ? relativeRunPath(runRoot, preview.outputLastMessagePath) : "missing"}`);
+  console.log(`Stdout log: ${relativeRunPath(runRoot, stdoutPath)}`);
+  console.log(`Stderr log: ${relativeRunPath(runRoot, stderrPath)}`);
+  console.log(`Public repo changed: ${repoChanged ? "yes" : "no"}`);
+  console.log("");
+  console.log(`Status: ${status}`);
+
+  if (failuresAfterExec.length > 0) {
+    console.log("Reasons:");
+    for (const failure of failuresAfterExec) {
+      console.log(`  - ${failure}`);
+    }
+  }
+
+  if (warningsAfterExec.length > 0) {
+    console.log("Warnings:");
+    for (const warning of warningsAfterExec) {
+      console.log(`  - ${warning}`);
+    }
+  }
+
+  console.log("");
+  console.log("No merge/push/publish was performed.");
+
+  if (status === "FAIL") {
+    process.exitCode = 1;
+  }
+}
+
 function runDispatchExecActual(options = {}) {
   if (!options.adapter) {
     throw new Error("dispatch exec requires --adapter codex-exec.");
@@ -2285,12 +2431,13 @@ function runDispatchExecActual(options = {}) {
     throw new Error(`Unsupported dispatch adapter: ${options.adapter}. Supported adapter: codex-exec.`);
   }
 
-  if (options.role === "reviewer") {
-    throw new Error("reviewer execution is not implemented yet. Use --dry-run/manual review.");
-  }
-
   const result = getDispatchExecPreview({ ...options, dryRun: false, printPreview: false });
   const { runId, runRoot, failures, warnings, preview } = result;
+
+  if (options.role === "reviewer") {
+    runDispatchReviewerExecActual(options, result);
+    return;
+  }
 
   if (failures.length > 0) {
     console.log("CEWP Coordinator Mode codex-exec execution");
