@@ -177,6 +177,15 @@ cewp run finalize --run 20260528-232250
 
 `finalize` requires `Decision: PASS` in the latest reviewer report, then marks run/board/tasks completed under `.cewp/`. It does not merge, push, publish, or clean up worktrees.
 
+Clean up registered worktrees:
+
+```bash
+cewp run cleanup
+cewp run cleanup --run 20260528-232250 --yes
+```
+
+`cleanup` is dry-run by default. With `--yes`, it removes only clean registered worktrees under `.cewp-worktrees/`; dirty worktrees are skipped. It does not delete `.cewp/runs/<run-id>/`, merge, push, or publish.
+
 Runtime state lives under:
 
 ```txt

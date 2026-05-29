@@ -126,11 +126,14 @@ cewp run finalize --dry-run
 
 It requires `Decision: PASS`, marks run/board/tasks completed under `.cewp/`, and does not merge source code, publish, release, or remove worktrees. Source integration and release still require explicit user approval.
 
-Cleanup is still manual until the cleanup helper slice:
+`cewp run cleanup` removes registered worker worktrees after review:
 
 ```bash
-git worktree remove "<path>"
+cewp run cleanup
+cewp run cleanup --yes
 ```
+
+Cleanup is dry-run by default. With `--yes`, it removes only clean registered worktrees under `.cewp-worktrees/`, skips dirty worktrees, and keeps run history under `.cewp/runs/`. Source code merge/release still requires explicit user approval.
 
 Runtime state is written under:
 
