@@ -39,7 +39,9 @@ Usage:
   cewp run dispatch exec <role> --adapter codex-exec --dry-run
   cewp run dispatch exec <role> --adapter codex-exec --yes [--timeout <seconds>]
   cewp run dispatch exec workers --adapter codex-exec --yes [--timeout <seconds>]
+  cewp run dispatch exec workers --adapter codex-exec --yes --parallel [--timeout <seconds>]
   cewp run dispatch pipeline --adapter codex-exec --yes [--timeout <seconds>]
+  cewp run dispatch pipeline --adapter codex-exec --yes --parallel [--timeout <seconds>]
   cewp run collect
   cewp run finalize [--dry-run]
   cewp run cleanup [--yes]
@@ -73,9 +75,13 @@ Examples:
   cewp run dispatch exec worker-a --run 20260528-232250 --adapter codex-exec --dry-run
   cewp run dispatch exec worker-a --run 20260528-232250 --adapter codex-exec --yes --timeout 120
   cewp run dispatch exec workers --run 20260528-232250 --adapter codex-exec --yes --timeout 120
+  cewp run dispatch exec workers --run 20260528-232250 --adapter codex-exec --dry-run --parallel
+  cewp run dispatch exec workers --run 20260528-232250 --adapter codex-exec --yes --parallel --timeout 120
   cewp run dispatch exec reviewer --run 20260528-232250 --adapter codex-exec --yes --timeout 120
   cewp run dispatch pipeline --run 20260528-232250 --adapter codex-exec --yes --timeout 120
+  cewp run dispatch pipeline --run 20260528-232250 --adapter codex-exec --yes --parallel --timeout 120
   cewp run dispatch pipeline --run 20260528-232250 --adapter codex-exec --dry-run
+  cewp run dispatch pipeline --run 20260528-232250 --adapter codex-exec --dry-run --parallel
   cewp run collect --run 20260528-232250
   cewp run finalize --run 20260528-232250 --dry-run
   cewp run cleanup --run 20260528-232250
@@ -98,6 +104,7 @@ function parseArgs(argv) {
     yes: false,
     adapter: undefined,
     timeoutSeconds: 120,
+    parallel: false,
     workers: undefined,
     reviewer: false,
   };
@@ -171,6 +178,11 @@ function parseArgs(argv) {
 
     if (args.command === "run" && arg === "--yes") {
       args.yes = true;
+      continue;
+    }
+
+    if (args.command === "run" && arg === "--parallel") {
+      args.parallel = true;
       continue;
     }
 
@@ -2642,13 +2654,195 @@ function runDispatchExecActual(options = {}) {
   return status;
 }
 
+function normalizeComparePath(filePath) {
+  return process.platform === "win32" ? filePath.toLowerCase() : filePath;
+}
+
+function normalizeAllowedFileEntry(value) {
+  return String(value || "").replace(/\\/g, "/").replace(/\/+$/, "");
+}
+
+function getAllowedFilesOverlap(taskA, taskB) {
+  const allowedA = Array.isArray(taskA.allowedFiles) ? taskA.allowedFiles.map(normalizeAllowedFileEntry).filter(Boolean) : [];
+  const allowedB = Array.isArray(taskB.allowedFiles) ? taskB.allowedFiles.map(normalizeAllowedFileEntry).filter(Boolean) : [];
+  const setB = new Set(allowedB);
+  return allowedA.filter((entry) => setB.has(entry));
+}
+
+function getParallelWorkersPreflight(options = {}) {
+  const roles = ["worker-a", "worker-b"];
+  const failures = [];
+  const warnings = [];
+  const previews = [];
+
+  for (const role of roles) {
+    const result = getDispatchExecPreview({
+      ...options,
+      role,
+      dryRun: true,
+      printPreview: false,
+    });
+    previews.push({ role, result });
+
+    for (const failure of result.failures) {
+      failures.push(`${role}: ${failure}`);
+    }
+    for (const warning of result.warnings) {
+      warnings.push(`${role}: ${warning}`);
+    }
+  }
+
+  const workerA = previews.find((entry) => entry.role === "worker-a");
+  const workerB = previews.find((entry) => entry.role === "worker-b");
+  const previewA = workerA && workerA.result.preview;
+  const previewB = workerB && workerB.result.preview;
+
+  if (previewA && previewB) {
+    if (previewA.cwd && previewB.cwd && normalizeComparePath(path.resolve(previewA.cwd)) === normalizeComparePath(path.resolve(previewB.cwd))) {
+      failures.push(`worker-a and worker-b use the same worktree path: ${previewA.cwd}`);
+    }
+
+    const taskIdA = previewA.task && previewA.task.id;
+    const taskIdB = previewB.task && previewB.task.id;
+    if (taskIdA && taskIdB && taskIdA === taskIdB) {
+      failures.push(`worker-a and worker-b are assigned the same task: ${taskIdA}`);
+    }
+
+    const allowedA = Array.isArray(previewA.task && previewA.task.allowedFiles) ? previewA.task.allowedFiles : [];
+    const allowedB = Array.isArray(previewB.task && previewB.task.allowedFiles) ? previewB.task.allowedFiles : [];
+    if (allowedA.length === 0) {
+      failures.push("worker-a allowedFiles is empty; parallel execution requires explicit non-overlapping allowedFiles.");
+    }
+    if (allowedB.length === 0) {
+      failures.push("worker-b allowedFiles is empty; parallel execution requires explicit non-overlapping allowedFiles.");
+    }
+
+    const overlap = getAllowedFilesOverlap(previewA.task || {}, previewB.task || {});
+    if (overlap.length > 0) {
+      failures.push(`worker allowedFiles overlap: ${overlap.join(", ")}`);
+    }
+
+    const forbiddenA = Array.isArray(previewA.task && previewA.task.forbiddenFiles) ? previewA.task.forbiddenFiles : [];
+    const forbiddenB = Array.isArray(previewB.task && previewB.task.forbiddenFiles) ? previewB.task.forbiddenFiles : [];
+    if (forbiddenA.length === 0) {
+      failures.push("worker-a forbiddenFiles is empty; parallel execution requires forbiddenFiles.");
+    }
+    if (forbiddenB.length === 0) {
+      failures.push("worker-b forbiddenFiles is empty; parallel execution requires forbiddenFiles.");
+    }
+
+    if (normalizeComparePath(path.resolve(previewA.reportPath)) === normalizeComparePath(path.resolve(previewB.reportPath))) {
+      failures.push(`worker report output paths overlap: ${previewA.reportPath}`);
+    }
+    if (normalizeComparePath(path.resolve(previewA.eventPath)) === normalizeComparePath(path.resolve(previewB.eventPath))) {
+      failures.push(`worker event output paths overlap: ${previewA.eventPath}`);
+    }
+    if (normalizeComparePath(path.resolve(previewA.outputLastMessagePath)) === normalizeComparePath(path.resolve(previewB.outputLastMessagePath))) {
+      failures.push(`adapter output paths overlap: ${previewA.outputLastMessagePath}`);
+    }
+  }
+
+  return {
+    failures,
+    warnings,
+    previews,
+  };
+}
+
+function printParallelWorkersPreflight(preflight) {
+  console.log(`Parallel preflight: ${preflight.failures.length > 0 ? "FAIL" : preflight.warnings.length > 0 ? "WARN" : "PASS"}`);
+
+  if (preflight.failures.length > 0) {
+    console.log("Failures:");
+    for (const failure of preflight.failures) {
+      console.log(`  - ${failure}`);
+    }
+  }
+
+  if (preflight.warnings.length > 0) {
+    console.log("Warnings:");
+    for (const warning of preflight.warnings) {
+      console.log(`  - ${warning}`);
+    }
+  }
+}
+
+function buildWorkerChildArgs({ role, runId, options }) {
+  const args = [
+    __filename,
+    "run",
+    "dispatch",
+    "exec",
+    role,
+    "--run",
+    runId,
+    "--adapter",
+    "codex-exec",
+    "--yes",
+    "--timeout",
+    String(options.timeoutSeconds || 120),
+  ];
+  return args;
+}
+
+function runWorkerChildProcess({ role, runId, options }) {
+  return new Promise((resolve) => {
+    const child = childProcess.spawn(process.execPath, buildWorkerChildArgs({ role, runId, options }), {
+      cwd: process.cwd(),
+      windowsHide: true,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    let stdout = "";
+    let stderr = "";
+
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString();
+    });
+
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on("error", (error) => {
+      resolve({
+        role,
+        status: "FAIL",
+        exitCode: 1,
+        stdout,
+        stderr: `${stderr}${stderr ? "\n" : ""}${error.message}`,
+      });
+    });
+
+    child.on("close", (code) => {
+      resolve({
+        role,
+        status: code === 0 ? "PASS" : "FAIL",
+        exitCode: typeof code === "number" ? code : 1,
+        stdout,
+        stderr,
+      });
+    });
+  });
+}
+
 function runDispatchExecWorkersDryRun(options = {}) {
   const roles = ["worker-a", "worker-b"];
   let hasFailure = false;
 
   console.log("CEWP Coordinator Mode codex-exec workers dry-run");
-  console.log("Mode: sequential preview");
+  console.log(`Mode: ${options.parallel ? "parallel preview" : "sequential preview"}`);
   console.log("");
+
+  if (options.parallel) {
+    const preflight = getParallelWorkersPreflight(options);
+    printParallelWorkersPreflight(preflight);
+    if (preflight.failures.length > 0) {
+      hasFailure = true;
+    }
+    console.log("");
+  }
+
   console.log("Worker order:");
   console.log("  1. worker-a");
   console.log("  2. worker-b");
@@ -2672,7 +2866,94 @@ function runDispatchExecWorkersDryRun(options = {}) {
   return hasFailure ? "FAIL" : "PASS";
 }
 
-function runDispatchExecWorkersActual(options = {}) {
+async function runDispatchExecWorkersParallelActual(options = {}) {
+  if (!options.adapter) {
+    throw new Error("dispatch exec requires --adapter codex-exec.");
+  }
+
+  if (options.adapter !== "codex-exec") {
+    throw new Error(`Unsupported dispatch adapter: ${options.adapter}. Supported adapter: codex-exec.`);
+  }
+
+  const { runId } = findRun(options);
+  const preflight = getParallelWorkersPreflight(options);
+
+  console.log("CEWP Coordinator Mode codex-exec workers execution");
+  console.log(`Run ID: ${runId}`);
+  console.log("Adapter: codex-exec");
+  console.log("Mode: parallel");
+  console.log("");
+  printParallelWorkersPreflight(preflight);
+  console.log("");
+
+  if (preflight.failures.length > 0) {
+    console.log("No worker processes were started.");
+    console.log("No reviewer execution, merge, push, or publish was performed.");
+    process.exitCode = 1;
+    return {
+      overall: "FAIL",
+      results: [
+        { role: "worker-a", status: "SKIPPED" },
+        { role: "worker-b", status: "SKIPPED" },
+      ],
+    };
+  }
+
+  console.log("Worker mode:");
+  console.log("  worker-a and worker-b start concurrently.");
+  console.log("  Parallel mode is not fail-fast; both workers may finish even if one fails.");
+  console.log("");
+
+  const childResults = await Promise.all([
+    runWorkerChildProcess({ role: "worker-a", runId, options }),
+    runWorkerChildProcess({ role: "worker-b", runId, options }),
+  ]);
+
+  for (const result of childResults) {
+    console.log(`--- ${result.role} output ---`);
+    if (result.stdout.trim().length > 0) {
+      process.stdout.write(result.stdout.endsWith("\n") ? result.stdout : `${result.stdout}\n`);
+    }
+    if (result.stderr.trim().length > 0) {
+      process.stderr.write(result.stderr.endsWith("\n") ? result.stderr : `${result.stderr}\n`);
+    }
+  }
+
+  const results = childResults.map((result) => ({ role: result.role, status: result.status }));
+  const overall = results.every((result) => result.status === "PASS") ? "PASS" : "FAIL";
+
+  console.log("");
+  console.log("CEWP Coordinator Mode codex-exec workers summary");
+  for (const result of results) {
+    console.log(`${result.role}: ${result.status}`);
+  }
+  console.log("");
+  console.log(`Overall: ${overall}`);
+
+  if (overall === "PASS") {
+    console.log("");
+    console.log("Next:");
+    console.log(`  cewp run collect --run ${runId}`);
+    console.log(`  cewp run dispatch exec reviewer --run ${runId} --adapter codex-exec --yes`);
+  } else {
+    console.log("Reason: one or more parallel workers failed post-check");
+    process.exitCode = 1;
+  }
+
+  console.log("");
+  console.log("No reviewer execution, merge, push, or publish was performed.");
+
+  return {
+    overall,
+    results,
+  };
+}
+
+async function runDispatchExecWorkersActual(options = {}) {
+  if (options.parallel) {
+    return runDispatchExecWorkersParallelActual(options);
+  }
+
   if (!options.adapter) {
     throw new Error("dispatch exec requires --adapter codex-exec.");
   }
@@ -2744,7 +3025,7 @@ function runDispatchExecWorkersActual(options = {}) {
   };
 }
 
-function runDispatchExec(options = {}) {
+async function runDispatchExec(options = {}) {
   if (options.dryRun && options.yes) {
     throw new Error("Use either --dry-run or --yes, not both.");
   }
@@ -2753,13 +3034,17 @@ function runDispatchExec(options = {}) {
     throw new Error("dispatch exec requires --dry-run or --yes.");
   }
 
+  if (options.parallel && options.role !== "workers") {
+    throw new Error("--parallel is only supported with dispatch exec workers.");
+  }
+
   if (options.role === "workers") {
     if (options.dryRun) {
       runDispatchExecWorkersDryRun(options);
       return;
     }
 
-    runDispatchExecWorkersActual(options);
+    await runDispatchExecWorkersActual(options);
     return;
   }
 
@@ -2797,7 +3082,7 @@ function runDispatchPipelineDryRun(options = {}) {
   console.log("CEWP Coordinator Mode dispatch pipeline");
   console.log(`Run ID: ${runId}`);
   console.log("Adapter: codex-exec");
-  console.log("Mode: dry-run sequential preview");
+  console.log(`Mode: dry-run ${options.parallel ? "parallel" : "sequential"} preview`);
   console.log("");
 
   const previousExitCode = process.exitCode;
@@ -2810,7 +3095,7 @@ function runDispatchPipelineDryRun(options = {}) {
   console.log("Pipeline preview:");
   console.log(`  Step 1 dispatch check: ${checkStatus || "UNKNOWN"}`);
   console.log(`  Step 2 dispatch prompts: ${fs.existsSync(dispatchPromptsRoot) ? "would refresh existing prompt bundles" : "would create prompt bundles"}`);
-  console.log("  Step 3 workers: sequential preview follows");
+  console.log(`  Step 3 workers: ${options.parallel ? "parallel" : "sequential"} preview follows`);
   const previewOptions = {
     ...options,
     ignoreMissingDispatchPrompts: true,
@@ -2832,7 +3117,7 @@ function runDispatchPipelineDryRun(options = {}) {
   }
 }
 
-function runDispatchPipelineActual(options = {}) {
+async function runDispatchPipelineActual(options = {}) {
   validateCodexExecAdapter(options);
 
   const { runId, runRoot } = findRun(options);
@@ -2847,7 +3132,7 @@ function runDispatchPipelineActual(options = {}) {
   console.log("CEWP Coordinator Mode dispatch pipeline");
   console.log(`Run ID: ${runId}`);
   console.log("Adapter: codex-exec");
-  console.log("Mode: sequential");
+  console.log(`Mode: ${options.parallel ? "parallel" : "sequential"}`);
   console.log("");
 
   const previousExitCode = process.exitCode;
@@ -2873,7 +3158,7 @@ function runDispatchPipelineActual(options = {}) {
     return;
   }
 
-  const workersResult = runDispatchExecWorkersActual(options);
+  const workersResult = await runDispatchExecWorkersActual(options);
   steps.push({ name: "workers", status: workersResult.overall, details: workersResult.results });
   if (workersResult.overall !== "PASS") {
     printDispatchPipelineSummary({ runId, steps, decision, overall: "FAIL", reason: "workers failed" });
@@ -2946,7 +3231,7 @@ function printDispatchPipelineSummary({ runId, steps, decision, overall, reason,
   console.log("No finalize, cleanup, merge, push, or publish was performed.");
 }
 
-function runDispatchPipeline(options = {}) {
+async function runDispatchPipeline(options = {}) {
   if (options.dryRun && options.yes) {
     throw new Error("Use either --dry-run or --yes, not both.");
   }
@@ -2960,7 +3245,7 @@ function runDispatchPipeline(options = {}) {
     return;
   }
 
-  runDispatchPipelineActual(options);
+  await runDispatchPipelineActual(options);
 }
 
 function getWorktreePreflightErrors(plans) {
@@ -3940,7 +4225,7 @@ function runWorktreesCreate(options = {}) {
   console.log("  cewp run worktrees status");
 }
 
-function runCommand(options) {
+async function runCommand(options) {
   if (options.help || !options.subcommand) {
     usage();
     return;
@@ -4017,12 +4302,12 @@ function runCommand(options) {
   }
 
   if (options.subcommand === "dispatch" && options.action === "exec") {
-    runDispatchExec(options);
+    await runDispatchExec(options);
     return;
   }
 
   if (options.subcommand === "dispatch" && options.action === "pipeline") {
-    runDispatchPipeline(options);
+    await runDispatchPipeline(options);
     return;
   }
 
@@ -4177,7 +4462,7 @@ function doctor(options) {
   console.log("Restart or reload Codex if newly installed skills are not visible.");
 }
 
-function main() {
+async function main() {
   try {
     const args = parseArgs(process.argv.slice(2));
 
@@ -4202,7 +4487,7 @@ function main() {
     }
 
     if (args.command === "run") {
-      runCommand(args);
+      await runCommand(args);
       return;
     }
 

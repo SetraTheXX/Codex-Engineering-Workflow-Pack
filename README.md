@@ -231,6 +231,14 @@ cewp run dispatch exec workers --adapter codex-exec --yes --timeout 120
 
 `workers` runs `worker-a` then `worker-b`. It is not parallel, does not run the reviewer, and stops before `worker-b` if `worker-a` fails.
 
+Run both workers in guarded parallel mode:
+
+```bash
+cewp run dispatch exec workers --adapter codex-exec --yes --parallel --timeout 120
+```
+
+`--parallel` starts only `worker-a` and `worker-b` at the same time. It requires separate worktrees, different assigned tasks, and non-overlapping `allowedFiles`; the reviewer still runs later and finalize, merge, push, and publish remain separate user-approved steps.
+
 Run the guarded sequential dispatch pipeline:
 
 ```bash
@@ -238,6 +246,14 @@ cewp run dispatch pipeline --adapter codex-exec --yes --timeout 120
 ```
 
 `pipeline` runs dispatch check, refreshes dispatch prompts, executes workers sequentially, collects a review packet, and executes the reviewer. It does not finalize, clean up, merge, push, or publish; finalize remains a separate user command.
+
+Pipeline can use the same guarded worker parallel mode:
+
+```bash
+cewp run dispatch pipeline --adapter codex-exec --yes --parallel --timeout 120
+```
+
+With `--parallel`, the pipeline runs worker-a and worker-b concurrently after the parallel preflight passes, then collects and runs the reviewer after both workers finish.
 
 Collect reviewer context into one local packet:
 
