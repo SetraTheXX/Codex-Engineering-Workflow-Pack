@@ -42,6 +42,18 @@ cewp doctor
 cewp list
 ```
 
+## Codex-led Operation
+
+After CEWP is installed in a repo, users do not need to memorize every CLI command. Ask Codex to run Coordinator Mode in natural language, and Codex can use the installed skill instructions to operate the CEWP CLI as the local runtime engine.
+
+Example:
+
+```txt
+Use CEWP Coordinator Mode to implement this change with two workers and a reviewer. Show me the plan before dispatch.
+```
+
+The CLI still creates auditable local runtime state under `.cewp/runs/<run-id>/`. Codex should ask for approval before worker dispatch, finalize, cleanup with `--yes`, merge, push, publish, or release.
+
 Global skill install:
 
 ```bash
