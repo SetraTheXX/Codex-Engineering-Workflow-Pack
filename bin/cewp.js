@@ -505,6 +505,48 @@ function getGitStatusShort(worktreePath) {
     .filter(Boolean);
 }
 
+function getGitHeadCommit(repoRoot) {
+  const result = getGitOutput(["rev-parse", "HEAD"], repoRoot);
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to read git HEAD for ${repoRoot}: ${(result.stderr || result.stdout || "").trim()}`);
+  }
+
+  return result.stdout.trim();
+}
+
+function getCommittedChangedFiles(worktreePath, baseCommit) {
+  const result = getGitOutput(["diff", "--name-only", `${baseCommit}...HEAD`], worktreePath);
+
+  if (result.status !== 0) {
+    throw new Error(`Failed to inspect committed changes for ${worktreePath}: ${(result.stderr || result.stdout || "").trim()}`);
+  }
+
+  return result.stdout
+    .split(/\r?\n/)
+    .map((line) => line.trim().replace(/\\/g, "/"))
+    .filter(Boolean);
+}
+
+function uniqueFileList(files) {
+  const seen = new Set();
+  const output = [];
+
+  for (const file of files) {
+    const normalized = String(file || "").replace(/\\/g, "/");
+    const key = process.platform === "win32" ? normalized.toLowerCase() : normalized;
+
+    if (!normalized || seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    output.push(normalized);
+  }
+
+  return output;
+}
+
 function getGitBranchName(worktreePath) {
   const result = getGitOutput(["branch", "--show-current"], worktreePath);
 
@@ -559,6 +601,7 @@ function buildWorktreePlans(runId, runRoot) {
   const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
   const repoRoot = (runJson && runJson.repoRoot) || process.cwd();
   const taskEntries = readTasks(runRoot);
+  const baseCommit = getGitHeadCommit(repoRoot);
 
   const plans = taskEntries.map(({ task }) => {
     if (!task.id) {
@@ -574,6 +617,7 @@ function buildWorktreePlans(runId, runRoot) {
       branch,
       targetWorktree,
       resolvedPath,
+      baseCommit,
       targetExists: fs.existsSync(resolvedPath),
       branchExists: branchExists(repoRoot, branch),
     };
@@ -2162,6 +2206,10 @@ function getDispatchExecPreview(options) {
       failures.push(`${taskId} path is not a git worktree: ${worktree.path}`);
     }
 
+    if (worktree && !worktree.baseCommit) {
+      warnings.push(`${taskId} worktree registry missing baseCommit; committed diff post-check will fail safely.`);
+    }
+
     if (!fs.existsSync(promptPath)) {
       if (options.ignoreMissingDispatchPrompts) {
         warnings.push(`${taskId} dispatch prompt missing; pipeline will create it before worker execution.`);
@@ -2256,6 +2304,7 @@ function getDispatchExecPreview(options) {
 
     console.log("Post-checks:");
     console.log("  git status --short");
+    console.log("  git diff --name-only <baseCommit>...HEAD");
     console.log("  allowedFiles / forbiddenFiles");
     console.log("  report exists");
     console.log("  adapter output exists");
@@ -2537,7 +2586,17 @@ function runDispatchExecActual(options = {}) {
     localEventsPath: workerOutput.eventsPath,
   });
   const statusLines = getGitStatusShort(preview.cwd);
-  const changedFiles = statusLines.map(parseChangedFile);
+  const statusChangedFiles = statusLines.map(parseChangedFile);
+  let committedChangedFiles = [];
+  let committedDiffError;
+  if (preview.worktree.baseCommit) {
+    try {
+      committedChangedFiles = getCommittedChangedFiles(preview.cwd, preview.worktree.baseCommit);
+    } catch (error) {
+      committedDiffError = error;
+    }
+  }
+  const changedFiles = uniqueFileList([...statusChangedFiles, ...committedChangedFiles]);
   const runtimeOutputFiles = changedFiles.filter(isWorkerRuntimeOutputPath);
   const scopeWarnings = findScopeWarnings(preview.task.id || "unknown-task", changedFiles, preview.task);
   const forbiddenWarnings = scopeWarnings.filter((warning) => warning.includes("changed forbidden file"));
@@ -2557,6 +2616,14 @@ function runDispatchExecActual(options = {}) {
 
   if (exitCode !== 0) {
     failuresAfterExec.push(`codex exec exited with code ${exitCode}.`);
+  }
+
+  if (!preview.worktree.baseCommit) {
+    failuresAfterExec.push("worktree registry missing baseCommit; committed branch scope check could not run.");
+  }
+
+  if (committedDiffError) {
+    failuresAfterExec.push(committedDiffError.message);
   }
 
   failuresAfterExec.push(...outsideAllowedWarnings);
@@ -2605,6 +2672,19 @@ function runDispatchExecActual(options = {}) {
     console.log("  none");
   } else {
     for (const filePath of changedFiles) {
+      console.log(`  ${filePath}${isWorkerRuntimeOutputPath(filePath) ? " (runtime output)" : ""}`);
+    }
+  }
+  console.log("");
+  console.log("Committed changes:");
+  if (!preview.worktree.baseCommit) {
+    console.log("  skipped: worktrees.json entry missing baseCommit");
+  } else if (committedDiffError) {
+    console.log(`  failed: ${committedDiffError.message}`);
+  } else if (committedChangedFiles.length === 0) {
+    console.log("  none");
+  } else {
+    for (const filePath of committedChangedFiles) {
       console.log(`  ${filePath}${isWorkerRuntimeOutputPath(filePath) ? " (runtime output)" : ""}`);
     }
   }
@@ -3311,6 +3391,7 @@ function writeWorktreesRegistry(runRoot, runId, created) {
       branch: entry.branch,
       path: entry.resolvedPath,
       status: "created",
+      baseCommit: entry.baseCommit,
     })),
   });
 }
@@ -4210,6 +4291,7 @@ function runWorktreesCreate(options = {}) {
       taskId: plan.task.id,
       branch: plan.branch,
       path: plan.resolvedPath,
+      baseCommit: plan.baseCommit,
     })),
   });
 
@@ -4218,6 +4300,7 @@ function runWorktreesCreate(options = {}) {
     console.log(`  ${plan.task.id}: created`);
     console.log(`    branch: ${plan.branch}`);
     console.log(`    path: ${plan.resolvedPath}`);
+    console.log(`    baseCommit: ${plan.baseCommit}`);
   }
   console.log("");
   console.log("Next:");

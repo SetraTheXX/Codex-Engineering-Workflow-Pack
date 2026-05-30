@@ -156,7 +156,7 @@ With explicit user approval, the adapter can run one worker at a time:
 cewp run dispatch exec worker-a --adapter codex-exec --yes --timeout 120
 ```
 
-This guarded execution mode runs `codex exec` only for worker roles, captures adapter output under `.cewp/runs/<run-id>/adapter-output/`, and performs post-checks for changed files, forbidden files, report existence, and exit code. Reviewer execution is not implemented yet, and merge/push/publish remain separate user-approved steps.
+This guarded execution mode runs `codex exec` only for worker roles, captures adapter output under `.cewp/runs/<run-id>/adapter-output/`, and performs post-checks for working tree changes, committed branch changes from the registered `baseCommit`, forbidden files, report existence, and exit code. Reviewer execution is not implemented yet, and merge/push/publish remain separate user-approved steps.
 
 Worker reports are written inside the assigned worktree under `.cewp-worker-output/` so `codex exec` stays within its sandbox. After execution, the CLI copies `.cewp-worker-output/<role>-report.md` into `.cewp/runs/<run-id>/reports/` and appends `.cewp-worker-output/<role>-events.jsonl` when present. `.cewp-worker-output/` is runtime output and should not be committed.
 
