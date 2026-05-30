@@ -282,6 +282,16 @@ cewp run cleanup --run 20260528-232250 --yes
 
 `cleanup` is dry-run by default. With `--yes`, it removes only clean registered worktrees under `.cewp-worktrees/`; dirty worktrees are skipped. It does not delete `.cewp/runs/<run-id>/`, merge, push, or publish.
 
+Prune local run history:
+
+```bash
+cewp run prune --keep 5
+cewp run prune --keep 5 --yes
+cewp run prune --older-than 7d --yes
+```
+
+`.cewp/runs/` is local runtime history and is not packaged. `run prune` is dry-run by default and only deletes selected `.cewp/runs/<run-id>/` directories when `--yes` is provided. It does not remove `.cewp-worktrees/`, merge, push, or publish.
+
 Runtime state lives under:
 
 ```txt
