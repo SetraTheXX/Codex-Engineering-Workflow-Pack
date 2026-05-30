@@ -432,6 +432,14 @@ You can also run:
 cewp doctor
 ```
 
+CLI errors are intentionally short. For usage and local runtime checks, run:
+
+```bash
+cewp --help
+cewp doctor
+cewp run status
+```
+
 ### Permission denied on install.sh
 
 On Unix/macOS/Linux, make the installer executable:

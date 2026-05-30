@@ -424,6 +424,8 @@ Check whether the pack is installed correctly:
 Run cewp doctor in this repo.
 ```
 
+CLI errors are intentionally short. Use `cewp --help` for full usage, `cewp doctor` for install checks, and `cewp run status` for the latest Coordinator Mode run.
+
 ## Search Tools
 
 Some skills prefer ripgrep (`rg`) when available for fast repo search. It is recommended but not required. If `rg` is unavailable, Codex can use IDE search, PowerShell `Get-ChildItem`, `git grep`, or normal file search.
