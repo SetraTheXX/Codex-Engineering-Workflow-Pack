@@ -211,7 +211,7 @@ cewp run dispatch exec worker-a --adapter codex-exec --yes
 cewp run dispatch exec worker-a --adapter codex-exec --yes --timeout 120
 ```
 
-`--yes` is required for real execution and is currently limited to one worker role at a time. Reviewer execution is still manual/dry-run. After `codex exec` exits, CEWP checks changed files against `allowedFiles` and `forbiddenFiles`, verifies the worker report and adapter output, and still does not merge, push, or publish.
+`--yes` is required for real execution and is currently limited to one worker role at a time. Reviewer execution is still manual/dry-run. After `codex exec` exits, CEWP checks both working tree changes and committed branch changes from the registered `baseCommit` against `allowedFiles` and `forbiddenFiles`, verifies the worker report and adapter output, and still does not merge, push, or publish.
 
 For sandbox compatibility, worker reports are written inside the assigned worktree under `.cewp-worker-output/`. The CLI copies `.cewp-worker-output/<role>-report.md` into `.cewp/runs/<run-id>/reports/` after execution and appends `.cewp-worker-output/<role>-events.jsonl` when present. `.cewp-worker-output/` is runtime output and should not be committed.
 
