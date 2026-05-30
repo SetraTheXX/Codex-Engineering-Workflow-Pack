@@ -122,6 +122,17 @@ function parseArgs(argv) {
     return args;
   }
 
+  if (argv[0] === "help") {
+    args.command = undefined;
+    args.help = true;
+    return args;
+  }
+
+  if (argv[0] === "run" && (argv[1] === "--help" || argv[1] === "-h" || argv[1] === "help")) {
+    args.help = true;
+    return args;
+  }
+
   const optionStart = args.command === "run" ? 2 : 1;
 
   for (let index = optionStart; index < argv.length; index += 1) {
@@ -4903,8 +4914,10 @@ function doctor(options) {
 }
 
 async function main() {
+  const rawArgs = process.argv.slice(2);
+
   try {
-    const args = parseArgs(process.argv.slice(2));
+    const args = parseArgs(rawArgs);
 
     if (!args.command || args.help) {
       usage();
@@ -4937,7 +4950,11 @@ async function main() {
   } catch (error) {
     console.error(`Error: ${error.message}`);
     console.error("");
-    usage();
+    if (rawArgs[0] === "run") {
+      console.error("Run `cewp run --help` or `cewp --help` for usage.");
+    } else {
+      console.error("Run `cewp --help` for usage.");
+    }
     process.exitCode = 1;
   }
 }
