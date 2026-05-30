@@ -157,7 +157,7 @@ cewp run worktrees status
 cewp run worktrees status --run 20260528-232250
 ```
 
-`worktrees status` reports clean/dirty state and allowed/forbidden file warnings. It is read-only and does not merge, push, publish, or remove worktrees.
+`worktrees status` reports clean/dirty state, committed branch changes since the registered `baseCommit`, and allowed/forbidden file warnings. It is read-only and does not merge, push, publish, or remove worktrees. Older runs without `baseCommit` may show safety warnings; create fresh worktrees for full committed-diff visibility.
 
 Preview agent dispatch without starting agents:
 
@@ -175,7 +175,7 @@ cewp run dispatch check
 cewp run dispatch check --run 20260528-232250
 ```
 
-`dispatch check` is a read-only preflight for worker/reviewer dispatch. It reports PASS/WARN/FAIL, does not start agents, and does not mutate run state.
+`dispatch check` is a read-only preflight for worker/reviewer dispatch. It verifies the worktree registry has `baseCommit` data for committed-diff checks, reports PASS/WARN/FAIL, does not start agents, and does not mutate run state.
 
 Create concrete dispatch prompt bundles:
 
@@ -262,7 +262,7 @@ cewp run collect
 cewp run collect --run 20260528-232250
 ```
 
-`collect` writes `.cewp/runs/<run-id>/review-packets/review-packet.md` for reviewer handoff. It does not merge, push, publish, or mutate board/task JSON.
+`collect` writes `.cewp/runs/<run-id>/review-packets/review-packet.md` for reviewer handoff, including working tree changes, committed branch changes, and combined scope warnings. It does not merge, push, publish, or mutate board/task JSON.
 
 Finalize a PASSed run:
 

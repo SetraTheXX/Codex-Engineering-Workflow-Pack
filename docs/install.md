@@ -108,7 +108,7 @@ After `create`, inspect registered worktrees with:
 cewp run worktrees status
 ```
 
-This helper reads `worktrees.json`, reports clean/dirty state, and warns when changed files fall outside `allowedFiles` or match `forbiddenFiles`. It does not merge, push, publish, or remove worktrees.
+This helper reads `worktrees.json`, reports clean/dirty state, committed branch changes since the registered `baseCommit`, and warns when changed files fall outside `allowedFiles` or match `forbiddenFiles`. It does not merge, push, publish, or remove worktrees. Older runs without `baseCommit` may show safety warnings; create fresh worktrees for full committed-diff visibility.
 
 `cewp run dispatch plan` previews task-to-agent dispatch:
 
@@ -124,7 +124,7 @@ It maps tasks, registered worktrees, prompts, reports, and event logs before wor
 cewp run dispatch check
 ```
 
-It reports PASS/WARN/FAIL for task, worktree, prompt, and reviewer readiness. It is a preflight for the user approval gate and does not spawn processes or mutate runtime state.
+It reports PASS/WARN/FAIL for task, worktree, prompt, and reviewer readiness, including whether committed-diff checks can run from each worktree `baseCommit`. It is a preflight for the user approval gate and does not spawn processes or mutate runtime state.
 
 `cewp run dispatch prompts` creates concrete prompt bundles:
 
@@ -206,7 +206,7 @@ Only worker execution is parallel. Collect and reviewer execution happen after b
 cewp run collect
 ```
 
-The packet is written under `.cewp/runs/<run-id>/review-packets/`. It is Coordinator Mode runtime state, not installed skill content or package content.
+The packet is written under `.cewp/runs/<run-id>/review-packets/` and includes working tree changes, committed branch changes, and combined scope warnings. It is Coordinator Mode runtime state, not installed skill content or package content.
 
 `cewp run finalize` closes Coordinator Mode runtime state after reviewer approval:
 
