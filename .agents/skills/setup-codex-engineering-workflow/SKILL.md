@@ -178,6 +178,8 @@ If a target file already exists:
 
 See `references/setup-checklist.md` and `references/local-docs-layout.md` for suggested templates and checklist details.
 
+For natural-language Coordinator Mode operation, see `references/coordinator-operator-mode.md`. Use it when the user asks Codex to run CEWP, split work across workers, or use Manager/Worker/Reviewer orchestration.
+
 ## Safety Rules
 
 - Do not run destructive git or filesystem commands.

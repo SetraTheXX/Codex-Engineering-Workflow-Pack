@@ -81,6 +81,18 @@ cewp init --mode global
 cewp init --mode global --force
 ```
 
+## Codex-led Usage
+
+Users do not need to memorize every CEWP command. In a CEWP-enabled repo, ask Codex to run Coordinator Mode. Codex should use the CEWP CLI as the local safety/runtime engine, show the plan, and ask for approval at the defined gates.
+
+Example:
+
+```txt
+Use CEWP Coordinator Mode to implement this docs-only change with two workers and a reviewer. Show me the plan before dispatch.
+```
+
+Codex operates the CLI, CEWP records auditable local runtime state, and the user keeps final control over dispatch, finalize, merge, push, publish, and cleanup.
+
 Planned CLI commands:
 
 - `cewp update`
