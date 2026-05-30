@@ -547,6 +547,30 @@ function uniqueFileList(files) {
   return output;
 }
 
+function getWorktreeChangeSummary(worktreePath, baseCommit) {
+  const statusLines = getGitStatusShort(worktreePath);
+  const statusChangedFiles = statusLines.map(parseChangedFile);
+  let committedChangedFiles = [];
+  let committedDiffError;
+
+  if (baseCommit) {
+    try {
+      committedChangedFiles = getCommittedChangedFiles(worktreePath, baseCommit);
+    } catch (error) {
+      committedDiffError = error;
+    }
+  }
+
+  return {
+    statusLines,
+    statusChangedFiles,
+    committedChangedFiles,
+    committedDiffError,
+    missingBaseCommit: !baseCommit,
+    changedFiles: uniqueFileList([...statusChangedFiles, ...committedChangedFiles]),
+  };
+}
+
 function getGitBranchName(worktreePath) {
   const result = getGitOutput(["branch", "--show-current"], worktreePath);
 
@@ -1547,12 +1571,23 @@ function runDispatchCheck(options = {}) {
           addDispatchCheck(checks, "ok", `${taskId} path is a git worktree`);
           addTaskLevel("ok");
 
-          const statusLines = getGitStatusShort(worktree.path);
-          if (statusLines.length > 0) {
+          const changeSummary = getWorktreeChangeSummary(worktree.path, worktree.baseCommit);
+          if (changeSummary.statusLines.length > 0) {
             addDispatchCheck(checks, "warn", `${taskId} worktree is dirty`);
             addTaskLevel("warn");
           } else {
             addDispatchCheck(checks, "ok", `${taskId} worktree is clean`);
+            addTaskLevel("ok");
+          }
+
+          if (changeSummary.missingBaseCommit) {
+            addDispatchCheck(checks, "fail", `${taskId} worktree registry missing baseCommit; committed diff check cannot run`);
+            addTaskLevel("fail");
+          } else if (changeSummary.committedDiffError) {
+            addDispatchCheck(checks, "fail", `${taskId} committed diff check failed: ${changeSummary.committedDiffError.message}`);
+            addTaskLevel("fail");
+          } else {
+            addDispatchCheck(checks, "ok", `${taskId} committed diff check ready`);
             addTaskLevel("ok");
           }
         } else {
@@ -3486,6 +3521,10 @@ function getWorktreeSnapshot(entry, taskMap) {
   const warnings = [];
   let branchName = "unknown";
   let statusLines = [];
+  let statusChangedFiles = [];
+  let committedChangedFiles = [];
+  let committedDiffError;
+  let changedFiles = [];
   let diffStat = "(not collected)";
   let gitStatus = "missing";
 
@@ -3500,12 +3539,25 @@ function getWorktreeSnapshot(entry, taskMap) {
     warnings.push(`${taskId} path is not a git worktree: ${entry.path}`);
   } else {
     branchName = getGitBranchName(entry.path);
-    statusLines = getGitStatusShort(entry.path);
+    const changeSummary = getWorktreeChangeSummary(entry.path, entry.baseCommit);
+    statusLines = changeSummary.statusLines;
+    statusChangedFiles = changeSummary.statusChangedFiles;
+    committedChangedFiles = changeSummary.committedChangedFiles;
+    committedDiffError = changeSummary.committedDiffError;
+    changedFiles = changeSummary.changedFiles;
     diffStat = getGitDiffStat(entry.path);
     gitStatus = statusLines.length === 0 ? "clean" : "dirty";
 
+    if (changeSummary.missingBaseCommit) {
+      warnings.push(`${taskId} worktree registry missing baseCommit; committed branch changes were not collected.`);
+    }
+
+    if (committedDiffError) {
+      warnings.push(`${taskId} committed diff check failed: ${committedDiffError.message}`);
+    }
+
     if (task) {
-      warnings.push(...findScopeWarnings(taskId, statusLines.map(parseChangedFile), task));
+      warnings.push(...findScopeWarnings(taskId, changedFiles, task));
     }
   }
 
@@ -3514,13 +3566,17 @@ function getWorktreeSnapshot(entry, taskMap) {
     task,
     assignedRole,
     branch: entry.branch || "unknown",
+    baseCommit: entry.baseCommit,
     branchName,
     path: entry.path || "unknown",
     exists,
     isGitWorktree,
     gitStatus,
     statusLines,
-    changedFiles: statusLines.map(parseChangedFile),
+    statusChangedFiles,
+    committedChangedFiles,
+    committedDiffError,
+    changedFiles,
     diffStat,
     warnings,
   };
@@ -3691,7 +3747,10 @@ function makeReviewPacket({
       lines.push(`- Path exists: ${snapshot.exists ? "yes" : "no"}`);
       lines.push(`- Git worktree: ${snapshot.isGitWorktree ? "yes" : "no"}`);
       lines.push(`- Git status: ${snapshot.gitStatus}`);
-      lines.push(`- Changed files: ${snapshot.changedFiles.length ? snapshot.changedFiles.join(", ") : "none"}`);
+      lines.push(`- Base commit: ${snapshot.baseCommit || "missing"}`);
+      lines.push(`- Working tree changes: ${snapshot.statusChangedFiles.length ? snapshot.statusChangedFiles.join(", ") : "none"}`);
+      lines.push(`- Committed branch changes: ${snapshot.committedChangedFiles.length ? snapshot.committedChangedFiles.join(", ") : snapshot.committedDiffError ? "failed to collect" : "none"}`);
+      lines.push(`- Combined changed files: ${snapshot.changedFiles.length ? snapshot.changedFiles.join(", ") : "none"}`);
       lines.push("");
     }
   }
@@ -3702,14 +3761,30 @@ function makeReviewPacket({
   } else {
     for (const snapshot of worktreeSnapshots) {
       lines.push(`### ${snapshot.taskId}`);
-      if (snapshot.statusLines.length === 0) {
-        lines.push("- Changed files: none");
+      if (snapshot.statusChangedFiles.length === 0) {
+        lines.push("Working tree changes:");
+        lines.push("- none");
       } else {
-        lines.push("Changed files:");
+        lines.push("Working tree changes:");
         for (const line of snapshot.statusLines) {
           lines.push(`- ${line}`);
         }
       }
+      lines.push("");
+      lines.push("Committed branch changes:");
+      if (snapshot.committedDiffError) {
+        lines.push(`- failed to collect: ${snapshot.committedDiffError.message}`);
+      } else if (snapshot.committedChangedFiles.length === 0) {
+        lines.push("- none");
+      } else {
+        for (const filePath of snapshot.committedChangedFiles) {
+          lines.push(`- ${filePath}`);
+        }
+      }
+      lines.push("");
+      lines.push("Combined scope result:");
+      lines.push(`- ${snapshot.warnings.length === 0 ? "OK" : "WARN"}`);
+      lines.push(`- Changed files: ${snapshot.changedFiles.length ? snapshot.changedFiles.join(", ") : "none"}`);
       lines.push("");
       lines.push("Diff stat:");
       lines.push("```txt");
@@ -4192,24 +4267,58 @@ function runWorktreesStatus(options = {}) {
     }
 
     const branchName = getGitBranchName(entry.path);
-    const statusLines = getGitStatusShort(entry.path);
-    const changedFiles = statusLines.map(parseChangedFile);
-    const scopeWarnings = task ? findScopeWarnings(taskId, changedFiles, task) : [];
+    const changeSummary = getWorktreeChangeSummary(entry.path, entry.baseCommit);
+    const statusLines = changeSummary.statusLines;
+    const scopeWarnings = task ? findScopeWarnings(taskId, changeSummary.changedFiles, task) : [];
     warnings.push(...scopeWarnings);
+
+    if (changeSummary.missingBaseCommit) {
+      warnings.push(`${taskId} worktree registry missing baseCommit; committed branch changes were not collected.`);
+    }
+
+    if (changeSummary.committedDiffError) {
+      warnings.push(`${taskId} committed diff check failed: ${changeSummary.committedDiffError.message}`);
+    }
 
     console.log(`  Current branch: ${branchName}`);
     console.log(`  Git status: ${statusLines.length === 0 ? "clean" : "dirty"}`);
+    console.log(`  Base commit: ${entry.baseCommit || "missing"}`);
 
+    console.log("  Changed files:");
+    console.log("    Working tree:");
     if (statusLines.length === 0) {
-      console.log("  Changed files: none");
+      console.log("      none");
     } else {
-      console.log("  Changed files:");
       for (const line of statusLines) {
-        console.log(`    ${line}`);
+        console.log(`      ${line}`);
       }
     }
 
-    console.log(`  Scope: ${scopeWarnings.length === 0 ? "OK" : "WARN"}`);
+    console.log("    Committed since baseCommit:");
+    if (changeSummary.committedDiffError) {
+      console.log(`      failed to collect: ${changeSummary.committedDiffError.message}`);
+    } else if (changeSummary.missingBaseCommit) {
+      console.log("      skipped: worktrees.json entry missing baseCommit");
+    } else if (changeSummary.committedChangedFiles.length === 0) {
+      console.log("      none");
+    } else {
+      for (const filePath of changeSummary.committedChangedFiles) {
+        console.log(`      ${filePath}`);
+      }
+    }
+
+    console.log("    Combined:");
+    if (changeSummary.changedFiles.length === 0) {
+      console.log("      none");
+    } else {
+      for (const filePath of changeSummary.changedFiles) {
+        console.log(`      ${filePath}${isWorkerRuntimeOutputPath(filePath) ? " (runtime output)" : ""}`);
+      }
+    }
+
+    const scopeStatus =
+      scopeWarnings.length === 0 && !changeSummary.missingBaseCommit && !changeSummary.committedDiffError ? "OK" : "WARN";
+    console.log(`  Scope: ${scopeStatus}`);
     console.log("");
   }
 
