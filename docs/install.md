@@ -52,7 +52,7 @@ Example:
 Use CEWP Coordinator Mode to implement this change with two workers and a reviewer. Show me the plan before dispatch.
 ```
 
-The CLI still creates auditable local runtime state under `.cewp/runs/<run-id>/`. Codex should ask for approval before worker dispatch, finalize, cleanup with `--yes`, merge, push, publish, or release.
+The CLI still creates auditable local runtime state under `.cewp/runs/<run-id>/`. Default operation is approval-gated: Codex should ask before worker dispatch, finalize, cleanup with `--yes`, merge, push, publish, or release. Advanced users may explicitly grant trusted or full-authority operation scoped to a repo, task, or release. Full authority keeps CEWP guardrails on; high-impact actions such as merge, push, publish, and release need either per-action confirmation or explicit full-authority language that names those actions.
 
 Global skill install:
 
