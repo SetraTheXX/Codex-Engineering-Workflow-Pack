@@ -123,6 +123,7 @@ async function main() {
   let coordinatorRepo;
   let negativeRepo;
   let pruneRepo;
+  let policyRepo;
 
   try {
     await step("cli help", () => {
@@ -135,6 +136,28 @@ async function main() {
 
     await step("list", () => {
       assertExit(cewp(["list"], cewpRoot), 0, "cewp list");
+    });
+
+    await step("operator policy", () => {
+      policyRepo = makeTempRepo("cewp-harness-policy-");
+      tempRepos.push(policyRepo);
+      const showDefault = cewp(["policy", "show"], policyRepo);
+      assertExit(showDefault, 0, "policy show default");
+      assertIncludes(showDefault.stdout, "Mode: safe (default)", "default policy mode");
+
+      const setFull = cewp(["policy", "set", "full-authority"], policyRepo);
+      assertExit(setFull, 0, "policy set full-authority");
+      const policyPath = path.join(policyRepo, ".cewp", "policy.json");
+      assertFileExists(policyPath, "policy file");
+      const policy = readJson(policyPath);
+      assert(policy.mode === "full-authority", "expected full-authority policy");
+      assert(policy.authority.runWorkers === true, "full-authority should allow workers");
+      assert(policy.authority.push === false, "push should remain disabled by default");
+
+      const reset = cewp(["policy", "reset"], policyRepo);
+      assertExit(reset, 0, "policy reset");
+      const resetPolicy = readJson(policyPath);
+      assert(resetPolicy.mode === "safe", "policy reset should write safe mode");
     });
 
     coordinatorRepo = makeTempRepo("cewp-harness-flow-");

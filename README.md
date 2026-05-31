@@ -91,7 +91,17 @@ Example:
 Use CEWP Coordinator Mode to implement this docs-only change with two workers and a reviewer. Show me the plan before dispatch.
 ```
 
-Codex operates the CLI, CEWP records auditable local runtime state, and the user keeps final control by default. Advanced users can explicitly grant trusted or full-authority operator modes for a repo, task, or release. Full authority does not disable CEWP guardrails; it only lets Codex ask fewer questions while still obeying task boundaries, worktrees, scope checks, reviewer checks, and logs. Merge, push, publish, and release require either per-action confirmation or an explicit full-authority instruction that names those actions.
+Codex operates the CLI, CEWP records auditable local runtime state, and the user keeps final control by default. Repos can also store an operator policy in `.cewp/policy.json`:
+
+```bash
+cewp policy show
+cewp policy set safe
+cewp policy set trusted
+cewp policy set full-authority
+cewp policy reset
+```
+
+`safe` is the default. Advanced users can set `trusted` or `full-authority` once per repo so Codex can read the local policy and ask fewer repeated questions. Full authority is a supported advanced mode, but it does not disable CEWP guardrails; worktrees, allowedFiles/forbiddenFiles, scope checks, reviewer decisions, logs, and reports still apply. Push, publish, and release remain disabled by default unless explicitly enabled by policy later.
 
 Planned CLI commands:
 

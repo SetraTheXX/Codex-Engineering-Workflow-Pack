@@ -52,7 +52,19 @@ Example:
 Use CEWP Coordinator Mode to implement this change with two workers and a reviewer. Show me the plan before dispatch.
 ```
 
-The CLI still creates auditable local runtime state under `.cewp/runs/<run-id>/`. Default operation is approval-gated: Codex should ask before worker dispatch, finalize, cleanup with `--yes`, merge, push, publish, or release. Advanced users may explicitly grant trusted or full-authority operation scoped to a repo, task, or release. Full authority keeps CEWP guardrails on; high-impact actions such as merge, push, publish, and release need either per-action confirmation or explicit full-authority language that names those actions.
+The CLI still creates auditable local runtime state under `.cewp/runs/<run-id>/`. Default operation is approval-gated: Codex should ask before worker dispatch, finalize, cleanup with `--yes`, merge, push, publish, or release.
+
+Repos can store a local operator policy in `.cewp/policy.json`:
+
+```bash
+cewp policy show
+cewp policy set safe
+cewp policy set trusted
+cewp policy set full-authority
+cewp policy reset
+```
+
+`safe` is the default. Advanced users can set `trusted` or `full-authority` so Codex can read the repo policy and ask fewer repeated questions. Full authority is a supported advanced mode, but it does not disable CEWP guardrails; worktrees, allowedFiles/forbiddenFiles, scope checks, reviewer decisions, logs, and reports still apply. Push, publish, and release remain disabled by default unless explicitly enabled by policy later.
 
 Global skill install:
 

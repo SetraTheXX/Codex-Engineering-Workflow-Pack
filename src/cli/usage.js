@@ -7,6 +7,9 @@ Usage:
   cewp init [--mode repo|global] [--target <path>] [--force]
   cewp list [--mode repo|global] [--target <path>]
   cewp doctor [--mode repo|global] [--target <path>]
+  cewp policy show
+  cewp policy set <safe|trusted|full-authority>
+  cewp policy reset
   cewp run init --workers <count> --reviewer
   cewp run status
   cewp run prompts
@@ -43,6 +46,10 @@ Examples:
   cewp init --mode global --force
   cewp list
   cewp doctor --mode repo --target "/path/to/repo"
+  cewp policy show
+  cewp policy set trusted
+  cewp policy set full-authority
+  cewp policy reset
   cewp run init --workers 2 --reviewer
   cewp run status
   cewp run status --run 20260528-232250
