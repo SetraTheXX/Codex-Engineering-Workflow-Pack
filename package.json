@@ -1,7 +1,7 @@
 {
   "name": "@setrathex/codex-engineering-workflow-pack",
-  "version": "0.2.0-beta.0",
-  "description": "Local-first engineering workflow skills for Codex.",
+  "version": "0.2.0-beta.1",
+  "description": "Local-first engineering workflow toolkit for Codex: skills, Coordinator Mode, guarded dispatch, and parallel agent workflows.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -33,7 +33,11 @@
     "node": ">=18"
   },
   "scripts": {
-    "check:cli": "node ./bin/cewp.js --help"
+    "test": "node tests/harness/run-smoke.js",
+    "smoke": "node tests/harness/run-smoke.js",
+    "check:cli": "node ./bin/cewp.js --help",
+    "check": "node --check ./bin/cewp.js && node tests/harness/run-smoke.js",
+    "pack:dry-run": "npm pack --dry-run"
   },
   "keywords": [
     "codex",

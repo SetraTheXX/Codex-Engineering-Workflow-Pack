@@ -5,6 +5,7 @@ const path = require("node:path");
 const { writeJson, readRequiredJson } = require("../lib/json");
 const { listFiles } = require("../lib/fs");
 const { findRun, appendRunEvent } = require("./runtime-cleanup");
+const { assertPolicyAllows } = require("./policy");
 
 function getFileMtimeMs(filePath) {
   try {
@@ -116,6 +117,11 @@ function printFinalizePlan({ runId, runRoot, decisionInfo, runJson, boardJson, t
 
 function runFinalize(options = {}) {
   const { runId, runRoot } = findRun(options);
+
+  if (!options.dryRun) {
+    assertPolicyAllows(process.cwd(), "finalize");
+  }
+
   const decisionInfo = getLatestReviewerDecision(runRoot);
   const runJsonPath = path.join(runRoot, "run.json");
   const boardJsonPath = path.join(runRoot, "board.json");

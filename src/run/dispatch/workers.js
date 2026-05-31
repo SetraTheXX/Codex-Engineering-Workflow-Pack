@@ -5,6 +5,7 @@ const childProcess = require("node:child_process");
 const { normalizeComparePath } = require("../../lib/paths");
 const { getAllowedFilesOverlap } = require("../../lib/scope-check");
 const { findRun } = require("../runtime-cleanup");
+const { assertPolicyAllows } = require("../policy");
 const { getDispatchExecPreview, runDispatchExecActual } = require("./exec");
 
 const CLI_ENTRYPOINT = path.resolve(__dirname, "../../../bin/cewp.js");
@@ -215,6 +216,8 @@ async function runDispatchExecWorkersParallelActual(options = {}) {
     throw new Error(`Unsupported dispatch adapter: ${options.adapter}. Supported adapter: codex-exec.`);
   }
 
+  assertPolicyAllows(process.cwd(), "runWorkers");
+
   const { runId } = findRun(options);
   const preflight = getParallelWorkersPreflight(options);
 
@@ -301,6 +304,8 @@ async function runDispatchExecWorkersActual(options = {}) {
   if (options.adapter !== "codex-exec") {
     throw new Error(`Unsupported dispatch adapter: ${options.adapter}. Supported adapter: codex-exec.`);
   }
+
+  assertPolicyAllows(process.cwd(), "runWorkers");
 
   const { runId } = findRun(options);
   const results = [];

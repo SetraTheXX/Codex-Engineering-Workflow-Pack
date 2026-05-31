@@ -145,6 +145,21 @@ async function main() {
       assertExit(showDefault, 0, "policy show default");
       assertIncludes(showDefault.stdout, "Mode: safe (default)", "default policy mode");
 
+      const blockedWorkers = cewp(["run", "dispatch", "exec", "workers", "--adapter", "codex-exec", "--yes"], policyRepo);
+      assertExit(blockedWorkers, 1, "safe policy blocks workers");
+      assertIncludes(blockedWorkers.stderr, "operator policy blocks dispatch worker execution", "workers policy block");
+
+      const blockedPipeline = cewp(["run", "dispatch", "pipeline", "--adapter", "codex-exec", "--yes"], policyRepo);
+      assertExit(blockedPipeline, 1, "safe policy blocks pipeline");
+      assertIncludes(blockedPipeline.stderr, "operator policy blocks dispatch pipeline execution", "pipeline policy block");
+
+      pruneFixture(policyRepo);
+      const pruneDryRun = cewp(["run", "prune", "--keep", "2"], policyRepo);
+      assertExit(pruneDryRun, 0, "policy allows prune dry-run");
+      const blockedPrune = cewp(["run", "prune", "--keep", "2", "--yes"], policyRepo);
+      assertExit(blockedPrune, 1, "safe policy blocks prune deletion");
+      assertIncludes(blockedPrune.stderr, "operator policy blocks cleanup/prune deletion", "prune policy block");
+
       const setFull = cewp(["policy", "set", "full-authority"], policyRepo);
       assertExit(setFull, 0, "policy set full-authority");
       const policyPath = path.join(policyRepo, ".cewp", "policy.json");
@@ -238,6 +253,151 @@ async function main() {
       assertIncludes(status.stdout, "changed file outside allowedFiles: secret.txt", "outside allowed warning");
     });
 
+    await step("worker scope guardrails", () => {
+      const scopeRepo = makeTempRepo("cewp-harness-scope-");
+      tempRepos.push(scopeRepo);
+      const runId = initHarnessRun(scopeRepo, (fixtureRunId, repoName) => [
+        taskFixture({
+          id: "task-001",
+          assignedRole: "worker-a",
+          allowedFiles: [],
+          forbiddenFiles: ["package.json", ".env", ".agents/skills/**", "bin/cewp.js"],
+          mission: "Empty allowedFiles should block real worker execution.",
+          runId: fixtureRunId,
+          repoName,
+        }),
+        taskFixture({
+          id: "task-002",
+          assignedRole: "worker-b",
+          allowedFiles: ["docs/install.md"],
+          forbiddenFiles: ["package.json", ".env", ".agents/skills/**", "bin/cewp.js"],
+          mission: "Valid worker task.",
+          runId: fixtureRunId,
+          repoName,
+        }),
+      ]);
+
+      assertExit(cewp(["run", "worktrees", "create", "--run", runId], scopeRepo), 0, "scope worktrees create");
+      assertExit(cewp(["run", "dispatch", "prompts", "--run", runId], scopeRepo), 0, "scope dispatch prompts");
+      assertExit(cewp(["policy", "set", "full-authority"], scopeRepo), 0, "scope policy full-authority");
+
+      const dryRun = cewp(["run", "dispatch", "exec", "worker-a", "--run", runId, "--adapter", "codex-exec", "--dry-run"], scopeRepo);
+      assertExit(dryRun, 0, "empty allowedFiles worker dry-run");
+      assertIncludes(dryRun.stdout, "real worker execution requires an explicit file scope", "dry-run allowedFiles warning");
+
+      const actual = cewp(["run", "dispatch", "exec", "worker-a", "--run", runId, "--adapter", "codex-exec", "--yes"], scopeRepo);
+      assertExit(actual, 1, "empty allowedFiles worker actual");
+      assertIncludes(actual.stdout, "task task-001 has no allowedFiles", "actual allowedFiles failure");
+
+      const workers = cewp(["run", "dispatch", "exec", "workers", "--run", runId, "--adapter", "codex-exec", "--yes"], scopeRepo);
+      assertExit(workers, 1, "empty allowedFiles workers actual");
+      assertIncludes(workers.stdout, "worker-b: SKIPPED", "sequential worker-b skipped");
+
+      const check = cewp(["run", "dispatch", "check", "--run", runId], scopeRepo);
+      assertExit(check, 1, "dispatch check empty allowedFiles");
+      assertIncludes(check.stdout, "allowedFiles is empty; real worker execution requires an explicit file scope", "dispatch check allowedFiles fail");
+    });
+
+    await step("parallel allowedFiles overlap", () => {
+      const { getAllowedFilesOverlap } = require("../../src/lib/scope-check");
+      assert(
+        getAllowedFilesOverlap({ allowedFiles: ["docs/**"] }, { allowedFiles: ["docs/install.md"] }).length > 0,
+        "docs/** should overlap docs/install.md",
+      );
+      assert(
+        getAllowedFilesOverlap({ allowedFiles: ["docs/install.md"] }, { allowedFiles: ["docs/**"] }).length > 0,
+        "docs/install.md should overlap docs/**",
+      );
+      assert(
+        getAllowedFilesOverlap({ allowedFiles: ["docs/**"] }, { allowedFiles: ["docs/**"] }).length > 0,
+        "same broad pattern should overlap",
+      );
+      assert(
+        getAllowedFilesOverlap({ allowedFiles: ["README.md"] }, { allowedFiles: ["README.md"] }).length > 0,
+        "same file should overlap",
+      );
+      assert(
+        getAllowedFilesOverlap({ allowedFiles: ["README.md"] }, { allowedFiles: ["docs/install.md"] }).length === 0,
+        "independent files should not overlap",
+      );
+    });
+
+    await step("target worktree policy", () => {
+      const traversalRepo = makeTempRepo("cewp-harness-traversal-");
+      tempRepos.push(traversalRepo);
+      const traversalRunId = initHarnessRun(traversalRepo, (fixtureRunId, repoName) => {
+        const task = taskFixture({
+          id: "task-001",
+          assignedRole: "worker-a",
+          allowedFiles: ["README.md"],
+          forbiddenFiles: ["package.json", ".env", ".agents/skills/**", "bin/cewp.js"],
+          mission: "Traversal target should be rejected.",
+          runId: fixtureRunId,
+          repoName,
+        });
+        task.targetWorktree = "../outside";
+        return [task];
+      });
+      const traversalCreate = cewp(["run", "worktrees", "create", "--run", traversalRunId], traversalRepo);
+      assertExit(traversalCreate, 1, "targetWorktree traversal rejected");
+      assertIncludes(traversalCreate.stderr, "Unsafe targetWorktree", "traversal rejection");
+
+      const absoluteRepo = makeTempRepo("cewp-harness-absolute-");
+      tempRepos.push(absoluteRepo);
+      const externalPath = path.join(path.dirname(absoluteRepo), `outside-worktree-${Date.now()}`);
+      const absoluteRunId = initHarnessRun(absoluteRepo, (fixtureRunId, repoName) => {
+        const task = taskFixture({
+          id: "task-001",
+          assignedRole: "worker-a",
+          allowedFiles: ["README.md"],
+          forbiddenFiles: ["package.json", ".env", ".agents/skills/**", "bin/cewp.js"],
+          mission: "Absolute external target should be rejected.",
+          runId: fixtureRunId,
+          repoName,
+        });
+        task.targetWorktree = externalPath;
+        return [task];
+      });
+      const absoluteCreate = cewp(["run", "worktrees", "create", "--run", absoluteRunId], absoluteRepo);
+      assertExit(absoluteCreate, 1, "absolute external targetWorktree rejected");
+      assertIncludes(absoluteCreate.stderr, "External targetWorktree", "absolute external rejection");
+      assertFileMissing(externalPath, "absolute external worktree");
+
+      const managedRepo = makeTempRepo("cewp-harness-managed-absolute-");
+      tempRepos.push(managedRepo);
+      const managedRunId = initHarnessRun(managedRepo, (fixtureRunId, repoName) => {
+        const task = taskFixture({
+          id: "task-001",
+          assignedRole: "worker-a",
+          allowedFiles: ["README.md"],
+          forbiddenFiles: ["package.json", ".env", ".agents/skills/**", "bin/cewp.js"],
+          mission: "Managed absolute target should be accepted.",
+          runId: fixtureRunId,
+          repoName,
+        });
+        task.targetWorktree = path.resolve(managedRepo, "..", ".cewp-worktrees", repoName, fixtureRunId, "task-001");
+        return [task];
+      });
+      const managedCreate = cewp(["run", "worktrees", "create", "--run", managedRunId], managedRepo);
+      assertExit(managedCreate, 0, "managed absolute targetWorktree accepted");
+
+      const registry = readWorktrees(managedRepo, managedRunId);
+      const externalRegistryPath = path.join(path.dirname(managedRepo), `external-registry-${Date.now()}`);
+      fs.mkdirSync(externalRegistryPath, { recursive: true });
+      registry.worktrees[0].path = externalRegistryPath;
+      writeJson(path.join(managedRepo, ".cewp", "runs", managedRunId, "worktrees.json"), registry);
+
+      const check = cewp(["run", "dispatch", "check", "--run", managedRunId], managedRepo);
+      assertExit(check, 1, "dispatch check external registry path");
+      assertIncludes(check.stdout, "worktree path is outside CEWP-managed root", "external registry path warning");
+
+      assertExit(cewp(["policy", "set", "full-authority"], managedRepo), 0, "managed repo full-authority");
+      const cleanup = cewp(["run", "cleanup", "--run", managedRunId, "--yes"], managedRepo);
+      assertExit(cleanup, 0, "cleanup external registry path");
+      assertFileExists(externalRegistryPath, "cleanup must not remove external registry path");
+      fs.rmSync(externalRegistryPath, { recursive: true, force: true });
+    });
+
     await step("run prune", () => {
       pruneRepo = makeTempRepo("cewp-harness-prune-");
       tempRepos.push(pruneRepo);
@@ -253,6 +413,7 @@ async function main() {
       assertIncludes(dryRun.stdout, "Would remove", "prune dry-run output");
       assertFileExists(oldRun, "old run after dry-run");
 
+      assertExit(cewp(["policy", "set", "full-authority"], pruneRepo), 0, "policy set full-authority for prune");
       const yes = cewp(["run", "prune", "--keep", "2", "--yes"], pruneRepo);
       assertExit(yes, 0, "prune --yes");
       assertFileMissing(oldRun, "old run after prune");
@@ -264,7 +425,7 @@ async function main() {
     await step("package surface", () => {
       const pack = run("npm", ["pack", "--dry-run"], { cwd: cewpRoot, timeout: 120000 });
       assertExit(pack, 0, "npm pack --dry-run");
-      assert(packageJson.version === "0.2.0-beta.0", `unexpected package version: ${packageJson.version}`);
+      assert(packageJson.version === "0.2.0-beta.1", `unexpected package version: ${packageJson.version}`);
       assert(!pack.stdout.includes(".cewp/"), ".cewp/ should not be packed");
       assert(!pack.stdout.includes(".cewp-worktrees/"), ".cewp-worktrees/ should not be packed");
     });

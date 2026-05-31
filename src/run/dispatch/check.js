@@ -18,6 +18,7 @@ const {
   getTaskBranch,
   readTasks,
 } = require("./shared");
+const { getManagedWorktreesRoot, isPathInside } = require("../worktrees");
 
 function runDispatchCheck(options = {}) {
   const { runId, runRoot } = findRun(options);
@@ -28,6 +29,8 @@ function runDispatchCheck(options = {}) {
   const checks = [];
   const taskReadiness = [];
   const supportedWorkers = ["worker-a", "worker-b"];
+  const repoRoot = (runJson && runJson.repoRoot) || process.cwd();
+  const managedWorktreesRoot = getManagedWorktreesRoot(repoRoot);
 
   if (runJson) {
     addDispatchCheck(checks, "ok", "run.json found");
@@ -145,6 +148,14 @@ function runDispatchCheck(options = {}) {
       addDispatchCheck(checks, "ok", `${taskId} worktree path registered`);
       addTaskLevel("ok");
 
+      if (isPathInside(managedWorktreesRoot, worktree.path)) {
+        addDispatchCheck(checks, "ok", `${taskId} worktree path is under CEWP-managed root`);
+        addTaskLevel("ok");
+      } else {
+        addDispatchCheck(checks, "fail", `${taskId} worktree path is outside CEWP-managed root: ${worktree.path}`);
+        addTaskLevel("fail");
+      }
+
       if (fs.existsSync(worktree.path)) {
         addDispatchCheck(checks, "ok", `${taskId} worktree path exists`);
         addTaskLevel("ok");
@@ -204,6 +215,9 @@ function runDispatchCheck(options = {}) {
     if (Array.isArray(task.allowedFiles) && task.allowedFiles.length > 0) {
       addDispatchCheck(checks, "ok", `${taskId} allowedFiles configured`);
       addTaskLevel("ok");
+    } else if (assignedRole && supportedWorkers.includes(assignedRole)) {
+      addDispatchCheck(checks, "fail", `${taskId} allowedFiles is empty; real worker execution requires an explicit file scope`);
+      addTaskLevel("fail");
     } else {
       addDispatchCheck(checks, "warn", `${taskId} allowedFiles is empty`);
       addTaskLevel("warn");

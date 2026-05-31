@@ -72,7 +72,7 @@ skills=(
 
 mkdir -p "$target_root"
 
-echo "Installing Codex Engineering Workflow Pack v0.1"
+echo "Installing Codex Engineering Workflow Pack from this package"
 echo "Mode: $mode"
 echo "Source: $source_root"
 echo "Target: $target_root"

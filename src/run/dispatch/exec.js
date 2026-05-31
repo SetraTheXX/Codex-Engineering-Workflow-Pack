@@ -33,6 +33,7 @@ const {
   getAdapterExitCode,
   didAdapterTimeOut,
 } = require("../adapters/codex-exec");
+const { assertPolicyAllows } = require("../policy");
 
 function findReviewerDecisionStrict(filePath) {
   const content = fs.readFileSync(filePath, "utf8");
@@ -148,6 +149,15 @@ function getDispatchExecPreview(options) {
 
     if (!task.id) {
       failures.push("task file missing required id.");
+    }
+
+    if (!Array.isArray(task.allowedFiles) || task.allowedFiles.length === 0) {
+      const message = `task ${taskId} has no allowedFiles; real worker execution requires an explicit file scope.`;
+      if (options.dryRun) {
+        warnings.push(message);
+      } else {
+        failures.push(message);
+      }
     }
 
     if (!worktree) {
@@ -425,6 +435,12 @@ function runDispatchExecActual(options = {}) {
 
   if (options.adapter !== "codex-exec") {
     throw new Error(`Unsupported dispatch adapter: ${options.adapter}. Supported adapter: codex-exec.`);
+  }
+
+  if (options.role === "reviewer") {
+    assertPolicyAllows(process.cwd(), "runReviewer");
+  } else {
+    assertPolicyAllows(process.cwd(), "runWorkers");
   }
 
   const result = getDispatchExecPreview({ ...options, dryRun: false, printPreview: false });

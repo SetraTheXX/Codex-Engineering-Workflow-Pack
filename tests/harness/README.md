@@ -8,6 +8,12 @@ Run it from the repository root:
 node tests/harness/run-smoke.js
 ```
 
+Or use the package script:
+
+```bash
+npm test
+```
+
 The harness creates temporary git repositories, initializes CEWP runs, creates worker worktrees, commits fixture changes inside those worktrees, checks committed-diff scope reporting, verifies `run prune`, and removes its temporary repos at the end.
 
 It is intended for release prep and regression checks. It does not publish, push, merge, change package version, or exercise the real codex-exec adapter.

@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { findRun } = require("../runtime-cleanup");
 const { runCollect } = require("../collect");
+const { assertPolicyAllows } = require("../policy");
 const { runDispatchCheck } = require("./check");
 const { runDispatchPrompts } = require("./prompts");
 const { relativeRunPath } = require("./shared");
@@ -70,6 +71,9 @@ function runDispatchPipelineDryRun(options = {}) {
 
 async function runDispatchPipelineActual(options = {}) {
   validateCodexExecAdapter(options);
+  assertPolicyAllows(process.cwd(), "runCewpPipeline");
+  assertPolicyAllows(process.cwd(), "runWorkers");
+  assertPolicyAllows(process.cwd(), "runReviewer");
 
   const { runId, runRoot } = findRun(options);
   const steps = [];

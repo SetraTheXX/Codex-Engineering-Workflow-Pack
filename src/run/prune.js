@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { getRunsRoot, validateRunId } = require("../lib/paths");
+const { assertPolicyAllows } = require("./policy");
 
 function getRunTimestampMs(runId) {
   validateRunId(runId);
@@ -175,6 +176,11 @@ function printRunPrunePlan(plan, yes) {
 
 function runPrune(options = {}) {
   const repoRoot = process.cwd();
+
+  if (options.yes) {
+    assertPolicyAllows(repoRoot, "cleanup");
+  }
+
   const plan = buildRunPrunePlan(options, repoRoot);
 
   printRunPrunePlan(plan, options.yes);

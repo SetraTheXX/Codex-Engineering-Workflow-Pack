@@ -10,6 +10,7 @@ const {
   pruneGitWorktrees,
 } = require("../lib/git");
 const { findRun, readWorktreesRegistry, appendRunEvent } = require("./runtime-cleanup");
+const { assertPolicyAllows } = require("./policy");
 
 function isPathUnderCewpWorktrees(worktreePath) {
   const normalized = path.resolve(worktreePath).replace(/\\/g, "/").toLowerCase();
@@ -100,6 +101,11 @@ function printCleanupPlan({ runId, runRoot, snapshots, yes }) {
 
 function runCleanup(options = {}) {
   const { runId, runRoot } = findRun(options);
+
+  if (options.yes) {
+    assertPolicyAllows(process.cwd(), "cleanup");
+  }
+
   const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
   const repoRoot = (runJson && runJson.repoRoot) || process.cwd();
   const registry = readWorktreesRegistry(runRoot);

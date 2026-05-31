@@ -88,6 +88,8 @@ cewp policy reset
 
 `safe` is the default. `full-authority` is a supported advanced mode for experienced users, but it does not disable CEWP guardrails. Push, publish, and release remain disabled by default unless explicitly allowed by policy later.
 
+The CLI enforces policy for actual high-impact local actions such as worker execution, reviewer execution, pipeline execution, finalize, cleanup, and prune deletion. Dry-run and read-only commands remain available in every mode.
+
 See [Operator Policy](docs/operator-policy.md).
 
 ## Safety Model
@@ -116,7 +118,7 @@ The harness uses temporary repos, checks Coordinator Mode helpers, and does not 
 
 ## Status
 
-`0.2.0-beta.0` is beta software. Use it for local-first workflow automation and dogfooding, and keep reviewing generated plans, worker output, and reviewer decisions before integrating changes.
+`0.2.0-beta.1` is beta software. Use it for local-first workflow automation and dogfooding, and keep reviewing generated plans, worker output, and reviewer decisions before integrating changes.
 
 ## License
 

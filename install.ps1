@@ -45,7 +45,7 @@ if ($Mode -eq "repo") {
 
 New-Item -ItemType Directory -Force -Path $targetRoot | Out-Null
 
-Write-Host "Installing Codex Engineering Workflow Pack v0.1"
+Write-Host "Installing Codex Engineering Workflow Pack from this package"
 Write-Host "Mode: $Mode"
 Write-Host "Source: $sourceRoot"
 Write-Host "Target: $targetRoot"
