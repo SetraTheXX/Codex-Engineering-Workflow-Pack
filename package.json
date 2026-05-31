@@ -1,6 +1,6 @@
 {
   "name": "@setrathex/codex-engineering-workflow-pack",
-  "version": "0.1.0-beta.6",
+  "version": "0.2.0-beta.0",
   "description": "Local-first engineering workflow skills for Codex.",
   "license": "MIT",
   "repository": {
@@ -21,6 +21,10 @@
     "src",
     "README.md",
     "docs/install.md",
+    "docs/coordinator-mode.md",
+    "docs/operator-policy.md",
+    "docs/security-model.md",
+    "docs/release-notes.md",
     "install.ps1",
     "install.sh",
     "LICENSE"

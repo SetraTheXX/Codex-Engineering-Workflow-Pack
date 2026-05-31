@@ -264,7 +264,7 @@ async function main() {
     await step("package surface", () => {
       const pack = run("npm", ["pack", "--dry-run"], { cwd: cewpRoot, timeout: 120000 });
       assertExit(pack, 0, "npm pack --dry-run");
-      assert(packageJson.version === "0.1.0-beta.6", `unexpected package version: ${packageJson.version}`);
+      assert(packageJson.version === "0.2.0-beta.0", `unexpected package version: ${packageJson.version}`);
       assert(!pack.stdout.includes(".cewp/"), ".cewp/ should not be packed");
       assert(!pack.stdout.includes(".cewp-worktrees/"), ".cewp-worktrees/ should not be packed");
     });
