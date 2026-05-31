@@ -452,6 +452,14 @@ cewp doctor
 cewp run status
 ```
 
+For release-prep smoke testing in this repo, run:
+
+```bash
+node tests/harness/run-smoke.js
+```
+
+The harness uses temporary repos, exercises Coordinator Mode runtime helpers, and does not run `codex exec`, publish, push, merge, or change package version.
+
 ### Permission denied on install.sh
 
 On Unix/macOS/Linux, make the installer executable:

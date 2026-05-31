@@ -438,6 +438,16 @@ Run cewp doctor in this repo.
 
 CLI errors are intentionally short. Use `cewp --help` for full usage, `cewp doctor` for install checks, and `cewp run status` for the latest Coordinator Mode run.
 
+### Harness smoke
+
+For release prep, run the deterministic Coordinator Mode harness:
+
+```bash
+node tests/harness/run-smoke.js
+```
+
+It uses temporary repos and does not run `codex exec`, publish, push, merge, or change package version.
+
 ## Search Tools
 
 Some skills prefer ripgrep (`rg`) when available for fast repo search. It is recommended but not required. If `rg` is unavailable, Codex can use IDE search, PowerShell `Get-ChildItem`, `git grep`, or normal file search.
