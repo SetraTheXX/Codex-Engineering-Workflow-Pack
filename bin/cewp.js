@@ -4,6 +4,27 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const childProcess = require("node:child_process");
+const { writeJson, readJsonIfExists, readJsonFile, readRequiredJson } = require("../src/lib/json");
+const { listFiles } = require("../src/lib/fs");
+const {
+  getGitOutput,
+  isRepoDirty,
+  branchExists,
+  getGitHeadCommit,
+  getGitBranchName,
+  isGitWorktreePath,
+  getGitDiffStat,
+  removeGitWorktree,
+  pruneGitWorktrees,
+} = require("../src/lib/git");
+const { getRunRoot, getRunsRoot, validateRunId, normalizeComparePath } = require("../src/lib/paths");
+const {
+  uniqueFileList,
+  getWorktreeChangeSummary,
+  isWorkerRuntimeOutputPath,
+  findScopeWarnings,
+  getAllowedFilesOverlap,
+} = require("../src/lib/scope-check");
 
 const SKILLS = [
   "setup-codex-engineering-workflow",
@@ -324,20 +345,6 @@ function getWorkerRoles(count) {
   });
 }
 
-function getRunRoot(runId, repoRoot = process.cwd()) {
-  return path.join(path.resolve(repoRoot), ".cewp", "runs", runId);
-}
-
-function getRunsRoot(repoRoot = process.cwd()) {
-  return path.join(path.resolve(repoRoot), ".cewp", "runs");
-}
-
-function validateRunId(runId) {
-  if (!/^\d{8}-\d{6}$/.test(runId)) {
-    throw new Error(`Invalid run id: ${runId}. Expected format: YYYYMMDD-HHMMSS.`);
-  }
-}
-
 function parseAgeToMs(value) {
   const match = String(value || "").match(/^(\d+)([dhm])$/);
 
@@ -370,30 +377,6 @@ function getRunTimestampMs(runId) {
   const minute = Number.parseInt(runId.slice(11, 13), 10);
   const second = Number.parseInt(runId.slice(13, 15), 10);
   return new Date(year, month, day, hour, minute, second).getTime();
-}
-
-function writeJson(filePath, value) {
-  fs.writeFileSync(`${filePath}`, `${JSON.stringify(value, null, 2)}\n`);
-}
-
-function readJsonIfExists(filePath) {
-  if (!fs.existsSync(filePath)) {
-    return undefined;
-  }
-
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
-}
-
-function listFiles(directory, extension) {
-  if (!fs.existsSync(directory)) {
-    return [];
-  }
-
-  return fs
-    .readdirSync(directory)
-    .filter((name) => name.endsWith(extension))
-    .sort()
-    .map((name) => path.join(directory, name));
 }
 
 function findLatestRun(repoRoot = process.cwd()) {
@@ -527,174 +510,9 @@ function readTasks(runRoot) {
   }));
 }
 
-function readJsonFile(filePath, label) {
-  try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8"));
-  } catch (error) {
-    throw new Error(`Invalid ${label} JSON: ${filePath}. ${error.message}`);
-  }
-}
-
-function runGit(args, cwd) {
-  return childProcess.spawnSync("git", args, {
-    cwd,
-    encoding: "utf8",
-    shell: false,
-  });
-}
-
-function getGitOutput(args, cwd) {
-  const result = runGit(args, cwd);
-
-  if (result.error) {
-    throw new Error(`Failed to run git ${args.join(" ")}: ${result.error.message}`);
-  }
-
-  return result;
-}
-
-function isRepoDirty(repoRoot) {
-  const result = getGitOutput(["status", "--porcelain"], repoRoot);
-
-  if (result.status !== 0) {
-    throw new Error(`Failed to inspect git status: ${(result.stderr || result.stdout || "").trim()}`);
-  }
-
-  return result.stdout.trim().length > 0;
-}
-
-function branchExists(repoRoot, branch) {
-  const result = getGitOutput(["show-ref", "--verify", "--quiet", `refs/heads/${branch}`], repoRoot);
-  return result.status === 0;
-}
-
-function getGitStatusShort(worktreePath) {
-  const result = getGitOutput(["status", "--short"], worktreePath);
-
-  if (result.status !== 0) {
-    throw new Error(`Failed to inspect git status for ${worktreePath}: ${(result.stderr || result.stdout || "").trim()}`);
-  }
-
-  return result.stdout
-    .split(/\r?\n/)
-    .map((line) => line.trimEnd())
-    .filter(Boolean);
-}
-
-function getGitHeadCommit(repoRoot) {
-  const result = getGitOutput(["rev-parse", "HEAD"], repoRoot);
-
-  if (result.status !== 0) {
-    throw new Error(`Failed to read git HEAD for ${repoRoot}: ${(result.stderr || result.stdout || "").trim()}`);
-  }
-
-  return result.stdout.trim();
-}
-
-function getCommittedChangedFiles(worktreePath, baseCommit) {
-  const result = getGitOutput(["diff", "--name-only", `${baseCommit}...HEAD`], worktreePath);
-
-  if (result.status !== 0) {
-    throw new Error(`Failed to inspect committed changes for ${worktreePath}: ${(result.stderr || result.stdout || "").trim()}`);
-  }
-
-  return result.stdout
-    .split(/\r?\n/)
-    .map((line) => line.trim().replace(/\\/g, "/"))
-    .filter(Boolean);
-}
-
-function uniqueFileList(files) {
-  const seen = new Set();
-  const output = [];
-
-  for (const file of files) {
-    const normalized = String(file || "").replace(/\\/g, "/");
-    const key = process.platform === "win32" ? normalized.toLowerCase() : normalized;
-
-    if (!normalized || seen.has(key)) {
-      continue;
-    }
-
-    seen.add(key);
-    output.push(normalized);
-  }
-
-  return output;
-}
-
-function getWorktreeChangeSummary(worktreePath, baseCommit) {
-  const statusLines = getGitStatusShort(worktreePath);
-  const statusChangedFiles = statusLines.map(parseChangedFile);
-  let committedChangedFiles = [];
-  let committedDiffError;
-
-  if (baseCommit) {
-    try {
-      committedChangedFiles = getCommittedChangedFiles(worktreePath, baseCommit);
-    } catch (error) {
-      committedDiffError = error;
-    }
-  }
-
-  return {
-    statusLines,
-    statusChangedFiles,
-    committedChangedFiles,
-    committedDiffError,
-    missingBaseCommit: !baseCommit,
-    changedFiles: uniqueFileList([...statusChangedFiles, ...committedChangedFiles]),
-  };
-}
-
-function getGitBranchName(worktreePath) {
-  const result = getGitOutput(["branch", "--show-current"], worktreePath);
-
-  if (result.status !== 0) {
-    return "unknown";
-  }
-
-  return result.stdout.trim() || "detached";
-}
-
-function isGitWorktreePath(worktreePath) {
-  if (!fs.existsSync(worktreePath) || !fs.statSync(worktreePath).isDirectory()) {
-    return false;
-  }
-
-  const result = getGitOutput(["rev-parse", "--is-inside-work-tree"], worktreePath);
-  return result.status === 0 && result.stdout.trim() === "true";
-}
-
-function getGitDiffStat(worktreePath) {
-  const result = getGitOutput(["diff", "--stat"], worktreePath);
-
-  if (result.status !== 0) {
-    return "(failed to read git diff --stat)";
-  }
-
-  return result.stdout.trim() || "(no diff stat)";
-}
-
 function isPathUnderCewpWorktrees(worktreePath) {
   const normalized = path.resolve(worktreePath).replace(/\\/g, "/").toLowerCase();
   return normalized.includes("/.cewp-worktrees/");
-}
-
-function removeGitWorktree(repoRoot, worktreePath) {
-  const result = getGitOutput(["worktree", "remove", worktreePath], repoRoot);
-
-  if (result.status !== 0) {
-    throw new Error(`Failed to remove worktree ${worktreePath}: ${(result.stderr || result.stdout || "").trim()}`);
-  }
-}
-
-function pruneGitWorktrees(repoRoot) {
-  const result = getGitOutput(["worktree", "prune"], repoRoot);
-
-  if (result.status !== 0) {
-    throw new Error(`Failed to prune git worktrees: ${(result.stderr || result.stdout || "").trim()}`);
-  }
 }
 
 function buildWorktreePlans(runId, runRoot) {
@@ -2845,21 +2663,6 @@ function runDispatchExecActual(options = {}) {
   return status;
 }
 
-function normalizeComparePath(filePath) {
-  return process.platform === "win32" ? filePath.toLowerCase() : filePath;
-}
-
-function normalizeAllowedFileEntry(value) {
-  return String(value || "").replace(/\\/g, "/").replace(/\/+$/, "");
-}
-
-function getAllowedFilesOverlap(taskA, taskB) {
-  const allowedA = Array.isArray(taskA.allowedFiles) ? taskA.allowedFiles.map(normalizeAllowedFileEntry).filter(Boolean) : [];
-  const allowedB = Array.isArray(taskB.allowedFiles) ? taskB.allowedFiles.map(normalizeAllowedFileEntry).filter(Boolean) : [];
-  const setB = new Set(allowedB);
-  return allowedA.filter((entry) => setB.has(entry));
-}
-
 function getParallelWorkersPreflight(options = {}) {
   const roles = ["worker-a", "worker-b"];
   const failures = [];
@@ -3527,51 +3330,6 @@ function getTaskMap(runRoot) {
   return new Map(readTasks(runRoot).map(({ task }) => [task.id, task]));
 }
 
-function parseChangedFile(statusLine) {
-  const rawPath = statusLine.slice(3).trim();
-  const renameParts = rawPath.split(" -> ");
-  return renameParts[renameParts.length - 1].replace(/\\/g, "/");
-}
-
-function pathMatchesPattern(filePath, pattern) {
-  const normalizedFile = filePath.replace(/\\/g, "/");
-  const normalizedPattern = String(pattern).replace(/\\/g, "/");
-
-  if (normalizedPattern.endsWith("/**")) {
-    const prefix = normalizedPattern.slice(0, -3);
-    return normalizedFile === prefix || normalizedFile.startsWith(`${prefix}/`);
-  }
-
-  return normalizedFile === normalizedPattern;
-}
-
-function isWorkerRuntimeOutputPath(filePath) {
-  const normalizedFile = filePath.replace(/\\/g, "/");
-  return normalizedFile === ".cewp-worker-output" || normalizedFile.startsWith(".cewp-worker-output/");
-}
-
-function findScopeWarnings(taskId, changedFiles, task) {
-  const warnings = [];
-  const allowedFiles = Array.isArray(task.allowedFiles) ? task.allowedFiles : [];
-  const forbiddenFiles = Array.isArray(task.forbiddenFiles) ? task.forbiddenFiles : [];
-
-  for (const filePath of changedFiles) {
-    if (
-      allowedFiles.length > 0 &&
-      !isWorkerRuntimeOutputPath(filePath) &&
-      !allowedFiles.some((pattern) => pathMatchesPattern(filePath, pattern))
-    ) {
-      warnings.push(`${taskId} changed file outside allowedFiles: ${filePath}`);
-    }
-
-    if (forbiddenFiles.some((pattern) => pathMatchesPattern(filePath, pattern))) {
-      warnings.push(`${taskId} changed forbidden file: ${filePath}`);
-    }
-  }
-
-  return warnings;
-}
-
 function markdownList(value) {
   if (!Array.isArray(value) || value.length === 0) {
     return "none";
@@ -3999,14 +3757,6 @@ function runCollect(options = {}) {
     packetPath,
     warnings,
   };
-}
-
-function readRequiredJson(filePath, label) {
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Missing ${label}: ${filePath}`);
-  }
-
-  return readJsonFile(filePath, label);
 }
 
 function getFinalizeTaskUpdates(taskEntries) {
