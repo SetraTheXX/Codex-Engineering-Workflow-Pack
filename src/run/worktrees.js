@@ -80,12 +80,27 @@ function isUnsafeWorktreePath(worktreePath) {
   return segments.some((segment) => segment === "..");
 }
 
+function getManagedWorktreesRoot(repoRoot = process.cwd()) {
+  return path.resolve(repoRoot, "../.cewp-worktrees");
+}
+
+function isPathInside(parentPath, childPath) {
+  const relative = path.relative(path.resolve(parentPath), path.resolve(childPath));
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
 function getTaskWorktreePath(task, runId, repoRoot) {
   const repoName = getRepoName(repoRoot);
   const worktreePath = task.targetWorktree || `../.cewp-worktrees/${repoName}/${runId}/${task.id}`;
+  const resolvedPath = resolveWorktreePath(worktreePath, repoRoot);
+  const managedRoot = getManagedWorktreesRoot(repoRoot);
 
   if (isUnsafeWorktreePath(worktreePath)) {
     throw new Error(`Unsafe targetWorktree for ${task.id}: ${worktreePath}`);
+  }
+
+  if (!isPathInside(managedRoot, resolvedPath)) {
+    throw new Error(`External targetWorktree for ${task.id} is not supported by default: ${worktreePath}`);
   }
 
   return worktreePath;
@@ -460,6 +475,8 @@ function runWorktreesStatus(options = {}) {
 }
 
 module.exports = {
+  getManagedWorktreesRoot,
+  isPathInside,
   runWorktreesPlan,
   runWorktreesCreate,
   runWorktreesStatus,

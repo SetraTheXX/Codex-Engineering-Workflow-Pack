@@ -4,6 +4,33 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const POLICY_MODES = ["safe", "trusted", "full-authority"];
+const POLICY_ACTIONS = {
+  runWorkers: {
+    authorityKey: "runWorkers",
+    label: "dispatch worker execution",
+    hint: "Run `cewp policy set full-authority` to allow guarded local CEWP execution, or use dry-run commands.",
+  },
+  runReviewer: {
+    authorityKey: "runReviewer",
+    label: "dispatch reviewer execution",
+    hint: "Run `cewp policy set full-authority` to allow guarded local CEWP execution, or use dry-run commands.",
+  },
+  runCewpPipeline: {
+    authorityKey: "runCewpPipeline",
+    label: "dispatch pipeline execution",
+    hint: "Run `cewp policy set full-authority` to allow guarded local CEWP execution, or use dry-run commands.",
+  },
+  finalize: {
+    authorityKey: "finalize",
+    label: "finalize",
+    hint: "Run `cewp policy set full-authority` to allow finalize, or use `cewp run finalize --dry-run`.",
+  },
+  cleanup: {
+    authorityKey: "cleanup",
+    label: "cleanup/prune deletion",
+    hint: "Run `cewp policy set full-authority` to allow cleanup or prune deletion, or use dry-run commands.",
+  },
+};
 
 function getPolicyPath(repoRoot = process.cwd()) {
   return path.join(repoRoot, ".cewp", "policy.json");
@@ -107,6 +134,29 @@ function readPolicy(repoRoot = process.cwd()) {
   };
 }
 
+function getEffectiveOperatorPolicy(repoRoot = process.cwd()) {
+  return readPolicy(repoRoot);
+}
+
+function assertPolicyAllows(repoRoot = process.cwd(), actionName) {
+  const action = POLICY_ACTIONS[actionName];
+
+  if (!action) {
+    throw new Error(`Unknown operator policy action: ${actionName}.`);
+  }
+
+  const { policy } = getEffectiveOperatorPolicy(repoRoot);
+  const authority = policy.authority || {};
+
+  if (authority[action.authorityKey] === true) {
+    return policy;
+  }
+
+  throw new Error(
+    `operator policy blocks ${action.label} in ${policy.mode} mode.\n\n${action.hint}`,
+  );
+}
+
 function writePolicy(mode, repoRoot = process.cwd()) {
   const policyPath = getPolicyPath(repoRoot);
   const policy = getPolicyTemplate(mode);
@@ -170,6 +220,8 @@ module.exports = {
   getPolicyPath,
   getPolicyTemplate,
   readPolicy,
+  getEffectiveOperatorPolicy,
+  assertPolicyAllows,
   writePolicy,
   runPolicy,
 };

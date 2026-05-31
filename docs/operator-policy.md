@@ -6,7 +6,7 @@ CEWP can store a repo-local operator policy at:
 .cewp/policy.json
 ```
 
-Codex can read this file to understand how much autonomy the user allows in the current repo.
+Codex can read this file to understand how much autonomy the user allows in the current repo. The CEWP CLI also enforces this policy for high-impact local runtime actions.
 
 ## Commands
 
@@ -94,6 +94,20 @@ It does not disable CEWP guardrails:
 - logs and reports remain part of the workflow.
 
 Push, publish, and release remain `false` by default. They require explicit policy permission in a future policy shape or direct user approval.
+
+## Runtime Enforcement
+
+Read-only and dry-run commands are allowed in every mode.
+
+Actual high-impact local CEWP actions are checked against `.cewp/policy.json`:
+
+- worker execution requires `authority.runWorkers`
+- reviewer execution requires `authority.runReviewer`
+- pipeline execution requires `authority.runCewpPipeline`, `authority.runWorkers`, and `authority.runReviewer`
+- finalize requires `authority.finalize`
+- cleanup and prune deletion require `authority.cleanup`
+
+If no policy file exists, CEWP uses the safe default and blocks these actual actions. `full-authority` allows guarded local workflow actions while keeping CEWP guardrails active.
 
 ## Package And Git Behavior
 

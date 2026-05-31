@@ -31,6 +31,7 @@ Manager:
 Workers:
 - work inside assigned git worktrees,
 - follow `allowedFiles` and `forbiddenFiles`,
+- require explicit `allowedFiles` for real guarded execution,
 - write worker output under `.cewp-worker-output/`,
 - do not write shared `board.json`.
 
@@ -70,6 +71,8 @@ cewp run worktrees status --run <run-id>
 ```
 
 `worktrees create` records a `baseCommit` for each worker. Later status and post-checks compare both uncommitted changes and committed branch changes against each task's scope.
+
+Worker worktrees are managed under `../.cewp-worktrees/` by default. External, absolute, or traversal-style `targetWorktree` paths are rejected unless they resolve inside that managed root.
 
 ## Dispatch Planning
 
@@ -123,7 +126,7 @@ Parallel workers:
 cewp run dispatch exec workers --run <run-id> --adapter codex-exec --yes --parallel --timeout 120
 ```
 
-Parallel mode starts only `worker-a` and `worker-b`. It requires separate worktrees, different tasks, and non-overlapping `allowedFiles`. Reviewer execution happens after workers finish.
+Parallel mode starts only `worker-a` and `worker-b`. It requires separate worktrees, different tasks, and non-overlapping `allowedFiles`. Directory scopes such as `docs/**` overlap with files under that directory, such as `docs/install.md`. Reviewer execution happens after workers finish.
 
 ## Pipeline
 
@@ -191,6 +194,8 @@ cewp run cleanup --run <run-id> --yes
 ```
 
 Cleanup is dry-run by default. With `--yes`, it removes only clean registered worktrees under `.cewp-worktrees/`.
+
+Cleanup does not remove arbitrary external paths, even if an older or edited registry points outside the CEWP-managed worktree root.
 
 Prune old run history:
 

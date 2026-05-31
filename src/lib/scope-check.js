@@ -95,11 +95,66 @@ function normalizeAllowedFileEntry(value) {
   return normalizeSlashPath(value).replace(/\/+$/, "");
 }
 
+function isTreePattern(pattern) {
+  return pattern === "**" || pattern.endsWith("/**");
+}
+
+function treePatternPrefix(pattern) {
+  if (pattern === "**") {
+    return "";
+  }
+
+  return pattern.slice(0, -3);
+}
+
+function pathIsWithinTreePattern(fileOrPattern, treePattern) {
+  const normalized = normalizeAllowedFileEntry(fileOrPattern);
+  const prefix = treePatternPrefix(treePattern);
+
+  if (prefix === "") {
+    return true;
+  }
+
+  return normalized === prefix || normalized.startsWith(`${prefix}/`);
+}
+
+function allowedFilePatternsOverlap(leftPattern, rightPattern) {
+  const left = normalizeAllowedFileEntry(leftPattern);
+  const right = normalizeAllowedFileEntry(rightPattern);
+
+  if (!left || !right) {
+    return false;
+  }
+
+  if (left === right) {
+    return true;
+  }
+
+  if (isTreePattern(left) && pathIsWithinTreePattern(right, left)) {
+    return true;
+  }
+
+  if (isTreePattern(right) && pathIsWithinTreePattern(left, right)) {
+    return true;
+  }
+
+  return false;
+}
+
 function getAllowedFilesOverlap(taskA, taskB) {
   const allowedA = Array.isArray(taskA.allowedFiles) ? taskA.allowedFiles.map(normalizeAllowedFileEntry).filter(Boolean) : [];
   const allowedB = Array.isArray(taskB.allowedFiles) ? taskB.allowedFiles.map(normalizeAllowedFileEntry).filter(Boolean) : [];
-  const setB = new Set(allowedB);
-  return allowedA.filter((entry) => setB.has(entry));
+  const overlaps = [];
+
+  for (const left of allowedA) {
+    for (const right of allowedB) {
+      if (allowedFilePatternsOverlap(left, right)) {
+        overlaps.push(left === right ? left : `${left} <-> ${right}`);
+      }
+    }
+  }
+
+  return overlaps;
 }
 
 module.exports = {
@@ -110,5 +165,6 @@ module.exports = {
   isWorkerRuntimeOutputPath,
   findScopeWarnings,
   normalizeAllowedFileEntry,
+  allowedFilePatternsOverlap,
   getAllowedFilesOverlap,
 };
