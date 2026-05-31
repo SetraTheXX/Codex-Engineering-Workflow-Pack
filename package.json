@@ -18,6 +18,7 @@
   "files": [
     ".agents/skills",
     "bin",
+    "src",
     "README.md",
     "docs/install.md",
     "install.ps1",
