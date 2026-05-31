@@ -42,6 +42,7 @@ function parseArgs(argv) {
     keepRuns: undefined,
     olderThanMs: undefined,
     olderThanRaw: undefined,
+    policyMode: undefined,
     parallel: false,
     workers: undefined,
     reviewer: false,
@@ -86,6 +87,16 @@ function parseArgs(argv) {
 
     if (args.command === "run" && args.subcommand === "dispatch" && args.action === "exec" && index === 3) {
       args.role = arg;
+      continue;
+    }
+
+    if (args.command === "policy" && index === 1) {
+      args.subcommand = arg;
+      continue;
+    }
+
+    if (args.command === "policy" && args.subcommand === "set" && index === 2) {
+      args.policyMode = arg;
       continue;
     }
 

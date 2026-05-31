@@ -2,6 +2,7 @@
 
 const { runCleanup } = require("../src/run/cleanup");
 const { runPrune } = require("../src/run/prune");
+const { runPolicy } = require("../src/run/policy");
 const {
   runWorktreesPlan,
   runWorktreesCreate,
@@ -152,12 +153,17 @@ async function main() {
       return;
     }
 
+    if (args.command === "policy") {
+      runPolicy(args);
+      return;
+    }
+
     if (args.command === "run") {
       await runCommand(args);
       return;
     }
 
-    if (!["init", "list", "doctor", "run"].includes(args.command)) {
+    if (!["init", "list", "doctor", "policy", "run"].includes(args.command)) {
       throw new Error(`Unsupported command: ${args.command}`);
     }
   } catch (error) {
