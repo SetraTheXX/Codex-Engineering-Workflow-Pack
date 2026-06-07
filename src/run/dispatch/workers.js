@@ -18,7 +18,12 @@ function normalizeExecResult(result) {
 
   return {
     status: (result && result.status) || "FAIL",
+    reason: result && result.reason,
     reasons: Array.isArray(result && result.reasons) ? result.reasons : [],
+    exitCode: result && result.exitCode,
+    timedOut: Boolean(result && result.timedOut),
+    paths: (result && result.paths) || {},
+    decision: result && result.decision,
   };
 }
 

@@ -24,6 +24,7 @@ const {
   cleanupRepo,
 } = require("./lib/temp-repo");
 const { createFakeCodexAdapter } = require("./lib/fake-adapter");
+const { normalizeAdapterResult } = require("../../src/run/adapters/codex-exec");
 
 const cewpRoot = path.resolve(__dirname, "..", "..");
 const cewpCli = path.join(cewpRoot, "bin", "cewp.js");
@@ -254,6 +255,28 @@ async function main() {
       const pipelineUnsupported = cewp(["run", "dispatch", "pipeline", "--adapter", "not-real", "--dry-run"], cewpRoot);
       assertExit(pipelineUnsupported, 1, "unsupported dispatch pipeline adapter");
       assertIncludes(pipelineUnsupported.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.", "unsupported pipeline adapter message");
+    });
+
+    await step("adapter result shape", () => {
+      const result = normalizeAdapterResult({
+        role: "worker-a",
+        status: "FAIL",
+        exitCode: 7,
+        timedOut: false,
+        reasons: ["codex exec exited with code 7."],
+        paths: {
+          stdout: "adapter-output/worker-a-stdout.log",
+        },
+      });
+
+      assert(result.adapter === "codex-exec", "adapter result adapter name");
+      assert(result.role === "worker-a", "adapter result role");
+      assert(result.status === "FAIL", "adapter result status");
+      assert(result.exitCode === 7, "adapter result exit code");
+      assert(result.timedOut === false, "adapter result timeout");
+      assert(result.reason === "codex exec exited with code 7.", "adapter result reason");
+      assert(Array.isArray(result.reasons) && result.reasons.length === 1, "adapter result reasons");
+      assert(result.paths.stdout === "adapter-output/worker-a-stdout.log", "adapter result paths");
     });
 
     coordinatorRepo = makeTempRepo("cewp-harness-flow-");

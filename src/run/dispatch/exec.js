@@ -300,7 +300,16 @@ function runDispatchReviewerExecActual(options, preflight) {
     console.log("No processes were started.");
     console.log("No merge/push/publish was performed.");
     process.exitCode = 1;
-    return "FAIL";
+    return adapter.normalizeAdapterResult({
+      role: "reviewer",
+      status: "FAIL",
+      reasons: failures,
+      paths: {
+        report: preview && preview.reportPath,
+        event: preview && preview.eventPath,
+        lastMessage: preview && preview.outputLastMessagePath,
+      },
+    });
   }
 
   const repoRoot = (runJson && runJson.repoRoot) || process.cwd();
@@ -410,11 +419,22 @@ function runDispatchReviewerExecActual(options, preflight) {
     process.exitCode = 1;
   }
 
-  return {
+  return adapter.normalizeAdapterResult({
+    role: "reviewer",
     status,
+    exitCode,
+    timedOut,
+    reason: failuresAfterExec[0],
     reasons: failuresAfterExec,
     decision: decision || "not_found",
-  };
+    paths: {
+      stdout: stdoutPath,
+      stderr: stderrPath,
+      report: preview.reportPath,
+      event: preview.eventPath,
+      lastMessage: preview.outputLastMessagePath,
+    },
+  });
 }
 
 function runDispatchExecActual(options = {}) {
@@ -448,7 +468,16 @@ function runDispatchExecActual(options = {}) {
     console.log("No processes were started.");
     console.log("No merge/push/publish was performed.");
     process.exitCode = 1;
-    return "FAIL";
+    return adapter.normalizeAdapterResult({
+      role: options.role,
+      status: "FAIL",
+      reasons: failures,
+      paths: {
+        report: preview && preview.reportPath,
+        event: preview && preview.eventPath,
+        lastMessage: preview && preview.outputLastMessagePath,
+      },
+    });
   }
 
   const { adapterOutputRoot, stdoutPath, stderrPath } = adapter.getAdapterOutputPaths(runRoot, options.role);
@@ -619,10 +648,23 @@ function runDispatchExecActual(options = {}) {
     process.exitCode = 1;
   }
 
-  return {
+  return adapter.normalizeAdapterResult({
+    role: options.role,
     status,
+    exitCode,
+    timedOut,
+    reason: failuresAfterExec[0],
     reasons: failuresAfterExec,
-  };
+    paths: {
+      stdout: stdoutPath,
+      stderr: stderrPath,
+      report: preview.reportPath,
+      event: preview.eventPath,
+      lastMessage: preview.outputLastMessagePath,
+      workerReport: workerOutput.reportPath,
+      workerEvents: workerOutput.eventsPath,
+    },
+  });
 }
 
 async function runDispatchExec(options = {}) {

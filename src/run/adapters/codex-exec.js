@@ -116,6 +116,34 @@ function didAdapterTimeOut(execResult) {
   return Boolean(execResult.error && execResult.error.code === "ETIMEDOUT");
 }
 
+function normalizeAdapterResult({
+  role,
+  status,
+  exitCode,
+  timedOut,
+  reason,
+  reasons,
+  paths,
+  decision,
+} = {}) {
+  const normalizedReasons = Array.isArray(reasons)
+    ? reasons.filter((value) => typeof value === "string" && value.length > 0)
+    : [];
+  const firstReason = reason || normalizedReasons[0];
+
+  return {
+    adapter: "codex-exec",
+    role,
+    status: status || (normalizedReasons.length > 0 ? "FAIL" : "PASS"),
+    exitCode: typeof exitCode === "number" ? exitCode : undefined,
+    timedOut: Boolean(timedOut),
+    reason: firstReason,
+    reasons: normalizedReasons,
+    paths: paths || {},
+    decision,
+  };
+}
+
 module.exports = {
   validateTimeoutSeconds,
   getAdapterOutputRoot,
@@ -127,4 +155,5 @@ module.exports = {
   runCodexExecAdapter,
   getAdapterExitCode,
   didAdapterTimeOut,
+  normalizeAdapterResult,
 };
