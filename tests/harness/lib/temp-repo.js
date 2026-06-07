@@ -12,6 +12,7 @@ function run(command, args = [], options = {}) {
   const result = spawnSync(executable, executableArgs, {
     cwd: options.cwd,
     encoding: "utf8",
+    env: options.env || process.env,
     shell: useShell,
     timeout: options.timeout || 120000,
   });
@@ -24,8 +25,8 @@ function run(command, args = [], options = {}) {
   };
 }
 
-function runNode(scriptPath, args = [], cwd) {
-  return run(process.execPath, [scriptPath, ...args], { cwd });
+function runNode(scriptPath, args = [], cwd, options = {}) {
+  return run(process.execPath, [scriptPath, ...args], { ...options, cwd });
 }
 
 function writeFile(filePath, content) {

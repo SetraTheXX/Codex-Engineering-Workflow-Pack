@@ -80,7 +80,17 @@ function copyWorkerOutputToRun({ runRoot, role, localReportPath, localEventsPath
 function runCodexExecAdapter({ worktreePath, promptPath, outputLastMessagePath, timeoutSeconds, sandbox = "workspace-write" }) {
   validateTimeoutSeconds(timeoutSeconds);
   const prompt = fs.readFileSync(promptPath, "utf8");
-  return childProcess.spawnSync("codex", [
+  const command = process.env.CEWP_CODEX_EXEC_COMMAND || "codex";
+  const prefixArgs = process.env.CEWP_CODEX_EXEC_PREFIX_ARGS
+    ? JSON.parse(process.env.CEWP_CODEX_EXEC_PREFIX_ARGS)
+    : [];
+
+  if (!Array.isArray(prefixArgs) || !prefixArgs.every((value) => typeof value === "string")) {
+    throw new Error("CEWP_CODEX_EXEC_PREFIX_ARGS must be a JSON array of strings.");
+  }
+
+  return childProcess.spawnSync(command, [
+    ...prefixArgs,
     "exec",
     "--cd",
     worktreePath,
