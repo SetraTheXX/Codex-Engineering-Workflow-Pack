@@ -102,6 +102,7 @@ See [Security Model](docs/security-model.md).
 
 - [Install Guide](docs/install.md)
 - [Coordinator Mode](docs/coordinator-mode.md)
+- [Adapter Contract](docs/adapter-contract.md)
 - [Operator Policy](docs/operator-policy.md)
 - [Security Model](docs/security-model.md)
 - [Release Notes](docs/release-notes.md)
