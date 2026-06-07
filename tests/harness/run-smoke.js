@@ -246,6 +246,16 @@ async function main() {
       assert(resetPolicy.mode === "safe", "policy reset should write safe mode");
     });
 
+    await step("adapter registry validation", () => {
+      const execUnsupported = cewp(["run", "dispatch", "exec", "worker-a", "--adapter", "not-real", "--dry-run"], cewpRoot);
+      assertExit(execUnsupported, 1, "unsupported dispatch exec adapter");
+      assertIncludes(execUnsupported.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.", "unsupported exec adapter message");
+
+      const pipelineUnsupported = cewp(["run", "dispatch", "pipeline", "--adapter", "not-real", "--dry-run"], cewpRoot);
+      assertExit(pipelineUnsupported, 1, "unsupported dispatch pipeline adapter");
+      assertIncludes(pipelineUnsupported.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.", "unsupported pipeline adapter message");
+    });
+
     coordinatorRepo = makeTempRepo("cewp-harness-flow-");
     tempRepos.push(coordinatorRepo);
     let flowRunId;

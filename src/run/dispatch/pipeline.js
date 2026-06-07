@@ -8,21 +8,16 @@ const { assertPolicyAllows } = require("../policy");
 const { runDispatchCheck } = require("./check");
 const { runDispatchPrompts } = require("./prompts");
 const { relativeRunPath } = require("./shared");
+const { validateAdapterName } = require("../adapters/registry");
 const { getDispatchExecPreview, runDispatchReviewerExecActual } = require("./exec");
 const { runDispatchExecWorkersDryRun, runDispatchExecWorkersActual } = require("./workers");
 
-function validateCodexExecAdapter(options) {
-  if (!options.adapter) {
-    throw new Error("dispatch pipeline requires --adapter codex-exec.");
-  }
-
-  if (options.adapter !== "codex-exec") {
-    throw new Error(`Unsupported dispatch adapter: ${options.adapter}. Supported adapter: codex-exec.`);
-  }
+function validatePipelineAdapter(options) {
+  validateAdapterName(options.adapter, { commandName: "dispatch pipeline" });
 }
 
 function runDispatchPipelineDryRun(options = {}) {
-  validateCodexExecAdapter(options);
+  validatePipelineAdapter(options);
 
   const { runId, runRoot } = findRun(options);
   const dispatchPromptsRoot = path.join(runRoot, "dispatch-prompts");
@@ -133,7 +128,7 @@ function buildPipelineSummaryRows({ steps, decision, overall, reason }) {
 }
 
 async function runDispatchPipelineActual(options = {}) {
-  validateCodexExecAdapter(options);
+  validatePipelineAdapter(options);
   assertPolicyAllows(process.cwd(), "runCewpPipeline");
   assertPolicyAllows(process.cwd(), "runWorkers");
   assertPolicyAllows(process.cwd(), "runReviewer");

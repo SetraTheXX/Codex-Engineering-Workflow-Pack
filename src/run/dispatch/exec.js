@@ -23,16 +23,7 @@ const {
   getWorkerTaskForRole,
   getDispatchPromptPathForTask,
 } = require("./shared");
-const {
-  getAdapterOutputPaths,
-  printCodexExecPreview,
-  writeAdapterLog,
-  getWorkerOutputPaths,
-  copyWorkerOutputToRun,
-  runCodexExecAdapter,
-  getAdapterExitCode,
-  didAdapterTimeOut,
-} = require("../adapters/codex-exec");
+const { getAdapter } = require("../adapters/registry");
 const { assertPolicyAllows } = require("../policy");
 
 function findReviewerDecisionStrict(filePath) {
@@ -44,14 +35,7 @@ function findReviewerDecisionStrict(filePath) {
 function getDispatchExecPreview(options) {
   const supportedRoles = ["worker-a", "worker-b", "reviewer"];
   const shouldPrint = options.printPreview !== false;
-
-  if (!options.adapter) {
-    throw new Error("dispatch exec requires --adapter codex-exec.");
-  }
-
-  if (options.adapter !== "codex-exec") {
-    throw new Error(`Unsupported dispatch adapter: ${options.adapter}. Supported adapter: codex-exec.`);
-  }
+  const adapter = getAdapter(options.adapter, { commandName: "dispatch exec" });
 
   if (!supportedRoles.includes(options.role)) {
     throw new Error(`Unsupported dispatch exec role: ${options.role || "(missing)"}. Supported roles: worker-a, worker-b, reviewer.`);
@@ -63,7 +47,7 @@ function getDispatchExecPreview(options) {
   const taskEntries = readTasks(runRoot);
   const worktreesRegistry = readWorktreesRegistry(runRoot);
   const dispatchPromptsRoot = path.join(runRoot, "dispatch-prompts");
-  const { outputLastMessagePath } = getAdapterOutputPaths(runRoot, options.role);
+  const { outputLastMessagePath } = adapter.getAdapterOutputPaths(runRoot, options.role);
   const failures = [];
   const warnings = [];
   let preview;
@@ -245,7 +229,7 @@ function getDispatchExecPreview(options) {
       console.log("");
       console.log("Expected outputs:");
       if (preview.task && preview.cwd) {
-        const workerOutput = getWorkerOutputPaths(preview.cwd, preview.role);
+        const workerOutput = adapter.getWorkerOutputPaths(preview.cwd, preview.role);
         console.log(`  Worker report source: ${path.relative(preview.cwd, workerOutput.reportPath).replace(/\\/g, "/")}`);
         console.log(`  Worker events source: ${path.relative(preview.cwd, workerOutput.eventsPath).replace(/\\/g, "/")}`);
       }
@@ -257,7 +241,7 @@ function getDispatchExecPreview(options) {
       console.log("  Pass prompt content to codex exec from the dispatch prompt file.");
       console.log("  Do not inline the full prompt in a shell command.");
       console.log("");
-      printCodexExecPreview({
+      adapter.printCodexExecPreview({
         cwd: preview.cwd || "<missing-workdir>",
         promptPath: preview.promptPath,
         outputPath: preview.outputLastMessagePath,
@@ -298,6 +282,7 @@ function getRepoStatusForReviewer(repoRoot) {
 }
 
 function runDispatchReviewerExecActual(options, preflight) {
+  const adapter = getAdapter(options.adapter, { commandName: "dispatch exec" });
   const { runId, runRoot, runJson, failures, warnings, preview } = preflight;
 
   if (failures.length > 0) {
@@ -320,12 +305,12 @@ function runDispatchReviewerExecActual(options, preflight) {
 
   const repoRoot = (runJson && runJson.repoRoot) || process.cwd();
   const repoStatusBefore = getRepoStatusForReviewer(repoRoot);
-  const { adapterOutputRoot, stdoutPath, stderrPath } = getAdapterOutputPaths(runRoot, "reviewer");
+  const { adapterOutputRoot, stdoutPath, stderrPath } = adapter.getAdapterOutputPaths(runRoot, "reviewer");
   fs.mkdirSync(adapterOutputRoot, { recursive: true });
 
   console.log("");
   console.log("Executing codex exec reviewer...");
-  const execResult = runCodexExecAdapter({
+  const execResult = adapter.runCodexExecAdapter({
     worktreePath: preview.cwd,
     promptPath: preview.promptPath,
     outputLastMessagePath: preview.outputLastMessagePath,
@@ -333,15 +318,15 @@ function runDispatchReviewerExecActual(options, preflight) {
     sandbox: "workspace-write",
   });
 
-  writeAdapterLog(stdoutPath, execResult.stdout);
-  writeAdapterLog(stderrPath, execResult.stderr);
+  adapter.writeAdapterLog(stdoutPath, execResult.stdout);
+  adapter.writeAdapterLog(stderrPath, execResult.stderr);
 
   const reportExists = fs.existsSync(preview.reportPath);
   const lastMessageExists = fs.existsSync(preview.outputLastMessagePath);
   const eventExists = fs.existsSync(preview.eventPath);
   const decision = reportExists ? findReviewerDecisionStrict(preview.reportPath) : undefined;
-  const timedOut = didAdapterTimeOut(execResult);
-  const exitCode = getAdapterExitCode(execResult);
+  const timedOut = adapter.didAdapterTimeOut(execResult);
+  const exitCode = adapter.getAdapterExitCode(execResult);
   const repoStatusAfter = getRepoStatusForReviewer(repoRoot);
   const repoChanged = repoStatusBefore.join("\n") !== repoStatusAfter.join("\n");
   const failuresAfterExec = [];
@@ -433,13 +418,7 @@ function runDispatchReviewerExecActual(options, preflight) {
 }
 
 function runDispatchExecActual(options = {}) {
-  if (!options.adapter) {
-    throw new Error("dispatch exec requires --adapter codex-exec.");
-  }
-
-  if (options.adapter !== "codex-exec") {
-    throw new Error(`Unsupported dispatch adapter: ${options.adapter}. Supported adapter: codex-exec.`);
-  }
+  const adapter = getAdapter(options.adapter, { commandName: "dispatch exec" });
 
   if (options.role === "reviewer") {
     assertPolicyAllows(process.cwd(), "runReviewer");
@@ -472,23 +451,23 @@ function runDispatchExecActual(options = {}) {
     return "FAIL";
   }
 
-  const { adapterOutputRoot, stdoutPath, stderrPath } = getAdapterOutputPaths(runRoot, options.role);
+  const { adapterOutputRoot, stdoutPath, stderrPath } = adapter.getAdapterOutputPaths(runRoot, options.role);
   fs.mkdirSync(adapterOutputRoot, { recursive: true });
 
   console.log("");
   console.log("Executing codex exec...");
-  const execResult = runCodexExecAdapter({
+  const execResult = adapter.runCodexExecAdapter({
     worktreePath: preview.cwd,
     promptPath: preview.promptPath,
     outputLastMessagePath: preview.outputLastMessagePath,
     timeoutSeconds: options.timeoutSeconds,
   });
 
-  writeAdapterLog(stdoutPath, execResult.stdout);
-  writeAdapterLog(stderrPath, execResult.stderr);
+  adapter.writeAdapterLog(stdoutPath, execResult.stdout);
+  adapter.writeAdapterLog(stderrPath, execResult.stderr);
 
-  const workerOutput = getWorkerOutputPaths(preview.cwd, options.role);
-  const copiedOutput = copyWorkerOutputToRun({
+  const workerOutput = adapter.getWorkerOutputPaths(preview.cwd, options.role);
+  const copiedOutput = adapter.copyWorkerOutputToRun({
     runRoot,
     role: options.role,
     localReportPath: workerOutput.reportPath,
@@ -514,8 +493,8 @@ function runDispatchExecActual(options = {}) {
   const localReportExists = fs.existsSync(workerOutput.reportPath);
   const localEventsExist = fs.existsSync(workerOutput.eventsPath);
   const lastMessageExists = fs.existsSync(preview.outputLastMessagePath);
-  const timedOut = didAdapterTimeOut(execResult);
-  const exitCode = getAdapterExitCode(execResult);
+  const timedOut = adapter.didAdapterTimeOut(execResult);
+  const exitCode = adapter.getAdapterExitCode(execResult);
   const failuresAfterExec = [];
   const warningsAfterExec = [];
 

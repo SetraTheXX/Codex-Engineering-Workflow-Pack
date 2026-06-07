@@ -6,6 +6,7 @@ const { normalizeComparePath } = require("../../lib/paths");
 const { getAllowedFilesOverlap } = require("../../lib/scope-check");
 const { findRun } = require("../runtime-cleanup");
 const { assertPolicyAllows } = require("../policy");
+const { validateAdapterName } = require("../adapters/registry");
 const { getDispatchExecPreview, runDispatchExecActual } = require("./exec");
 
 const CLI_ENTRYPOINT = path.resolve(__dirname, "../../../bin/cewp.js");
@@ -238,13 +239,7 @@ function runDispatchExecWorkersDryRun(options = {}) {
 }
 
 async function runDispatchExecWorkersParallelActual(options = {}) {
-  if (!options.adapter) {
-    throw new Error("dispatch exec requires --adapter codex-exec.");
-  }
-
-  if (options.adapter !== "codex-exec") {
-    throw new Error(`Unsupported dispatch adapter: ${options.adapter}. Supported adapter: codex-exec.`);
-  }
+  validateAdapterName(options.adapter, { commandName: "dispatch exec" });
 
   assertPolicyAllows(process.cwd(), "runWorkers");
 
@@ -331,13 +326,7 @@ async function runDispatchExecWorkersActual(options = {}) {
     return runDispatchExecWorkersParallelActual(options);
   }
 
-  if (!options.adapter) {
-    throw new Error("dispatch exec requires --adapter codex-exec.");
-  }
-
-  if (options.adapter !== "codex-exec") {
-    throw new Error(`Unsupported dispatch adapter: ${options.adapter}. Supported adapter: codex-exec.`);
-  }
+  validateAdapterName(options.adapter, { commandName: "dispatch exec" });
 
   assertPolicyAllows(process.cwd(), "runWorkers");
 
