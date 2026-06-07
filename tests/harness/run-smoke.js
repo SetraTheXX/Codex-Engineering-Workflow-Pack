@@ -94,8 +94,9 @@ const changedFile = role === "worker-b" ? "docs/install.md" : "README.md";
 if (isReviewer) {
   const reportPath = path.join(worktree, "reviews", "reviewer-report.md");
   const eventPath = path.join(worktree, "events", "reviewer.jsonl");
-  const decisionLine = mode === "reviewer-missing-decision" ? "" : "Decision: PASS\\n\\n";
-  const decision = mode === "reviewer-missing-decision" ? "not_found" : "PASS";
+  const decisionValue = mode === "reviewer-request-changes" ? "REQUEST_CHANGES" : "PASS";
+  const decisionLine = mode === "reviewer-missing-decision" ? "" : \`Decision: \${decisionValue}\\n\\n\`;
+  const decision = mode === "reviewer-missing-decision" ? "not_found" : decisionValue;
   fs.mkdirSync(path.dirname(reportPath), { recursive: true });
   fs.mkdirSync(path.dirname(eventPath), { recursive: true });
   fs.writeFileSync(
@@ -693,6 +694,38 @@ async function main() {
       }
     });
 
+    await step("fake codex pipeline reports worker failure reason", () => {
+      const fake = makeFakeCodexShim("scope-violation");
+      const fakeRepo = makeTempRepo("cewp-harness-fake-pipeline-worker-failure-");
+      tempRepos.push(fakeRepo);
+
+      try {
+        const { runId } = setupFakeAdapterRun(fakeRepo);
+        const pipeline = cewpWithEnv([
+          "run",
+          "dispatch",
+          "pipeline",
+          "--run",
+          runId,
+          "--adapter",
+          "codex-exec",
+          "--yes",
+        ], fakeRepo, fake.env);
+
+        assertExit(pipeline, 1, "pipeline worker failure");
+        assertIncludes(pipeline.stdout, "Pipeline summary", "worker failure stable summary heading");
+        assertIncludes(pipeline.stdout, "- check: PASS", "worker failure check pass");
+        assertIncludes(pipeline.stdout, "- prompts: PASS", "worker failure prompts pass");
+        assertIncludes(pipeline.stdout, "- workers: FAIL (worker-a: outside allowedFiles: secret.txt)", "worker failure reason");
+        assertIncludes(pipeline.stdout, "- collect: SKIPPED", "worker failure collect skipped");
+        assertIncludes(pipeline.stdout, "- reviewer: SKIPPED", "worker failure reviewer skipped");
+        assertIncludes(pipeline.stdout, "- finalize: not run", "worker failure finalize not run");
+        assertRunIsNotCompleted(fakeRepo, runId, "pipeline worker failure");
+      } finally {
+        fs.rmSync(fake.fakeRoot, { recursive: true, force: true });
+      }
+    });
+
     await step("fake codex pipeline blocks missing reviewer decision", () => {
       const fake = makeFakeCodexShim("reviewer-missing-decision");
       const fakeRepo = makeTempRepo("cewp-harness-fake-reviewer-missing-decision-");
@@ -717,6 +750,11 @@ async function main() {
         assertIncludes(pipeline.stdout, "Step 5/5 reviewer: FAIL", "missing decision pipeline reviewer");
         assertIncludes(pipeline.stdout, "Overall: FAIL", "missing decision pipeline overall");
         assertNotIncludes(pipeline.stdout, "Reviewer decision: PASS", "missing decision should not print PASS");
+        assertIncludes(pipeline.stdout, "Pipeline summary", "missing decision stable summary heading");
+        assertIncludes(pipeline.stdout, "- workers: PASS", "missing decision workers pass");
+        assertIncludes(pipeline.stdout, "- collect: PASS", "missing decision collect pass");
+        assertIncludes(pipeline.stdout, "- reviewer: FAIL (reviewer decision not found)", "missing decision reason");
+        assertIncludes(pipeline.stdout, "- finalize: not run", "missing decision finalize not run");
 
         const reportPath = path.join(fakeRepo, ".cewp", "runs", runId, "reviews", "reviewer-report.md");
         assertFileExists(reportPath, "missing decision reviewer report");
@@ -727,6 +765,38 @@ async function main() {
         assertExit(dryRunFinalize, 1, "missing decision finalize dry-run");
         assertIncludes(dryRunFinalize.stderr, "Cannot finalize: reviewer decision not found.", "missing decision finalize gate");
         assertRunIsNotCompleted(fakeRepo, runId, "missing reviewer decision");
+      } finally {
+        fs.rmSync(fake.fakeRoot, { recursive: true, force: true });
+      }
+    });
+
+    await step("fake codex pipeline reports reviewer request changes", () => {
+      const fake = makeFakeCodexShim("reviewer-request-changes");
+      const fakeRepo = makeTempRepo("cewp-harness-fake-reviewer-request-changes-");
+      tempRepos.push(fakeRepo);
+
+      try {
+        const { runId } = setupFakeAdapterRun(fakeRepo);
+        const pipeline = cewpWithEnv([
+          "run",
+          "dispatch",
+          "pipeline",
+          "--run",
+          runId,
+          "--adapter",
+          "codex-exec",
+          "--yes",
+        ], fakeRepo, fake.env);
+
+        assertExit(pipeline, 1, "request changes pipeline");
+        assertIncludes(pipeline.stdout, "Reviewer decision: REQUEST_CHANGES", "request changes decision output");
+        assertIncludes(pipeline.stdout, "- reviewer: FAIL (reviewer requested changes)", "request changes summary reason");
+        assertIncludes(pipeline.stdout, "- finalize: not run", "request changes finalize not run");
+
+        const dryRunFinalize = cewp(["run", "finalize", "--run", runId, "--dry-run"], fakeRepo);
+        assertExit(dryRunFinalize, 1, "request changes pipeline finalize dry-run");
+        assertIncludes(dryRunFinalize.stderr, "Cannot finalize: reviewer decision is REQUEST_CHANGES.", "request changes finalize gate");
+        assertRunIsNotCompleted(fakeRepo, runId, "request changes pipeline");
       } finally {
         fs.rmSync(fake.fakeRoot, { recursive: true, force: true });
       }

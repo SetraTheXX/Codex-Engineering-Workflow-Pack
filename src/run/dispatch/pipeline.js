@@ -69,6 +69,69 @@ function runDispatchPipelineDryRun(options = {}) {
   }
 }
 
+function pipelineStepKey(name) {
+  if (name === "dispatch check") {
+    return "check";
+  }
+  if (name === "dispatch prompts") {
+    return "prompts";
+  }
+  return name;
+}
+
+function firstFailedWorkerReason(step) {
+  const failed = step && Array.isArray(step.details) ? step.details.find((detail) => detail.status === "FAIL") : undefined;
+  if (!failed) {
+    return undefined;
+  }
+  return `${failed.role}: ${failed.reason || "worker execution failed"}`;
+}
+
+function reviewerFailureReason(decision) {
+  if (!decision || decision === "not found") {
+    return "reviewer decision not found";
+  }
+  if (decision === "REQUEST_CHANGES") {
+    return "reviewer requested changes";
+  }
+  if (decision === "BLOCK") {
+    return "reviewer blocked finalize";
+  }
+  return undefined;
+}
+
+function buildPipelineSummaryRows({ steps, decision, overall, reason }) {
+  const byKey = new Map(steps.map((step) => [pipelineStepKey(step.name), step]));
+  const rows = [];
+  let blocked = false;
+
+  for (const key of ["check", "prompts", "workers", "collect", "reviewer"]) {
+    const step = byKey.get(key);
+    if (!step || blocked) {
+      rows.push({ key, status: "SKIPPED" });
+      continue;
+    }
+
+    let stepReason;
+    const status = step.status === "WARN" ? "PASS" : step.status;
+    if (status === "FAIL") {
+      if (key === "workers") {
+        stepReason = firstFailedWorkerReason(step) || reason || "workers failed";
+      } else if (key === "reviewer") {
+        stepReason = reviewerFailureReason(decision) || reason || "reviewer failed";
+      } else {
+        stepReason = reason || "policy/preflight failure";
+      }
+      blocked = true;
+    }
+
+    rows.push({ key, status, reason: stepReason });
+  }
+
+  rows.push({ key: "finalize", status: "not run" });
+  return rows;
+}
+
 async function runDispatchPipelineActual(options = {}) {
   validateCodexExecAdapter(options);
   assertPolicyAllows(process.cwd(), "runCewpPipeline");
@@ -133,14 +196,16 @@ async function runDispatchPipelineActual(options = {}) {
     return;
   }
 
-  const reviewerStatus = runDispatchReviewerExecActual(options, getDispatchExecPreview({ ...options, role: "reviewer", printPreview: false }));
-  steps.push({ name: "reviewer", status: reviewerStatus });
+  const reviewerResult = runDispatchReviewerExecActual(options, getDispatchExecPreview({ ...options, role: "reviewer", printPreview: false }));
+  const reviewerExecStatus = typeof reviewerResult === "string" ? reviewerResult : reviewerResult.status;
   try {
     decision = findReviewerDecisionStrict(path.join(findRun(options).runRoot, "reviews", "reviewer-report.md")) || "not found";
   } catch {
     decision = "not found";
   }
 
+  const reviewerStatus = reviewerExecStatus === "PASS" && decision === "PASS" ? "PASS" : "FAIL";
+  steps.push({ name: "reviewer", status: reviewerStatus });
   const overall = reviewerStatus === "PASS" ? "PASS" : "FAIL";
   printDispatchPipelineSummary({ runId, steps, decision, overall, packetPath });
 
@@ -167,6 +232,12 @@ function printDispatchPipelineSummary({ runId, steps, decision, overall, reason,
 
   if (decision && decision !== "not found") {
     console.log(`Reviewer decision: ${decision}`);
+  }
+
+  console.log("");
+  console.log("Pipeline summary");
+  for (const row of buildPipelineSummaryRows({ steps, decision, overall, reason })) {
+    console.log(`- ${row.key}: ${row.status}${row.reason ? ` (${row.reason})` : ""}`);
   }
 
   console.log("");

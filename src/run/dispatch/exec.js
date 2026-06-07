@@ -425,7 +425,11 @@ function runDispatchReviewerExecActual(options, preflight) {
     process.exitCode = 1;
   }
 
-  return status;
+  return {
+    status,
+    reasons: failuresAfterExec,
+    decision: decision || "not_found",
+  };
 }
 
 function runDispatchExecActual(options = {}) {
@@ -636,7 +640,10 @@ function runDispatchExecActual(options = {}) {
     process.exitCode = 1;
   }
 
-  return status;
+  return {
+    status,
+    reasons: failuresAfterExec,
+  };
 }
 
 async function runDispatchExec(options = {}) {

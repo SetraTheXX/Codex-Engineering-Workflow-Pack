@@ -10,6 +10,36 @@ const { getDispatchExecPreview, runDispatchExecActual } = require("./exec");
 
 const CLI_ENTRYPOINT = path.resolve(__dirname, "../../../bin/cewp.js");
 
+function normalizeExecResult(result) {
+  if (typeof result === "string") {
+    return { status: result, reasons: [] };
+  }
+
+  return {
+    status: (result && result.status) || "FAIL",
+    reasons: Array.isArray(result && result.reasons) ? result.reasons : [],
+  };
+}
+
+function summarizeWorkerReason(reasons) {
+  const firstReason = Array.isArray(reasons) ? reasons[0] : undefined;
+  if (!firstReason) {
+    return "worker execution failed";
+  }
+
+  const outsideAllowed = firstReason.match(/outside allowedFiles:\s*(.+)$/);
+  if (outsideAllowed) {
+    return `outside allowedFiles: ${outsideAllowed[1]}`;
+  }
+
+  const adapterExit = firstReason.match(/codex exec exited with code\s+(\d+)/);
+  if (adapterExit) {
+    return `adapter non-zero exit: ${firstReason}`;
+  }
+
+  return firstReason.replace(/\.$/, "");
+}
+
 function getParallelWorkersPreflight(options = {}) {
   const roles = ["worker-a", "worker-b"];
   const failures = [];
@@ -236,8 +266,8 @@ async function runDispatchExecWorkersParallelActual(options = {}) {
     return {
       overall: "FAIL",
       results: [
-        { role: "worker-a", status: "SKIPPED" },
-        { role: "worker-b", status: "SKIPPED" },
+        { role: "worker-a", status: "SKIPPED", reason: "policy/preflight failure" },
+        { role: "worker-b", status: "SKIPPED", reason: "policy/preflight failure" },
       ],
     };
   }
@@ -262,13 +292,17 @@ async function runDispatchExecWorkersParallelActual(options = {}) {
     }
   }
 
-  const results = childResults.map((result) => ({ role: result.role, status: result.status }));
+  const results = childResults.map((result) => ({
+    role: result.role,
+    status: result.status,
+    reason: result.status === "FAIL" ? `adapter non-zero exit: codex exec exited with code ${result.exitCode}.` : undefined,
+  }));
   const overall = results.every((result) => result.status === "PASS") ? "PASS" : "FAIL";
 
   console.log("");
   console.log("CEWP Coordinator Mode codex-exec workers summary");
   for (const result of results) {
-    console.log(`${result.role}: ${result.status}`);
+    console.log(`${result.role}: ${result.status}${result.reason ? ` (${result.reason})` : ""}`);
   }
   console.log("");
   console.log(`Overall: ${overall}`);
@@ -324,8 +358,13 @@ async function runDispatchExecWorkersActual(options = {}) {
   for (const role of ["worker-a", "worker-b"]) {
     const previousExitCode = process.exitCode;
     process.exitCode = undefined;
-    const status = runDispatchExecActual({ ...options, role, yes: true, dryRun: false });
-    results.push({ role, status: status || "FAIL" });
+    const execResult = normalizeExecResult(runDispatchExecActual({ ...options, role, yes: true, dryRun: false }));
+    const status = execResult.status || "FAIL";
+    results.push({
+      role,
+      status,
+      reason: status === "FAIL" ? summarizeWorkerReason(execResult.reasons) : undefined,
+    });
 
     if (status !== "PASS") {
       process.exitCode = 1;
@@ -345,7 +384,7 @@ async function runDispatchExecWorkersActual(options = {}) {
   console.log("");
   console.log("CEWP Coordinator Mode codex-exec workers summary");
   for (const result of results) {
-    console.log(`${result.role}: ${result.status}`);
+    console.log(`${result.role}: ${result.status}${result.reason ? ` (${result.reason})` : ""}`);
   }
   console.log("");
   console.log(`Overall: ${overall}`);
@@ -357,7 +396,7 @@ async function runDispatchExecWorkersActual(options = {}) {
     console.log(`  cewp run dispatch exec reviewer --run ${runId} --adapter codex-exec --yes`);
   } else {
     const failed = results.find((result) => result.status === "FAIL");
-    console.log(`Reason: ${failed ? `${failed.role} failed post-check` : "worker execution failed"}`);
+    console.log(`Reason: ${failed ? `${failed.role}: ${failed.reason || "failed post-check"}` : "worker execution failed"}`);
     process.exitCode = 1;
   }
 
