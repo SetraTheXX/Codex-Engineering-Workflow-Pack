@@ -119,7 +119,7 @@ The harness uses temporary repos, checks Coordinator Mode helpers, and does not 
 
 ## Status
 
-`0.2.0-beta.1` is beta software. Use it for local-first workflow automation and dogfooding, and keep reviewing generated plans, worker output, and reviewer decisions before integrating changes.
+`0.2.0-beta.2` is beta software. Use it for local-first workflow automation and dogfooding, and keep reviewing generated plans, worker output, and reviewer decisions before integrating changes.
 
 ## License
 
