@@ -25,6 +25,7 @@ const {
 } = require("./lib/temp-repo");
 const { createFakeCodexAdapter } = require("./lib/fake-adapter");
 const { normalizeAdapterResult } = require("../../src/run/adapters/codex-exec");
+const { normalizeAdapterConfig } = require("../../src/run/adapters/config");
 
 const cewpRoot = path.resolve(__dirname, "..", "..");
 const cewpCli = path.join(cewpRoot, "bin", "cewp.js");
@@ -277,6 +278,45 @@ async function main() {
       assert(result.reason === "codex exec exited with code 7.", "adapter result reason");
       assert(Array.isArray(result.reasons) && result.reasons.length === 1, "adapter result reasons");
       assert(result.paths.stdout === "adapter-output/worker-a-stdout.log", "adapter result paths");
+    });
+
+    await step("adapter config normalization", () => {
+      const defaults = normalizeAdapterConfig();
+      for (const role of ["manager", "worker-a", "worker-b", "reviewer"]) {
+        assert(defaults[role].provider === "codex-exec", `default adapter provider for ${role}`);
+      }
+
+      const explicit = normalizeAdapterConfig({
+        roles: {
+          "worker-a": { provider: "codex-exec" },
+          reviewer: { provider: "codex-exec" },
+        },
+      });
+      assert(explicit["worker-a"].provider === "codex-exec", "explicit worker-a provider");
+      assert(explicit.reviewer.provider === "codex-exec", "explicit reviewer provider");
+      assert(explicit["worker-b"].provider === "codex-exec", "default worker-b provider remains");
+
+      let unsupportedProviderError;
+      try {
+        normalizeAdapterConfig({ roles: { "worker-a": { provider: "not-real" } } });
+      } catch (error) {
+        unsupportedProviderError = error;
+      }
+      assert(
+        unsupportedProviderError && unsupportedProviderError.message === "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.",
+        "unsupported adapter provider should fail",
+      );
+
+      let unknownRoleError;
+      try {
+        normalizeAdapterConfig({ roles: { intern: { provider: "codex-exec" } } });
+      } catch (error) {
+        unknownRoleError = error;
+      }
+      assert(
+        unknownRoleError && unknownRoleError.message === "Unknown adapter config role: intern. Supported roles: manager, worker-a, worker-b, reviewer.",
+        "unknown adapter role should fail",
+      );
     });
 
     coordinatorRepo = makeTempRepo("cewp-harness-flow-");
