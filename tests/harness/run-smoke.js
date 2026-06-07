@@ -24,7 +24,7 @@ const {
   cleanupRepo,
 } = require("./lib/temp-repo");
 const { createFakeCodexAdapter } = require("./lib/fake-adapter");
-const { normalizeAdapterResult } = require("../../src/run/adapters/codex-exec");
+const { buildCodexExecInvocation, normalizeAdapterResult } = require("../../src/run/adapters/codex-exec");
 const { normalizeAdapterConfig, resolveAdapterProviderForRole } = require("../../src/run/adapters/config");
 
 const cewpRoot = path.resolve(__dirname, "..", "..");
@@ -278,6 +278,25 @@ async function main() {
       assert(result.reason === "codex exec exited with code 7.", "adapter result reason");
       assert(Array.isArray(result.reasons) && result.reasons.length === 1, "adapter result reasons");
       assert(result.paths.stdout === "adapter-output/worker-a-stdout.log", "adapter result paths");
+    });
+
+    await step("codex exec command construction", () => {
+      const invocation = buildCodexExecInvocation({
+        command: "node",
+        prefixArgs: ["fake-codex.js"],
+        worktreePath: "C:/repo/worktree",
+        prompt: "Do the task",
+        outputLastMessagePath: "C:/repo/run/adapter-output/worker-a-last-message.md",
+        sandbox: "workspace-write",
+      });
+
+      assert(invocation.command === "node", "codex exec invocation command");
+      assert(invocation.cwd === "C:/repo/worktree", "codex exec invocation cwd");
+      assert(invocation.args[0] === "fake-codex.js", "codex exec invocation prefix");
+      assert(invocation.args.includes("exec"), "codex exec invocation exec arg");
+      assert(invocation.args.includes("--cd"), "codex exec invocation cd arg");
+      assert(invocation.args.includes("--output-last-message"), "codex exec invocation output arg");
+      assert(invocation.args[invocation.args.length - 1] === "Do the task", "codex exec invocation prompt last");
     });
 
     await step("adapter config normalization", () => {

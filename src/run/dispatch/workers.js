@@ -145,6 +145,12 @@ function printParallelWorkersPreflight(preflight) {
 }
 
 function buildWorkerChildArgs({ role, runId, options }) {
+  const adapterName = resolveAdapterProviderForRole({
+    role,
+    adapterName: options.adapter,
+    commandName: "dispatch exec",
+    requireAdapter: true,
+  });
   const args = [
     CLI_ENTRYPOINT,
     "run",
@@ -154,7 +160,7 @@ function buildWorkerChildArgs({ role, runId, options }) {
     "--run",
     runId,
     "--adapter",
-    "codex-exec",
+    adapterName,
     "--yes",
     "--timeout",
     String(options.timeoutSeconds || 120),

@@ -31,9 +31,18 @@ function getAdapterOutputPaths(runRoot, role) {
 }
 
 function printCodexExecPreview({ cwd, promptPath, outputPath, sandbox }) {
+  const invocation = buildCodexExecInvocation({
+    command: "codex",
+    prefixArgs: [],
+    worktreePath: cwd,
+    prompt: "$prompt",
+    outputLastMessagePath: outputPath,
+    sandbox,
+  });
+
   console.log("PowerShell preview:");
   console.log(`  $prompt = Get-Content -Raw ${quote(promptPath)}`);
-  console.log(`  codex exec --cd ${quote(cwd)} --sandbox ${sandbox} --output-last-message ${quote(outputPath)} $prompt`);
+  console.log(`  ${invocation.command} exec --cd ${quote(cwd)} --sandbox ${sandbox} --output-last-message ${quote(outputPath)} $prompt`);
 }
 
 function writeAdapterLog(filePath, value) {
@@ -77,19 +86,33 @@ function copyWorkerOutputToRun({ runRoot, role, localReportPath, localEventsPath
   return copied;
 }
 
-function runCodexExecAdapter({ worktreePath, promptPath, outputLastMessagePath, timeoutSeconds, sandbox = "workspace-write" }) {
-  validateTimeoutSeconds(timeoutSeconds);
-  const prompt = fs.readFileSync(promptPath, "utf8");
-  const command = process.env.CEWP_CODEX_EXEC_COMMAND || "codex";
-  const prefixArgs = process.env.CEWP_CODEX_EXEC_PREFIX_ARGS
-    ? JSON.parse(process.env.CEWP_CODEX_EXEC_PREFIX_ARGS)
+function getCodexExecCommand(env = process.env) {
+  return env.CEWP_CODEX_EXEC_COMMAND || "codex";
+}
+
+function getCodexExecPrefixArgs(env = process.env) {
+  const prefixArgs = env.CEWP_CODEX_EXEC_PREFIX_ARGS
+    ? JSON.parse(env.CEWP_CODEX_EXEC_PREFIX_ARGS)
     : [];
 
   if (!Array.isArray(prefixArgs) || !prefixArgs.every((value) => typeof value === "string")) {
     throw new Error("CEWP_CODEX_EXEC_PREFIX_ARGS must be a JSON array of strings.");
   }
 
-  return childProcess.spawnSync(command, [
+  return prefixArgs;
+}
+
+function buildCodexExecInvocation({
+  command,
+  prefixArgs,
+  worktreePath,
+  prompt,
+  outputLastMessagePath,
+  sandbox = "workspace-write",
+}) {
+  return {
+    command: command || "codex",
+    args: [
     ...prefixArgs,
     "exec",
     "--cd",
@@ -99,8 +122,25 @@ function runCodexExecAdapter({ worktreePath, promptPath, outputLastMessagePath, 
     "--output-last-message",
     outputLastMessagePath,
     prompt,
-  ], {
+    ],
     cwd: worktreePath,
+  };
+}
+
+function runCodexExecAdapter({ worktreePath, promptPath, outputLastMessagePath, timeoutSeconds, sandbox = "workspace-write" }) {
+  validateTimeoutSeconds(timeoutSeconds);
+  const prompt = fs.readFileSync(promptPath, "utf8");
+  const invocation = buildCodexExecInvocation({
+    command: getCodexExecCommand(),
+    prefixArgs: getCodexExecPrefixArgs(),
+    worktreePath,
+    prompt,
+    outputLastMessagePath,
+    sandbox,
+  });
+
+  return childProcess.spawnSync(invocation.command, invocation.args, {
+    cwd: invocation.cwd,
     encoding: "utf8",
     shell: false,
     timeout: timeoutSeconds * 1000,
@@ -152,6 +192,9 @@ module.exports = {
   writeAdapterLog,
   getWorkerOutputPaths,
   copyWorkerOutputToRun,
+  getCodexExecCommand,
+  getCodexExecPrefixArgs,
+  buildCodexExecInvocation,
   runCodexExecAdapter,
   getAdapterExitCode,
   didAdapterTimeOut,
