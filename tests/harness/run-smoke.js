@@ -6,6 +6,7 @@ const {
   assert,
   assertExit,
   assertIncludes,
+  assertNotIncludes,
   assertFileExists,
   assertFileMissing,
 } = require("./lib/assertions");
@@ -136,6 +137,14 @@ async function main() {
 
     await step("list", () => {
       assertExit(cewp(["list"], cewpRoot), 0, "cewp list");
+    });
+
+    await step("docs and dispatch wording", () => {
+      const dispatchPlan = fs.readFileSync(path.join(cewpRoot, "src", "run", "dispatch", "plan.js"), "utf8");
+      const dispatchStart = fs.readFileSync(path.join(cewpRoot, "src", "run", "dispatch", "start.js"), "utf8");
+
+      assertNotIncludes(dispatchPlan, "codex-exec: planned, not implemented", "dispatch plan wording");
+      assertNotIncludes(dispatchStart, "codex-exec: planned, not implemented", "dispatch start wording");
     });
 
     await step("operator policy", () => {

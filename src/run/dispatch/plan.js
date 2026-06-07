@@ -81,7 +81,7 @@ function runDispatchPlan(options = {}) {
     console.log(`    forbiddenFiles: ${formatList(task.forbiddenFiles)}`);
     console.log("    Adapter preview:");
     console.log(`      manual: open Codex in ${quote(worktreePath || "<missing-worktree>")} and paste ${quote(relativeRunPath(runRoot, promptPath))}`);
-    console.log("      codex-exec: planned, not implemented");
+    console.log("      codex-exec: use dispatch exec with --dry-run to preview or --yes to execute");
     console.log("");
 
     if (!task.assignedRole) {
@@ -121,7 +121,7 @@ function runDispatchPlan(options = {}) {
   printDispatchPath("Event log", reviewerEventPath, runRoot);
   console.log("  Adapter preview:");
   console.log(`    manual: open Codex in ${quote((runJson && runJson.repoRoot) || process.cwd())} and paste ${quote(relativeRunPath(runRoot, reviewerPromptPath))}`);
-  console.log("    codex-exec: planned, not implemented");
+  console.log("    codex-exec: use dispatch exec reviewer with --dry-run to preview or --yes to execute");
   console.log("");
 
   if (!fs.existsSync(reviewerPromptPath)) {

@@ -166,7 +166,7 @@ function runDispatchStart(options = {}) {
 
   console.log("Adapter preview:");
   console.log("  manual: supported now");
-  console.log("  codex-exec: planned, not implemented");
+  console.log("  codex-exec: use dispatch exec or dispatch pipeline with --dry-run/--yes");
   console.log("");
   console.log("No processes were started.");
   console.log("No files were changed.");
