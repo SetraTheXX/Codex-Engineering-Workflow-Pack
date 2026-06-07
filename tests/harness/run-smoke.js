@@ -24,7 +24,7 @@ const {
   cleanupRepo,
 } = require("./lib/temp-repo");
 const { createFakeCodexAdapter } = require("./lib/fake-adapter");
-const { buildCodexExecInvocation, normalizeAdapterResult } = require("../../src/run/adapters/codex-exec");
+const { buildCodexExecInvocation, checkCodexExecAvailability, normalizeAdapterResult } = require("../../src/run/adapters/codex-exec");
 const { normalizeAdapterConfig, resolveAdapterProviderForRole } = require("../../src/run/adapters/config");
 
 const cewpRoot = path.resolve(__dirname, "..", "..");
@@ -196,7 +196,10 @@ async function main() {
     });
 
     await step("doctor", () => {
-      assertExit(cewp(["doctor"], cewpRoot), 0, "cewp doctor");
+      const result = cewp(["doctor"], cewpRoot);
+      assertExit(result, 0, "cewp doctor");
+      assertIncludes(result.stdout, "Adapter availability:", "doctor adapter availability section");
+      assertIncludes(result.stdout, "codex-exec:", "doctor codex-exec availability");
     });
 
     await step("list", () => {
@@ -297,6 +300,26 @@ async function main() {
       assert(invocation.args.includes("--cd"), "codex exec invocation cd arg");
       assert(invocation.args.includes("--output-last-message"), "codex exec invocation output arg");
       assert(invocation.args[invocation.args.length - 1] === "Do the task", "codex exec invocation prompt last");
+    });
+
+    await step("codex exec availability", () => {
+      const override = checkCodexExecAvailability({
+        env: {
+          CEWP_CODEX_EXEC_COMMAND: process.execPath,
+          CEWP_CODEX_EXEC_PREFIX_ARGS: JSON.stringify(["fake-codex.js"]),
+        },
+      });
+      assert(override.status === "PASS", "codex exec override available");
+      assertIncludes(override.reason, "CEWP_CODEX_EXEC_COMMAND", "codex exec override reason");
+
+      const missing = checkCodexExecAvailability({
+        env: {
+          PATH: "",
+          Path: "",
+        },
+      });
+      assert(missing.status === "FAIL", "codex exec missing binary fail");
+      assertIncludes(missing.reason, "codex executable not found", "codex exec missing binary reason");
     });
 
     await step("adapter config normalization", () => {

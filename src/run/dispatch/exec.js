@@ -326,6 +326,34 @@ function runDispatchReviewerExecActual(options, preflight) {
     });
   }
 
+  const availability = adapter.checkCodexExecAvailability();
+  if (availability.status !== "PASS") {
+    const reason = `adapter availability failed: ${availability.reason}`;
+    console.log("CEWP Coordinator Mode codex-exec reviewer execution");
+    console.log(`Run ID: ${runId}`);
+    console.log("Role: reviewer");
+    console.log("Adapter: codex-exec");
+    console.log("");
+    console.log("Preflight: FAIL");
+    console.log("Failures:");
+    console.log(`  - ${reason}`);
+    console.log("");
+    console.log("No processes were started.");
+    console.log("No merge/push/publish was performed.");
+    process.exitCode = 1;
+    return adapter.normalizeAdapterResult({
+      role: "reviewer",
+      status: "FAIL",
+      reason,
+      reasons: [reason],
+      paths: {
+        report: preview && preview.reportPath,
+        event: preview && preview.eventPath,
+        lastMessage: preview && preview.outputLastMessagePath,
+      },
+    });
+  }
+
   const repoRoot = (runJson && runJson.repoRoot) || process.cwd();
   const repoStatusBefore = getRepoStatusForReviewer(repoRoot);
   const { adapterOutputRoot, stdoutPath, stderrPath } = adapter.getAdapterOutputPaths(runRoot, "reviewer");
@@ -492,6 +520,34 @@ function runDispatchExecActual(options = {}) {
       role: options.role,
       status: "FAIL",
       reasons: failures,
+      paths: {
+        report: preview && preview.reportPath,
+        event: preview && preview.eventPath,
+        lastMessage: preview && preview.outputLastMessagePath,
+      },
+    });
+  }
+
+  const availability = adapter.checkCodexExecAvailability();
+  if (availability.status !== "PASS") {
+    const reason = `adapter availability failed: ${availability.reason}`;
+    console.log("CEWP Coordinator Mode codex-exec execution");
+    console.log(`Run ID: ${runId}`);
+    console.log(`Role: ${options.role}`);
+    console.log("Adapter: codex-exec");
+    console.log("");
+    console.log("Preflight: FAIL");
+    console.log("Failures:");
+    console.log(`  - ${reason}`);
+    console.log("");
+    console.log("No processes were started.");
+    console.log("No merge/push/publish was performed.");
+    process.exitCode = 1;
+    return adapter.normalizeAdapterResult({
+      role: options.role,
+      status: "FAIL",
+      reason,
+      reasons: [reason],
       paths: {
         report: preview && preview.reportPath,
         event: preview && preview.eventPath,

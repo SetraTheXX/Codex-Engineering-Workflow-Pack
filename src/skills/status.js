@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const { resolveTarget, getSkillStatus } = require("./paths");
+const { checkCodexExecAvailability } = require("../run/adapters/codex-exec");
 
 function list(options) {
   const targetRoot = resolveTarget(options);
@@ -39,6 +40,11 @@ function doctor(options) {
     const state = status.hasDirectory && status.hasSkillFile ? "OK" : "MISSING";
     console.log(`[${state}] ${status.skill}`);
   }
+
+  const adapterAvailability = checkCodexExecAvailability();
+  console.log("");
+  console.log("Adapter availability:");
+  console.log(`[${adapterAvailability.status === "PASS" ? "OK" : "WARN"}] codex-exec: ${adapterAvailability.reason}`);
 
   console.log("");
 
