@@ -24,6 +24,7 @@ const {
   getDispatchPromptPathForTask,
 } = require("./shared");
 const { getAdapter } = require("../adapters/registry");
+const { resolveAdapterProviderForRole } = require("../adapters/config");
 const { assertPolicyAllows } = require("../policy");
 
 function findReviewerDecisionStrict(filePath) {
@@ -35,11 +36,18 @@ function findReviewerDecisionStrict(filePath) {
 function getDispatchExecPreview(options) {
   const supportedRoles = ["worker-a", "worker-b", "reviewer"];
   const shouldPrint = options.printPreview !== false;
-  const adapter = getAdapter(options.adapter, { commandName: "dispatch exec" });
 
   if (!supportedRoles.includes(options.role)) {
     throw new Error(`Unsupported dispatch exec role: ${options.role || "(missing)"}. Supported roles: worker-a, worker-b, reviewer.`);
   }
+
+  const adapterName = resolveAdapterProviderForRole({
+    role: options.role,
+    adapterName: options.adapter,
+    commandName: "dispatch exec",
+    requireAdapter: true,
+  });
+  const adapter = getAdapter(adapterName, { commandName: "dispatch exec" });
 
   const { runId, runRoot } = findRun(options);
   const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
@@ -282,7 +290,13 @@ function getRepoStatusForReviewer(repoRoot) {
 }
 
 function runDispatchReviewerExecActual(options, preflight) {
-  const adapter = getAdapter(options.adapter, { commandName: "dispatch exec" });
+  const adapterName = resolveAdapterProviderForRole({
+    role: "reviewer",
+    adapterName: options.adapter,
+    commandName: "dispatch exec",
+    requireAdapter: true,
+  });
+  const adapter = getAdapter(adapterName, { commandName: "dispatch exec" });
   const { runId, runRoot, runJson, failures, warnings, preview } = preflight;
 
   if (failures.length > 0) {
@@ -438,7 +452,13 @@ function runDispatchReviewerExecActual(options, preflight) {
 }
 
 function runDispatchExecActual(options = {}) {
-  const adapter = getAdapter(options.adapter, { commandName: "dispatch exec" });
+  const adapterName = resolveAdapterProviderForRole({
+    role: options.role,
+    adapterName: options.adapter,
+    commandName: "dispatch exec",
+    requireAdapter: true,
+  });
+  const adapter = getAdapter(adapterName, { commandName: "dispatch exec" });
 
   if (options.role === "reviewer") {
     assertPolicyAllows(process.cwd(), "runReviewer");

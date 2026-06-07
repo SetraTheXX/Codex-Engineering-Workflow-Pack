@@ -32,8 +32,42 @@ function normalizeAdapterConfig(config = {}) {
   return normalized;
 }
 
+function assertKnownRole(role) {
+  if (!ADAPTER_CONFIG_ROLES.includes(role)) {
+    throw new Error(`Unknown adapter config role: ${role}. Supported roles: ${ADAPTER_CONFIG_ROLES.join(", ")}.`);
+  }
+}
+
+function resolveAdapterProviderForRole({
+  role,
+  adapterName,
+  config,
+  commandName = "dispatch exec",
+  requireAdapter = false,
+} = {}) {
+  assertKnownRole(role);
+
+  if (requireAdapter || adapterName) {
+    validateAdapterName(adapterName, { commandName });
+  }
+
+  const roles = {
+    ...((config && config.roles) || {}),
+  };
+
+  if (adapterName) {
+    roles[role] = {
+      ...(roles[role] || {}),
+      provider: adapterName,
+    };
+  }
+
+  return normalizeAdapterConfig({ ...config, roles })[role].provider;
+}
+
 module.exports = {
   ADAPTER_CONFIG_ROLES,
   defaultAdapterConfig,
   normalizeAdapterConfig,
+  resolveAdapterProviderForRole,
 };

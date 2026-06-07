@@ -6,7 +6,7 @@ const { normalizeComparePath } = require("../../lib/paths");
 const { getAllowedFilesOverlap } = require("../../lib/scope-check");
 const { findRun } = require("../runtime-cleanup");
 const { assertPolicyAllows } = require("../policy");
-const { validateAdapterName } = require("../adapters/registry");
+const { resolveAdapterProviderForRole } = require("../adapters/config");
 const { getDispatchExecPreview, runDispatchExecActual } = require("./exec");
 
 const CLI_ENTRYPOINT = path.resolve(__dirname, "../../../bin/cewp.js");
@@ -244,7 +244,8 @@ function runDispatchExecWorkersDryRun(options = {}) {
 }
 
 async function runDispatchExecWorkersParallelActual(options = {}) {
-  validateAdapterName(options.adapter, { commandName: "dispatch exec" });
+  resolveAdapterProviderForRole({ role: "worker-a", adapterName: options.adapter, commandName: "dispatch exec", requireAdapter: true });
+  resolveAdapterProviderForRole({ role: "worker-b", adapterName: options.adapter, commandName: "dispatch exec", requireAdapter: true });
 
   assertPolicyAllows(process.cwd(), "runWorkers");
 
@@ -331,7 +332,8 @@ async function runDispatchExecWorkersActual(options = {}) {
     return runDispatchExecWorkersParallelActual(options);
   }
 
-  validateAdapterName(options.adapter, { commandName: "dispatch exec" });
+  resolveAdapterProviderForRole({ role: "worker-a", adapterName: options.adapter, commandName: "dispatch exec", requireAdapter: true });
+  resolveAdapterProviderForRole({ role: "worker-b", adapterName: options.adapter, commandName: "dispatch exec", requireAdapter: true });
 
   assertPolicyAllows(process.cwd(), "runWorkers");
 

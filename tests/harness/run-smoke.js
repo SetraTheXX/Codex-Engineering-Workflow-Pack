@@ -25,7 +25,7 @@ const {
 } = require("./lib/temp-repo");
 const { createFakeCodexAdapter } = require("./lib/fake-adapter");
 const { normalizeAdapterResult } = require("../../src/run/adapters/codex-exec");
-const { normalizeAdapterConfig } = require("../../src/run/adapters/config");
+const { normalizeAdapterConfig, resolveAdapterProviderForRole } = require("../../src/run/adapters/config");
 
 const cewpRoot = path.resolve(__dirname, "..", "..");
 const cewpCli = path.join(cewpRoot, "bin", "cewp.js");
@@ -295,6 +295,10 @@ async function main() {
       assert(explicit["worker-a"].provider === "codex-exec", "explicit worker-a provider");
       assert(explicit.reviewer.provider === "codex-exec", "explicit reviewer provider");
       assert(explicit["worker-b"].provider === "codex-exec", "default worker-b provider remains");
+      assert(
+        resolveAdapterProviderForRole({ role: "worker-a", adapterName: "codex-exec", commandName: "dispatch exec", requireAdapter: true }) === "codex-exec",
+        "resolve worker-a adapter provider",
+      );
 
       let unsupportedProviderError;
       try {
@@ -317,6 +321,26 @@ async function main() {
         unknownRoleError && unknownRoleError.message === "Unknown adapter config role: intern. Supported roles: manager, worker-a, worker-b, reviewer.",
         "unknown adapter role should fail",
       );
+    });
+
+    await step("dispatch adapter config resolution dry-run", () => {
+      const configRepo = makeTempRepo("cewp-harness-adapter-config-");
+      tempRepos.push(configRepo);
+      const { runId } = setupFakeAdapterRun(configRepo);
+
+      const workerDryRun = cewp(["run", "dispatch", "exec", "worker-a", "--run", runId, "--adapter", "codex-exec", "--dry-run"], configRepo);
+      assertExit(workerDryRun, 0, "config worker-a dry-run");
+      assertIncludes(workerDryRun.stdout, "Role: worker-a", "config worker dry-run role");
+      assertIncludes(workerDryRun.stdout, "Adapter: codex-exec", "config worker dry-run adapter");
+
+      makeReport(configRepo, runId, "worker-a", "README.md");
+      makeReport(configRepo, runId, "worker-b", "docs/install.md");
+      assertExit(cewp(["run", "collect", "--run", runId], configRepo), 0, "config collect");
+
+      const reviewerDryRun = cewp(["run", "dispatch", "exec", "reviewer", "--run", runId, "--adapter", "codex-exec", "--dry-run"], configRepo);
+      assertExit(reviewerDryRun, 0, "config reviewer dry-run");
+      assertIncludes(reviewerDryRun.stdout, "Role: reviewer", "config reviewer dry-run role");
+      assertIncludes(reviewerDryRun.stdout, "Adapter: codex-exec", "config reviewer dry-run adapter");
     });
 
     coordinatorRepo = makeTempRepo("cewp-harness-flow-");

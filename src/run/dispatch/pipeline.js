@@ -8,12 +8,19 @@ const { assertPolicyAllows } = require("../policy");
 const { runDispatchCheck } = require("./check");
 const { runDispatchPrompts } = require("./prompts");
 const { relativeRunPath } = require("./shared");
-const { validateAdapterName } = require("../adapters/registry");
+const { resolveAdapterProviderForRole } = require("../adapters/config");
 const { getDispatchExecPreview, runDispatchReviewerExecActual } = require("./exec");
 const { runDispatchExecWorkersDryRun, runDispatchExecWorkersActual } = require("./workers");
 
 function validatePipelineAdapter(options) {
-  validateAdapterName(options.adapter, { commandName: "dispatch pipeline" });
+  for (const role of ["worker-a", "worker-b", "reviewer"]) {
+    resolveAdapterProviderForRole({
+      role,
+      adapterName: options.adapter,
+      commandName: "dispatch pipeline",
+      requireAdapter: true,
+    });
+  }
 }
 
 function runDispatchPipelineDryRun(options = {}) {
