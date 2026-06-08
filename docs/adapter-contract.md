@@ -1,8 +1,8 @@
 # Adapter Contract
 
-Status: public contract note. This document describes the adapter boundary used by Coordinator Mode. It does not describe an implemented adapter registry.
+Status: public contract note. This document describes the adapter boundary used by Coordinator Mode.
 
-CEWP currently executes agents through the guarded `codex-exec` adapter. The goal of this contract is to make the execution boundary clear without weakening Coordinator Mode guardrails. Future versions may introduce a provider registry, but this document does not promise specific providers.
+CEWP currently executes agents through the guarded `codex-exec` adapter. The goal of this contract is to make the execution boundary clear without weakening Coordinator Mode guardrails. CEWP includes a minimal adapter registry and role-based config normalization foundation, but `codex-exec` is currently the only supported provider. External provider support is not implemented by this document.
 
 ## What Is A CEWP Adapter?
 
@@ -44,6 +44,27 @@ Current behavior:
 - post-checks run after provider execution.
 
 The test harness can replace the executable through environment variables so lifecycle tests can run without real `codex exec` calls.
+
+## Adapter Registry And Config Foundation
+
+CEWP has a minimal internal adapter registry. The registry currently supports only:
+
+```txt
+codex-exec
+```
+
+Dispatch execution resolves the selected provider through a role-aware config normalization helper before looking it up in the registry. The recognized roles are:
+
+```txt
+manager
+worker-a
+worker-b
+reviewer
+```
+
+The default normalized config maps every recognized role to `codex-exec`. Unsupported providers fail through registry validation. Unknown roles fail with a clear role validation error.
+
+This foundation is internal and intentionally small. CEWP does not currently read a public adapter config file and does not include external provider implementations.
 
 ## Adapter Lifecycle
 
@@ -147,7 +168,7 @@ Silent missing output should be avoided.
 
 ## Adapter Result Shape Draft
 
-Adapter execution should be summarized as a small structured result:
+Adapter execution is summarized internally as a small structured result:
 
 ```json
 {
@@ -174,6 +195,18 @@ Adapter execution should be summarized as a small structured result:
 - `SKIPPED`: CEWP intentionally did not run the provider.
 
 `reason` should be a short single-line reason for summaries. `reasons` may include detailed post-check failures such as adapter non-zero exit, timeout, missing report, forbidden file change, or outside-allowedFiles change.
+
+## Adapter Availability
+
+`codex-exec` includes a side-effect-free availability check.
+
+The check:
+- accepts `CEWP_CODEX_EXEC_COMMAND` as an explicit command override,
+- validates `CEWP_CODEX_EXEC_PREFIX_ARGS` shape when present,
+- otherwise checks whether the `codex` executable is available with a safe version check,
+- reports a short reason when the executable is missing.
+
+`cewp doctor` reports adapter availability as informational output. Actual dispatch execution can fail before starting a provider process when the selected adapter is unavailable. Dry-run previews remain side-effect-free.
 
 ## Provider-Neutral Boundary
 

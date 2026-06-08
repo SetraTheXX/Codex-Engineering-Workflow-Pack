@@ -1,5 +1,21 @@
 # Release Notes
 
+## Unreleased
+
+### Summary
+
+Adapter foundation hardening for the next beta. These changes keep `codex-exec` as the only supported provider while clarifying and testing the adapter boundary.
+
+### Changed
+
+- Formalized the fake adapter harness setup used by worker, reviewer, and pipeline lifecycle smoke tests.
+- Added a minimal internal adapter registry with `codex-exec` as the only supported provider.
+- Standardized the internal adapter result shape for worker and reviewer execution summaries.
+- Added role-based adapter config normalization foundation with default `codex-exec` providers.
+- Routed dispatch adapter resolution through the role-aware config helper without changing CLI behavior.
+- Centralized `codex-exec` command construction and preserved fake harness command overrides.
+- Added `codex-exec` availability checks and informational doctor output.
+
 ## 0.2.0-beta.2
 
 ### Summary
