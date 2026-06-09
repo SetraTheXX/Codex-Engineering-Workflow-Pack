@@ -16,6 +16,21 @@ Adapter foundation hardening for the next beta. These changes keep `codex-exec` 
 - Centralized `codex-exec` command construction and preserved fake harness command overrides.
 - Added `codex-exec` availability checks and informational doctor output.
 
+### Post-Release Package Smoke
+
+After publishing to npm, verify the released package from a clean temporary directory as a new user:
+
+```bash
+mkdir /tmp/cewp-smoke && cd /tmp/cewp-smoke
+npm install @setrathex/codex-engineering-workflow-pack@latest
+npx cewp --help
+npx cewp init
+npx cewp doctor
+npx cewp list
+```
+
+This confirms the published package installs cleanly, the CLI entry point resolves, and the basic commands run without errors. It does not publish, push, tag, or create releases.
+
 ## 0.2.0-beta.2
 
 ### Summary
