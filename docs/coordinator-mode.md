@@ -20,6 +20,14 @@ Runtime state lives under:
 
 This state is local, auditable, and excluded from the npm package.
 
+### CodeGraph-assisted code discovery
+
+CodeGraph is not a CEWP runtime dependency. It is a local developer workflow helper for starting new Codex tasks with a repo map before broad `grep`, `rg`, or random file-reading loops.
+
+When CodeGraph is available, use it first for repository exploration, symbol search, caller/callee checks, and impact analysis. Treat CodeGraph output as discovery context only: every code or docs change still needs the normal project test, check, or smoke commands before it is trusted.
+
+`.codegraph/` is a local index directory and must not be committed. Keep local/private paths such as `.ctxo/`, `.cewp/`, `.cewp-worktrees/`, and `.codegraph/` out of commits.
+
 ## Roles
 
 Manager:
