@@ -71,3 +71,4 @@ docs/coordinator-mode-roadmap.md
 
 # Local MCP/tool cache
 .ctxo/
+.codegraph/
