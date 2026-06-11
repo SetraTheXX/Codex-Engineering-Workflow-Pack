@@ -46,6 +46,7 @@ function parseArgs(argv) {
     parallel: false,
     workers: undefined,
     reviewer: false,
+    withConfig: false,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -128,6 +129,11 @@ function parseArgs(argv) {
 
     if (arg === "--force") {
       args.force = true;
+      continue;
+    }
+
+    if (args.command === "init" && arg === "--with-config") {
+      args.withConfig = true;
       continue;
     }
 

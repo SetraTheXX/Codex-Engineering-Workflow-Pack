@@ -61,11 +61,14 @@ cewp list
 
 ```bash
 cewp init --mode repo
+cewp init --mode repo --with-config
 cewp init --mode repo --target "/path/to/repo"
 cewp init --mode repo --target "/path/to/repo" --force
 ```
 
 Force mode refreshes CEWP skill files in existing skill folders. It does not delete unrelated project files.
+
+Use `--with-config` to create a starter root-level `cewp.config.json` adapter config. If the file already exists, CEWP leaves it unchanged.
 
 ## Codex-Led Operation
 

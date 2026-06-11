@@ -4,7 +4,7 @@ function usage() {
   console.log(`Codex Engineering Workflow Pack
 
 Usage:
-  cewp init [--mode repo|global] [--target <path>] [--force]
+  cewp init [--mode repo|global] [--target <path>] [--force] [--with-config]
   cewp list [--mode repo|global] [--target <path>]
   cewp doctor [--mode repo|global] [--target <path>]
   cewp policy show
@@ -40,6 +40,7 @@ Defaults:
 Examples:
   cewp init
   cewp init --mode repo
+  cewp init --mode repo --with-config
   cewp init --mode repo --target "C:\\path\\to\\repo"
   cewp init --mode repo --target "/path/to/repo" --force
   cewp init --mode global

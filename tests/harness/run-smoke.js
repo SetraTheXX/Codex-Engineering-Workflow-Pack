@@ -249,6 +249,37 @@ async function main() {
       assertIncludes(invalidJsonDoctor.stderr, "cewp.config.json", "doctor invalid config json path");
     });
 
+    await step("init adapter config template", () => {
+      const defaultInitRepo = makeTempRepo("cewp-harness-init-default-");
+      tempRepos.push(defaultInitRepo);
+      assertExit(cewp(["init"], defaultInitRepo), 0, "default init");
+      assertFileMissing(path.join(defaultInitRepo, "cewp.config.json"), "default init adapter config");
+
+      const configInitRepo = makeTempRepo("cewp-harness-init-config-");
+      tempRepos.push(configInitRepo);
+      const configInit = cewp(["init", "--with-config"], configInitRepo);
+      assertExit(configInit, 0, "init with config");
+      assertIncludes(configInit.stdout, "Created adapter config: cewp.config.json", "init with config message");
+      const generatedConfig = readJson(path.join(configInitRepo, "cewp.config.json"));
+      for (const role of ["manager", "worker-a", "worker-b", "reviewer"]) {
+        assert(generatedConfig.adapters[role].provider === "codex-exec", `generated adapter config ${role}`);
+      }
+
+      const existingConfigRepo = makeTempRepo("cewp-harness-init-existing-config-");
+      tempRepos.push(existingConfigRepo);
+      writeJson(path.join(existingConfigRepo, "cewp.config.json"), {
+        adapters: {
+          "worker-a": { provider: "codex-exec" },
+        },
+      });
+      const existingConfigInit = cewp(["init", "--with-config"], existingConfigRepo);
+      assertExit(existingConfigInit, 0, "init with existing config");
+      assertIncludes(existingConfigInit.stdout, "Adapter config already exists: cewp.config.json", "existing config not overwritten message");
+      const preservedConfig = readJson(path.join(existingConfigRepo, "cewp.config.json"));
+      assert(preservedConfig.adapters.manager === undefined, "existing adapter config should not be overwritten");
+      assert(preservedConfig.adapters["worker-a"].provider === "codex-exec", "existing adapter config worker-a preserved");
+    });
+
     await step("list", () => {
       assertExit(cewp(["list"], cewpRoot), 0, "cewp list");
     });

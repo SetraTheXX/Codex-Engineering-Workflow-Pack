@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Added `cewp init --with-config` to write a starter optional adapter config template.
 - Hardened adapter config smoke coverage across dispatch exec workers and dispatch pipeline paths.
 - `cewp doctor` now reports the adapter config source and resolved provider summary.
 - Added optional root-level `cewp.config.json` adapter config support while keeping `codex-exec` as the only supported provider.
