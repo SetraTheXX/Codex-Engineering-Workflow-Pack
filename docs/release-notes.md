@@ -61,7 +61,7 @@ Validation and documentation hardening release for the Coordinator Mode dispatch
 - Added deterministic fake Codex lifecycle smoke coverage for worker and reviewer execution without calling real `codex exec`.
 - Added failure-path smoke coverage for worker scope violations, adapter non-zero exits, missing reviewer decisions, and reviewer `REQUEST_CHANGES`.
 - Improved dispatch pipeline failure summaries with stable step statuses and short failure reasons.
-- Hardened local and Linux Dev Node validation workflow coverage for release prep.
+- Hardened local and Linux validation workflow coverage for release prep.
 - Added and then trimmed the public adapter contract documentation so it describes current adapter boundaries without provider roadmap promises.
 - Kept package surface focused on public docs, skills, CLI, and runtime source files.
 
