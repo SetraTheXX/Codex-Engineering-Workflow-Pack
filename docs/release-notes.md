@@ -8,6 +8,7 @@
 - Hardened adapter config smoke coverage across dispatch exec workers and dispatch pipeline paths.
 - `cewp doctor` now reports the adapter config source and resolved provider summary.
 - Added optional root-level `cewp.config.json` adapter config support while keeping `codex-exec` as the only supported provider.
+- Clarified `.cewp-worktrees/` as ignored local worktree cache state.
 - Added Coordinator Mode documentation for CodeGraph-assisted code discovery as an optional local developer workflow helper.
 - Ignored `.codegraph/` as a local CodeGraph index directory that must not be committed.
 - Hardened the package surface harness to assert `.codegraph/` is not included in npm package dry-runs.

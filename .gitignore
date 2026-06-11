@@ -33,6 +33,7 @@ temp/
 
 # CEWP local runtime state
 .cewp/
+.cewp-worktrees/
 
 # Local env and secrets
 .env
