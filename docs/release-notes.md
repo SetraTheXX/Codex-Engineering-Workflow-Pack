@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.3.1-beta.0
+
+### Summary
+
+Adapter config hardening for the v0.3 beta line. These changes keep `codex-exec` as the only supported provider while adding optional local adapter config ergonomics and package-surface hygiene.
+
 ### Changed
 
 - Added `cewp init --with-config` to write a starter optional adapter config template.
