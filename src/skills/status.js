@@ -1,8 +1,10 @@
 "use strict";
 
 const fs = require("node:fs");
+const path = require("node:path");
 const { resolveTarget, getSkillStatus } = require("./paths");
 const { checkCodexExecAvailability } = require("../run/adapters/codex-exec");
+const { ADAPTER_CONFIG_FILE, ADAPTER_CONFIG_ROLES, loadAdapterConfig } = require("../run/adapters/config");
 
 function list(options) {
   const targetRoot = resolveTarget(options);
@@ -45,6 +47,15 @@ function doctor(options) {
   console.log("");
   console.log("Adapter availability:");
   console.log(`[${adapterAvailability.status === "PASS" ? "OK" : "WARN"}] codex-exec: ${adapterAvailability.reason}`);
+
+  const adapterConfig = loadAdapterConfig(process.cwd());
+  const adapterConfigSource = fs.existsSync(path.join(process.cwd(), ADAPTER_CONFIG_FILE)) ? ADAPTER_CONFIG_FILE : "default";
+  console.log("");
+  console.log("Adapter config:");
+  console.log(`  Source: ${adapterConfigSource}`);
+  for (const role of ADAPTER_CONFIG_ROLES) {
+    console.log(`  ${role}: ${adapterConfig[role].provider}`);
+  }
 
   console.log("");
 

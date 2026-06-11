@@ -200,6 +200,53 @@ async function main() {
       assertExit(result, 0, "cewp doctor");
       assertIncludes(result.stdout, "Adapter availability:", "doctor adapter availability section");
       assertIncludes(result.stdout, "codex-exec:", "doctor codex-exec availability");
+      assertIncludes(result.stdout, "Adapter config:", "doctor adapter config section");
+      assertIncludes(result.stdout, "Source: default", "doctor adapter config default source");
+      assertIncludes(result.stdout, "manager: codex-exec", "doctor adapter config manager provider");
+      assertIncludes(result.stdout, "worker-a: codex-exec", "doctor adapter config worker-a provider");
+      assertIncludes(result.stdout, "worker-b: codex-exec", "doctor adapter config worker-b provider");
+      assertIncludes(result.stdout, "reviewer: codex-exec", "doctor adapter config reviewer provider");
+    });
+
+    await step("doctor adapter config file summary", () => {
+      const doctorConfigRepo = makeTempRepo("cewp-harness-doctor-config-");
+      tempRepos.push(doctorConfigRepo);
+      assertExit(cewp(["init"], doctorConfigRepo), 0, "doctor config repo init");
+      writeJson(path.join(doctorConfigRepo, "cewp.config.json"), {
+        adapters: {
+          manager: { provider: "codex-exec" },
+          "worker-a": { provider: "codex-exec" },
+          "worker-b": { provider: "codex-exec" },
+          reviewer: { provider: "codex-exec" },
+        },
+      });
+
+      const validDoctor = cewp(["doctor"], doctorConfigRepo);
+      assertExit(validDoctor, 0, "doctor valid adapter config");
+      assertIncludes(validDoctor.stdout, "Adapter config:", "doctor valid config section");
+      assertIncludes(validDoctor.stdout, "Source: cewp.config.json", "doctor config file source");
+      assertIncludes(validDoctor.stdout, "worker-a: codex-exec", "doctor valid config worker-a");
+
+      const unsupportedRepo = makeTempRepo("cewp-harness-doctor-unsupported-");
+      tempRepos.push(unsupportedRepo);
+      assertExit(cewp(["init"], unsupportedRepo), 0, "doctor unsupported repo init");
+      writeJson(path.join(unsupportedRepo, "cewp.config.json"), {
+        adapters: {
+          "worker-a": { provider: "not-real" },
+        },
+      });
+      const unsupportedDoctor = cewp(["doctor"], unsupportedRepo);
+      assertExit(unsupportedDoctor, 1, "doctor unsupported adapter config");
+      assertIncludes(unsupportedDoctor.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.", "doctor unsupported config message");
+
+      const invalidJsonRepo = makeTempRepo("cewp-harness-doctor-invalid-json-");
+      tempRepos.push(invalidJsonRepo);
+      assertExit(cewp(["init"], invalidJsonRepo), 0, "doctor invalid json repo init");
+      writeFile(path.join(invalidJsonRepo, "cewp.config.json"), "{ invalid json\n");
+      const invalidJsonDoctor = cewp(["doctor"], invalidJsonRepo);
+      assertExit(invalidJsonDoctor, 1, "doctor invalid adapter config json");
+      assertIncludes(invalidJsonDoctor.stderr, "Invalid cewp.config.json JSON:", "doctor invalid config json message");
+      assertIncludes(invalidJsonDoctor.stderr, "cewp.config.json", "doctor invalid config json path");
     });
 
     await step("list", () => {

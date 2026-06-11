@@ -138,6 +138,7 @@ function resolveAdapterProviderForRole({
 }
 
 module.exports = {
+  ADAPTER_CONFIG_FILE,
   ADAPTER_CONFIG_ROLES,
   defaultAdapterConfig,
   loadAdapterConfig,

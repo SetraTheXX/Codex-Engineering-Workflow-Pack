@@ -79,6 +79,8 @@ CEWP may also read an optional root-level `cewp.config.json` file. Only the top-
 
 When the file is missing, CEWP keeps the default `codex-exec` provider for every role. A CLI `--adapter` value overrides the selected role. Invalid JSON fails with a clear `Invalid cewp.config.json JSON` message, and unsupported providers fail through the adapter registry. The only supported provider is still `codex-exec`; external provider implementations are not included.
 
+`cewp doctor` reports the adapter config source and resolved provider for each role.
+
 ## Adapter Lifecycle
 
 The provider-independent lifecycle should stay stable:
