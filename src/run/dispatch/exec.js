@@ -191,7 +191,7 @@ function getDispatchExecPreview(options) {
     console.log("CEWP Coordinator Mode codex-exec adapter dry-run");
     console.log(`Run ID: ${runId}`);
     console.log(`Role: ${options.role}`);
-    console.log(`Adapter: ${options.adapter}`);
+    console.log(`Adapter: ${adapterName}`);
     console.log(`Mode: ${options.dryRun ? "dry-run" : "execution"}`);
     console.log("");
     console.log(`Readiness: ${failures.length > 0 ? "FAIL" : warnings.length > 0 ? "WARN" : "PASS"}`);

@@ -64,7 +64,20 @@ reviewer
 
 The default normalized config maps every recognized role to `codex-exec`. Unsupported providers fail through registry validation. Unknown roles fail with a clear role validation error.
 
-This foundation is internal and intentionally small. CEWP does not currently read a public adapter config file and does not include external provider implementations.
+CEWP may also read an optional root-level `cewp.config.json` file. Only the top-level `adapters` field is used:
+
+```json
+{
+  "adapters": {
+    "manager": { "provider": "codex-exec" },
+    "worker-a": { "provider": "codex-exec" },
+    "worker-b": { "provider": "codex-exec" },
+    "reviewer": { "provider": "codex-exec" }
+  }
+}
+```
+
+When the file is missing, CEWP keeps the default `codex-exec` provider for every role. A CLI `--adapter` value overrides the selected role. Invalid JSON fails with a clear `Invalid cewp.config.json JSON` message, and unsupported providers fail through the adapter registry. The only supported provider is still `codex-exec`; external provider implementations are not included.
 
 ## Adapter Lifecycle
 

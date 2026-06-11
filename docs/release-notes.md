@@ -4,6 +4,7 @@
 
 ### Changed
 
+- Added optional root-level `cewp.config.json` adapter config support while keeping `codex-exec` as the only supported provider.
 - Added Coordinator Mode documentation for CodeGraph-assisted code discovery as an optional local developer workflow helper.
 - Ignored `.codegraph/` as a local CodeGraph index directory that must not be committed.
 - Hardened the package surface harness to assert `.codegraph/` is not included in npm package dry-runs.

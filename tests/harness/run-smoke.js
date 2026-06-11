@@ -25,7 +25,7 @@ const {
 } = require("./lib/temp-repo");
 const { createFakeCodexAdapter } = require("./lib/fake-adapter");
 const { buildCodexExecInvocation, checkCodexExecAvailability, normalizeAdapterResult } = require("../../src/run/adapters/codex-exec");
-const { normalizeAdapterConfig, resolveAdapterProviderForRole } = require("../../src/run/adapters/config");
+const { loadAdapterConfig, normalizeAdapterConfig, resolveAdapterProviderForRole } = require("../../src/run/adapters/config");
 
 const cewpRoot = path.resolve(__dirname, "..", "..");
 const cewpCli = path.join(cewpRoot, "bin", "cewp.js");
@@ -363,6 +363,78 @@ async function main() {
         unknownRoleError && unknownRoleError.message === "Unknown adapter config role: intern. Supported roles: manager, worker-a, worker-b, reviewer.",
         "unknown adapter role should fail",
       );
+    });
+
+    await step("adapter config file defaults", () => {
+      const defaultConfigRepo = makeTempRepo("cewp-harness-adapter-default-");
+      tempRepos.push(defaultConfigRepo);
+      const loadedDefaults = loadAdapterConfig(defaultConfigRepo);
+      for (const role of ["manager", "worker-a", "worker-b", "reviewer"]) {
+        assert(loadedDefaults[role].provider === "codex-exec", "file default adapter provider for " + role);
+      }
+    });
+
+    await step("adapter config file dispatch resolution dry-run", () => {
+      const validConfigRepo = makeTempRepo("cewp-harness-adapter-file-");
+      tempRepos.push(validConfigRepo);
+      const { runId } = setupFakeAdapterRun(validConfigRepo);
+      writeJson(path.join(validConfigRepo, "cewp.config.json"), {
+        adapters: {
+          manager: { provider: "codex-exec" },
+          "worker-a": { provider: "codex-exec" },
+          "worker-b": { provider: "codex-exec" },
+          reviewer: { provider: "codex-exec" },
+        },
+      });
+
+      const workerADryRun = cewp(["run", "dispatch", "exec", "worker-a", "--run", runId, "--dry-run"], validConfigRepo);
+      assertExit(workerADryRun, 0, "config file worker-a dry-run");
+      assertIncludes(workerADryRun.stdout, "Role: worker-a", "config file worker-a role");
+      assertIncludes(workerADryRun.stdout, "Adapter: codex-exec", "config file worker-a adapter");
+
+      const workerBDryRun = cewp(["run", "dispatch", "exec", "worker-b", "--run", runId, "--dry-run"], validConfigRepo);
+      assertExit(workerBDryRun, 0, "config file worker-b dry-run");
+      assertIncludes(workerBDryRun.stdout, "Role: worker-b", "config file worker-b role");
+      assertIncludes(workerBDryRun.stdout, "Adapter: codex-exec", "config file worker-b adapter");
+
+      makeReport(validConfigRepo, runId, "worker-a", "README.md");
+      makeReport(validConfigRepo, runId, "worker-b", "docs/install.md");
+      assertExit(cewp(["run", "collect", "--run", runId], validConfigRepo), 0, "config file collect");
+
+      const reviewerDryRun = cewp(["run", "dispatch", "exec", "reviewer", "--run", runId, "--dry-run"], validConfigRepo);
+      assertExit(reviewerDryRun, 0, "config file reviewer dry-run");
+      assertIncludes(reviewerDryRun.stdout, "Role: reviewer", "config file reviewer role");
+      assertIncludes(reviewerDryRun.stdout, "Adapter: codex-exec", "config file reviewer adapter");
+
+      writeJson(path.join(validConfigRepo, "cewp.config.json"), {
+        adapters: {
+          "worker-a": { provider: "not-real" },
+        },
+      });
+      const overrideDryRun = cewp(["run", "dispatch", "exec", "worker-a", "--run", runId, "--adapter", "codex-exec", "--dry-run"], validConfigRepo);
+      assertExit(overrideDryRun, 0, "config file cli adapter override dry-run");
+      assertIncludes(overrideDryRun.stdout, "Adapter: codex-exec", "config file cli adapter override");
+    });
+
+    await step("adapter config file failure paths", () => {
+      const unsupportedRepo = makeTempRepo("cewp-harness-adapter-unsupported-");
+      tempRepos.push(unsupportedRepo);
+      writeJson(path.join(unsupportedRepo, "cewp.config.json"), {
+        adapters: {
+          "worker-a": { provider: "not-real" },
+        },
+      });
+      const unsupported = cewp(["run", "dispatch", "exec", "worker-a", "--dry-run"], unsupportedRepo);
+      assertExit(unsupported, 1, "unsupported config provider");
+      assertIncludes(unsupported.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.", "unsupported config provider message");
+
+      const invalidJsonRepo = makeTempRepo("cewp-harness-adapter-invalid-json-");
+      tempRepos.push(invalidJsonRepo);
+      writeFile(path.join(invalidJsonRepo, "cewp.config.json"), "{ invalid json\n");
+      const invalidJson = cewp(["run", "dispatch", "exec", "worker-a", "--dry-run"], invalidJsonRepo);
+      assertExit(invalidJson, 1, "invalid config json");
+      assertIncludes(invalidJson.stderr, "Invalid cewp.config.json JSON:", "invalid config json message");
+      assertIncludes(invalidJson.stderr, "cewp.config.json", "invalid config json path");
     });
 
     await step("dispatch adapter config resolution dry-run", () => {
