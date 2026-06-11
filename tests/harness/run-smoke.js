@@ -987,6 +987,7 @@ async function main() {
       assert(!packOutput.includes(".cewp/"), ".cewp/ should not be packed");
       assert(!packOutput.includes(".cewp-worktrees/"), ".cewp-worktrees/ should not be packed");
       assert(!packOutput.includes(".ctxo/"), ".ctxo/ should not be packed");
+      assert(!packOutput.includes(".codegraph/"), ".codegraph/ should not be packed");
       assert(!packOutput.includes("docs/agents/"), "docs/agents/ should not be packed");
       assert(!packOutput.includes("tests/"), "tests/ should not be packed");
     });
