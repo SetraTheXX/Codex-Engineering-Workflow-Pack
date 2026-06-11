@@ -1,5 +1,13 @@
 # Release Notes
 
+## Unreleased
+
+### Changed
+
+- Added Coordinator Mode documentation for CodeGraph-assisted code discovery as an optional local developer workflow helper.
+- Ignored `.codegraph/` as a local CodeGraph index directory that must not be committed.
+- Hardened the package surface harness to assert `.codegraph/` is not included in npm package dry-runs.
+
 ## 0.3.0-beta.0
 
 ### Summary
