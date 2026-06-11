@@ -453,6 +453,19 @@ async function main() {
       assertIncludes(reviewerDryRun.stdout, "Role: reviewer", "config file reviewer role");
       assertIncludes(reviewerDryRun.stdout, "Adapter: codex-exec", "config file reviewer adapter");
 
+      const workersDryRun = cewp(["run", "dispatch", "exec", "workers", "--run", runId, "--dry-run"], validConfigRepo);
+      assertExit(workersDryRun, 0, "config file workers dry-run");
+      assertIncludes(workersDryRun.stdout, "CEWP Coordinator Mode codex-exec workers dry-run", "config file workers dry-run header");
+      assertIncludes(workersDryRun.stdout, "Role: worker-a", "config file workers worker-a role");
+      assertIncludes(workersDryRun.stdout, "Role: worker-b", "config file workers worker-b role");
+      assertIncludes(workersDryRun.stdout, "Adapter: codex-exec", "config file workers adapter");
+
+      const pipelineDryRun = cewp(["run", "dispatch", "pipeline", "--run", runId, "--dry-run"], validConfigRepo);
+      assertExit(pipelineDryRun, 0, "config file pipeline dry-run");
+      assertIncludes(pipelineDryRun.stdout, "CEWP Coordinator Mode dispatch pipeline", "config file pipeline header");
+      assertIncludes(pipelineDryRun.stdout, "Adapter: codex-exec", "config file pipeline adapter");
+      assertIncludes(pipelineDryRun.stdout, "Overall dry-run:", "config file pipeline overall");
+
       writeJson(path.join(validConfigRepo, "cewp.config.json"), {
         adapters: {
           "worker-a": { provider: "not-real" },
@@ -475,6 +488,14 @@ async function main() {
       assertExit(unsupported, 1, "unsupported config provider");
       assertIncludes(unsupported.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.", "unsupported config provider message");
 
+      const unsupportedWorkers = cewp(["run", "dispatch", "exec", "workers", "--dry-run"], unsupportedRepo);
+      assertExit(unsupportedWorkers, 1, "unsupported config provider workers");
+      assertIncludes(unsupportedWorkers.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.", "unsupported config provider workers message");
+
+      const unsupportedPipeline = cewp(["run", "dispatch", "pipeline", "--dry-run"], unsupportedRepo);
+      assertExit(unsupportedPipeline, 1, "unsupported config provider pipeline");
+      assertIncludes(unsupportedPipeline.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.", "unsupported config provider pipeline message");
+
       const invalidJsonRepo = makeTempRepo("cewp-harness-adapter-invalid-json-");
       tempRepos.push(invalidJsonRepo);
       writeFile(path.join(invalidJsonRepo, "cewp.config.json"), "{ invalid json\n");
@@ -482,6 +503,14 @@ async function main() {
       assertExit(invalidJson, 1, "invalid config json");
       assertIncludes(invalidJson.stderr, "Invalid cewp.config.json JSON:", "invalid config json message");
       assertIncludes(invalidJson.stderr, "cewp.config.json", "invalid config json path");
+
+      const invalidJsonWorkers = cewp(["run", "dispatch", "exec", "workers", "--dry-run"], invalidJsonRepo);
+      assertExit(invalidJsonWorkers, 1, "invalid config json workers");
+      assertIncludes(invalidJsonWorkers.stderr, "Invalid cewp.config.json JSON:", "invalid config json workers message");
+
+      const invalidJsonPipeline = cewp(["run", "dispatch", "pipeline", "--dry-run"], invalidJsonRepo);
+      assertExit(invalidJsonPipeline, 1, "invalid config json pipeline");
+      assertIncludes(invalidJsonPipeline.stderr, "Invalid cewp.config.json JSON:", "invalid config json pipeline message");
     });
 
     await step("dispatch adapter config resolution dry-run", () => {
