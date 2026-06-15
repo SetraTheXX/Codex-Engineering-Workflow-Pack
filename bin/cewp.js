@@ -10,6 +10,7 @@ const {
 } = require("../src/run/worktrees");
 const {
   runInit,
+  runList,
   runStatus,
   runNext,
   runPrompts,
@@ -39,6 +40,11 @@ async function runCommand(options) {
 
   if (options.subcommand === "init") {
     runInit(options);
+    return;
+  }
+
+  if (options.subcommand === "list") {
+    runList(options);
     return;
   }
 

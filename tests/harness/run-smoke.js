@@ -229,6 +229,7 @@ async function main() {
     await step("cli help", () => {
       const help = cewp(["--help"], cewpRoot);
       assertExit(help, 0, "cewp --help");
+      assertIncludes(help.stdout, "cewp run list [--limit <count>]", "help includes operator run list");
       assertIncludes(help.stdout, "cewp run status [run-id]", "help includes operator run status");
       assertIncludes(help.stdout, "cewp run next [run-id]", "help includes operator run next");
     });
@@ -321,6 +322,96 @@ async function main() {
 
     await step("list", () => {
       assertExit(cewp(["list"], cewpRoot), 0, "cewp list");
+    });
+
+    await step("operator run list", () => {
+      const emptyRunsRepo = makeTempRepo("cewp-harness-run-list-empty-");
+      tempRepos.push(emptyRunsRepo);
+      const emptyList = cewp(["run", "list"], emptyRunsRepo);
+      assertExit(emptyList, 0, "run list no runs");
+      assertIncludes(emptyList.stdout, "CEWP Coordinator Mode run list", "run list heading no runs");
+      assertIncludes(emptyList.stdout, "No CEWP runs found.", "run list no runs message");
+
+      const listRepo = makeTempRepo("cewp-harness-run-list-");
+      tempRepos.push(listRepo);
+      const runsRoot = path.join(listRepo, ".cewp", "runs");
+      const oldRunId = "20260529-000001";
+      const latestRunIdForList = "20260529-000002";
+      const oldRunRoot = path.join(runsRoot, oldRunId);
+      const latestRunRoot = path.join(runsRoot, latestRunIdForList);
+
+      for (const runRoot of [oldRunRoot, latestRunRoot]) {
+        fs.mkdirSync(path.join(runRoot, "tasks"), { recursive: true });
+        fs.mkdirSync(path.join(runRoot, "manual"), { recursive: true });
+        fs.mkdirSync(path.join(runRoot, "reports"), { recursive: true });
+        fs.mkdirSync(path.join(runRoot, "reviews"), { recursive: true });
+        fs.mkdirSync(path.join(runRoot, "review-packets"), { recursive: true });
+        fs.mkdirSync(path.join(runRoot, "events"), { recursive: true });
+      }
+
+      writeJson(path.join(oldRunRoot, "run.json"), {
+        runId: oldRunId,
+        createdAt: "2026-05-29T00:00:01.000Z",
+        status: "dispatching",
+      });
+      writeJson(path.join(oldRunRoot, "board.json"), {
+        runId: oldRunId,
+        status: "dispatching",
+        roles: {
+          "worker-a": { status: "active" },
+          reviewer: { status: "waiting" },
+        },
+      });
+      writeJson(path.join(oldRunRoot, "tasks", "task-001.json"), {
+        id: "task-001",
+        status: "doing",
+        assignedRole: "worker-a",
+      });
+      writeFile(path.join(oldRunRoot, "manual", "worker-a.md"), "# Manual Handoff\n");
+
+      writeJson(path.join(latestRunRoot, "run.json"), {
+        runId: latestRunIdForList,
+        createdAt: "2026-05-29T00:00:02.000Z",
+        status: "reviewing",
+      });
+      writeJson(path.join(latestRunRoot, "board.json"), {
+        runId: latestRunIdForList,
+        status: "reviewing",
+        roles: {
+          "worker-a": { status: "done" },
+          "worker-b": { status: "done" },
+          reviewer: { status: "done" },
+        },
+      });
+      writeJson(path.join(latestRunRoot, "tasks", "task-001.json"), {
+        id: "task-001",
+        status: "done",
+        assignedRole: "worker-a",
+      });
+      writeFile(path.join(latestRunRoot, "reports", "worker-a-report.md"), "# Worker Report\n");
+      writeFile(path.join(latestRunRoot, "review-packets", "review-packet.md"), "# Review Packet\n");
+      writeFile(path.join(latestRunRoot, "reviews", "reviewer-report.md"), "# Reviewer Report\n\nDecision: PASS\n");
+
+      const beforeList = snapshotRunFiles(runsRoot);
+      const list = cewp(["run", "list"], listRepo);
+      const afterList = snapshotRunFiles(runsRoot);
+      assertExit(list, 0, "run list multiple runs");
+      assertSnapshotsEqual(beforeList, afterList, "run list should be read-only");
+      assertIncludes(list.stdout, oldRunId, "run list old run");
+      assertIncludes(list.stdout, `${latestRunIdForList} (latest)`, "run list latest marker");
+      assertIncludes(list.stdout, "created: 2026-05-29T00:00:02.000Z", "run list created time");
+      assertIncludes(list.stdout, "manual handoff: yes", "run list manual handoff presence");
+      assertIncludes(list.stdout, "worker reports: yes (1)", "run list worker report presence");
+      assertIncludes(list.stdout, "review packet: yes", "run list review packet presence");
+      assertIncludes(list.stdout, "reviewer report: yes", "run list reviewer report presence");
+      assertIncludes(list.stdout, "reviewer PASS: yes", "run list reviewer pass presence");
+      assertIncludes(list.stdout, "next: complete-manual", "run list manual next label");
+      assertIncludes(list.stdout, "next: finalize-dry-run", "run list finalize next label");
+
+      const limited = cewp(["run", "list", "--limit", "1"], listRepo);
+      assertExit(limited, 0, "run list limit");
+      assertIncludes(limited.stdout, `${latestRunIdForList} (latest)`, "run list limit latest");
+      assertNotIncludes(limited.stdout, oldRunId, "run list limit hides older run");
     });
 
     await step("docs and dispatch wording", () => {

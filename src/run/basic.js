@@ -4,7 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { writeJson, readJsonIfExists } = require("../lib/json");
 const { listFiles } = require("../lib/fs");
-const { getRunRoot } = require("../lib/paths");
+const { getRunRoot, getRunsRoot } = require("../lib/paths");
 const { findRun } = require("./runtime-cleanup");
 const {
   makePlanTemplate,
@@ -335,6 +335,30 @@ function getRecommendedActions({ runId, runRoot, artifactRoles, reportFiles, rev
   return actions;
 }
 
+function getNextActionLabel(action) {
+  if (!action) {
+    return "none";
+  }
+
+  if (action.command.includes("dispatch complete")) {
+    return "complete-manual";
+  }
+
+  if (action.command.includes("run collect")) {
+    return "collect";
+  }
+
+  if (action.command.includes("exec reviewer")) {
+    return "reviewer-dry-run";
+  }
+
+  if (action.command.includes("run finalize")) {
+    return "finalize-dry-run";
+  }
+
+  return "inspect";
+}
+
 function inspectRun(options = {}) {
   const { runId, runRoot } = findRun(options);
   const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
@@ -379,6 +403,54 @@ function inspectRun(options = {}) {
     lastEvent,
     artifactRoles,
     recommendedActions,
+  };
+}
+
+function formatStatusCounts(statusCounts) {
+  const entries = Object.keys(statusCounts)
+    .sort()
+    .map((status) => `${status}:${statusCounts[status]}`);
+
+  return entries.length === 0 ? "none" : entries.join(", ");
+}
+
+function formatRoleSummary(boardJson) {
+  const roles = (boardJson && boardJson.roles) || {};
+  const entries = Object.keys(roles)
+    .sort()
+    .map((role) => `${role}=${roles[role].status || "unknown"}`);
+
+  return entries.length === 0 ? "none" : entries.join(", ");
+}
+
+function getRunDirectoryMtime(runRoot) {
+  try {
+    return fs.statSync(runRoot).mtime.toISOString();
+  } catch {
+    return "unknown";
+  }
+}
+
+function getRunIds(repoRoot = process.cwd()) {
+  const runsRoot = getRunsRoot(repoRoot);
+
+  if (!fs.existsSync(runsRoot)) {
+    return {
+      runsRoot,
+      runIds: [],
+    };
+  }
+
+  const runIds = fs
+    .readdirSync(runsRoot, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .filter((name) => /^\d{8}-\d{6}$/.test(name))
+    .sort();
+
+  return {
+    runsRoot,
+    runIds,
   };
 }
 
@@ -473,6 +545,46 @@ function runStatus(options = {}) {
   }
 }
 
+function runList(options = {}) {
+  const repoRoot = path.resolve(process.cwd());
+  const { runsRoot, runIds } = getRunIds(repoRoot);
+  const limit = options.limit || 10;
+
+  console.log("CEWP Coordinator Mode run list");
+  console.log(`Runs root: ${runsRoot}`);
+  console.log(`Limit: ${limit}`);
+
+  if (runIds.length === 0) {
+    console.log("No CEWP runs found.");
+    return;
+  }
+
+  const latestRunId = runIds[runIds.length - 1];
+  const recentRunIds = runIds.slice(-limit).reverse();
+
+  console.log("");
+  console.log("Recent runs:");
+
+  for (const runId of recentRunIds) {
+    const inspection = inspectRun({ runId });
+    const action = inspection.recommendedActions[0];
+    const reviewerDecision = getReviewerDecision(inspection.reviewFiles);
+
+    console.log(`  ${runId}${runId === latestRunId ? " (latest)" : ""}`);
+    console.log(`    created: ${(inspection.runJson && inspection.runJson.createdAt) || "unknown"}`);
+    console.log(`    modified: ${getRunDirectoryMtime(inspection.runRoot)}`);
+    console.log(`    state: run=${(inspection.runJson && inspection.runJson.status) || "unknown"}, board=${(inspection.boardJson && inspection.boardJson.status) || "unknown"}`);
+    console.log(`    roles: ${formatRoleSummary(inspection.boardJson)}`);
+    console.log(`    tasks: ${inspection.tasks.length} (${formatStatusCounts(inspection.statusCounts)})`);
+    console.log(`    manual handoff: ${inspection.manualFiles.length > 0 ? "yes" : "no"}`);
+    console.log(`    worker reports: ${inspection.reportFiles.length > 0 ? "yes" : "no"} (${inspection.reportFiles.length})`);
+    console.log(`    review packet: ${inspection.reviewPacketFiles.length > 0 ? "yes" : "no"}`);
+    console.log(`    reviewer report: ${inspection.reviewFiles.length > 0 ? "yes" : "no"}`);
+    console.log(`    reviewer PASS: ${reviewerDecision && reviewerDecision.decision === "PASS" ? "yes" : "no"}`);
+    console.log(`    next: ${getNextActionLabel(action)}`);
+  }
+}
+
 function runNext(options = {}) {
   const {
     runId,
@@ -547,6 +659,7 @@ function runPrompt(role, options = {}) {
 
 module.exports = {
   runInit,
+  runList,
   runStatus,
   runNext,
   runPrompts,

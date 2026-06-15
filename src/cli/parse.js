@@ -48,6 +48,7 @@ function parseArgs(argv) {
     reviewer: false,
     withConfig: false,
     fromFile: undefined,
+    limit: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -227,6 +228,19 @@ function parseArgs(argv) {
       args.keepRuns = Number.parseInt(value, 10);
       if (args.keepRuns <= 0) {
         throw new Error("--keep requires a positive integer.");
+      }
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "run" && arg === "--limit") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--") || !/^\d+$/.test(value)) {
+        throw new Error("--limit requires a positive integer.");
+      }
+      args.limit = Number.parseInt(value, 10);
+      if (args.limit <= 0) {
+        throw new Error("--limit requires a positive integer.");
       }
       index += 1;
       continue;

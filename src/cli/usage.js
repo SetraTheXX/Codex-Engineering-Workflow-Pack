@@ -11,6 +11,7 @@ Usage:
   cewp policy set <safe|trusted|full-authority>
   cewp policy reset
   cewp run init --workers <count> --reviewer
+  cewp run list [--limit <count>]
   cewp run status [run-id]
   cewp run next [run-id]
   cewp run prompts
@@ -54,6 +55,8 @@ Examples:
   cewp policy set full-authority
   cewp policy reset
   cewp run init --workers 2 --reviewer
+  cewp run list
+  cewp run list --limit 10
   cewp run status
   cewp run status 20260528-232250
   cewp run status --run 20260528-232250
