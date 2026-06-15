@@ -275,6 +275,8 @@ function getDispatchExecPreview(options) {
       console.log("  Do not inline the full prompt in a shell command.");
       console.log("");
       adapter.printCodexExecPreview({
+        runRoot,
+        role: preview.role,
         cwd: preview.cwd || "<missing-workdir>",
         promptPath: preview.promptPath,
         outputPath: preview.outputLastMessagePath,
@@ -461,6 +463,12 @@ function runDispatchReviewerExecActual(options, preflight) {
   console.log(`Report: ${reportExists ? `found ${relativeRunPath(runRoot, preview.reportPath)}` : `missing ${relativeRunPath(runRoot, preview.reportPath)}`}`);
   console.log(`Event log: ${eventExists ? relativeRunPath(runRoot, preview.eventPath) : "not provided"}`);
   console.log(`Last message: ${lastMessageExists ? relativeRunPath(runRoot, preview.outputLastMessagePath) : "missing"}`);
+  if (execResult.manualPath) {
+    console.log(`Manual handoff: ${relativeRunPath(runRoot, execResult.manualPath)}`);
+  }
+  if (execResult.externalCommandExecuted === false) {
+    console.log("External command: not executed");
+  }
   console.log(`Stdout log: ${relativeRunPath(runRoot, stdoutPath)}`);
   console.log(`Stderr log: ${relativeRunPath(runRoot, stderrPath)}`);
   console.log(`Public repo changed: ${repoChanged ? "yes" : "no"}`);
@@ -502,6 +510,7 @@ function runDispatchReviewerExecActual(options, preflight) {
       report: preview.reportPath,
       event: preview.eventPath,
       lastMessage: preview.outputLastMessagePath,
+      handoff: execResult.manualPath,
     },
   });
 }
@@ -727,6 +736,12 @@ function runDispatchExecActual(options = {}) {
   console.log(`Report: ${reportExists ? `copied to ${relativeRunPath(runRoot, preview.reportPath)}` : `missing ${relativeRunPath(runRoot, preview.reportPath)}`}`);
   console.log(`Worker events: ${copiedOutput.events ? `appended to ${relativeRunPath(runRoot, preview.eventPath)}` : "not provided"}`);
   console.log(`Last message: ${lastMessageExists ? relativeRunPath(runRoot, preview.outputLastMessagePath) : "missing"}`);
+  if (execResult.manualPath) {
+    console.log(`Manual handoff: ${relativeRunPath(runRoot, execResult.manualPath)}`);
+  }
+  if (execResult.externalCommandExecuted === false) {
+    console.log("External command: not executed");
+  }
   console.log(`Stdout log: ${relativeRunPath(runRoot, stdoutPath)}`);
   console.log(`Stderr log: ${relativeRunPath(runRoot, stderrPath)}`);
   console.log("");
@@ -766,6 +781,7 @@ function runDispatchExecActual(options = {}) {
       report: preview.reportPath,
       event: preview.eventPath,
       lastMessage: preview.outputLastMessagePath,
+      handoff: execResult.manualPath,
       workerReport: workerOutput.reportPath,
       workerEvents: workerOutput.eventsPath,
     },

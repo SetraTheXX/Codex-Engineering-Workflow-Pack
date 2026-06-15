@@ -593,6 +593,8 @@ async function main() {
       assertExit(dryRun, 0, "manual worker dry-run");
       assertIncludes(dryRun.stdout, "Adapter: manual", "manual dry-run adapter");
       assertIncludes(dryRun.stdout, "Manual adapter preview:", "manual dry-run preview");
+      assertIncludes(dryRun.stdout, "Manual handoff: manual/worker-a.md", "manual dry-run handoff path");
+      assertIncludes(dryRun.stdout, "External command: not executed", "manual dry-run external command");
 
       const workersDryRun = cewp(["run", "dispatch", "exec", "workers", "--run", runId, "--adapter", "manual", "--dry-run"], manualRepo);
       assertExit(workersDryRun, 0, "manual workers dry-run");
@@ -606,6 +608,8 @@ async function main() {
       assertExit(actual, 1, "manual worker actual requires manual action");
       assertIncludes(actual.stdout, "Adapter: manual", "manual actual adapter");
       assertIncludes(actual.stdout, "manual action required; adapter did not execute code.", "manual action reason");
+      assertIncludes(actual.stdout, "Manual handoff: manual/worker-a.md", "manual actual handoff path");
+      assertIncludes(actual.stdout, "External command: not executed", "manual actual external command");
       assertIncludes(actual.stdout, "No merge/push/publish was performed.", "manual no publish guard");
 
       const manualPath = path.join(manualRepo, ".cewp", "runs", runId, "manual", "worker-a.md");

@@ -28,11 +28,11 @@ function checkAdapterAvailability() {
   };
 }
 
-function printCodexExecPreview({ promptPath, outputPath }) {
+function printCodexExecPreview({ runRoot, role, promptPath }) {
   console.log("Manual adapter preview:");
-  console.log("  No external process will be started.");
+  console.log("  External command: not executed");
   console.log(`  Read prompt: ${promptPath}`);
-  console.log(`  Manual handoff will be written next to: ${outputPath}`);
+  console.log(`  Manual handoff: ${path.relative(runRoot, getManualPromptPath(runRoot, role)).replace(/\\/g, "/")}`);
 }
 
 function runDispatchAdapter({ runRoot, role, worktreePath, promptPath, outputLastMessagePath }) {
@@ -70,6 +70,7 @@ function runDispatchAdapter({ runRoot, role, worktreePath, promptPath, outputLas
     stdout: `Manual handoff written: ${manualPath}\n${MANUAL_ACTION_REASON}\n`,
     stderr: "",
     manualPath,
+    externalCommandExecuted: false,
   };
 }
 

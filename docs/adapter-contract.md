@@ -57,7 +57,7 @@ It does not call Codex, external AI tools, local models, or provider CLIs. For d
 .cewp/runs/<run-id>/manual/<role>.md
 ```
 
-It also writes an adapter last-message marker explaining that manual action is required. The result fails closed because CEWP has not performed the worker or reviewer work automatically.
+It also writes an adapter last-message marker explaining that manual action is required. Dispatch output prints the selected provider, the handoff artifact path, and `External command: not executed`. The result fails closed because CEWP has not performed the worker or reviewer work automatically.
 
 ## Adapter Registry And Config Foundation
 
