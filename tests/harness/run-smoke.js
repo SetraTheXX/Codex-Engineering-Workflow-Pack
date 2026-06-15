@@ -230,6 +230,7 @@ async function main() {
       const help = cewp(["--help"], cewpRoot);
       assertExit(help, 0, "cewp --help");
       assertIncludes(help.stdout, "cewp run status [run-id]", "help includes operator run status");
+      assertIncludes(help.stdout, "cewp run next [run-id]", "help includes operator run next");
     });
 
     await step("doctor", () => {
@@ -669,6 +670,10 @@ async function main() {
       assertIncludes(missingStatus.stderr, "CEWP run not found: 20260529-999999", "operator status missing run message");
 
       const runRoot = path.join(manualRepo, ".cewp", "runs", runId);
+      const missingNext = cewp(["run", "next", "20260529-999999"], manualRepo);
+      assertExit(missingNext, 1, "operator next missing run");
+      assertIncludes(missingNext.stderr, "CEWP run not found: 20260529-999999", "operator next missing run message");
+
       const beforeStatus = snapshotRunFiles(runRoot);
       const statusWithHandoff = cewp(["run", "status", runId], manualRepo);
       const afterStatus = snapshotRunFiles(runRoot);
@@ -685,6 +690,17 @@ async function main() {
       assertIncludes(statusWithHandoff.stdout, "Events:", "operator status event count");
       assertIncludes(statusWithHandoff.stdout, "Next suggested actions:", "operator status next actions heading");
       assertIncludes(statusWithHandoff.stdout, `cewp run dispatch complete worker-a --run ${runId} --from <file>`, "operator status manual completion hint");
+
+      const beforeNext = snapshotRunFiles(runRoot);
+      const nextWithHandoff = cewp(["run", "next", runId], manualRepo);
+      const afterNext = snapshotRunFiles(runRoot);
+      assertExit(nextWithHandoff, 0, "operator next manual handoff");
+      assertSnapshotsEqual(beforeNext, afterNext, "operator next should be read-only");
+      assertIncludes(nextWithHandoff.stdout, "CEWP Coordinator Mode next", "operator next heading");
+      assertIncludes(nextWithHandoff.stdout, `Run ID: ${runId}`, "operator next run id");
+      assertIncludes(nextWithHandoff.stdout, "Current state:", "operator next state summary");
+      assertIncludes(nextWithHandoff.stdout, `Recommended command: cewp run dispatch complete worker-a --run ${runId} --from <file>`, "operator next manual completion command");
+      assertIncludes(nextWithHandoff.stdout, "Reason: worker-a has a manual handoff but its expected report is missing.", "operator next manual completion reason");
 
       const manualResultPath = path.join(manualRepo, "manual-result-worker-a.md");
       writeFile(
@@ -708,10 +724,20 @@ async function main() {
       assertIncludes(statusWithReport.stdout, "Reports: reports/worker-a-report.md", "operator status report inventory");
       assertIncludes(statusWithReport.stdout, `cewp run collect --run ${runId}`, "operator status collect hint");
 
+      const nextWithReport = cewp(["run", "next", "--run", runId], manualRepo);
+      assertExit(nextWithReport, 0, "operator next worker report");
+      assertIncludes(nextWithReport.stdout, `Recommended command: cewp run collect --run ${runId}`, "operator next collect command");
+      assertIncludes(nextWithReport.stdout, "Reason: Worker reports exist but no review packet has been collected.", "operator next collect reason");
+
       const collect = cewp(["run", "collect", "--run", runId], manualRepo);
       assertExit(collect, 0, "manual complete collect");
       const packetPath = path.join(manualRepo, ".cewp", "runs", runId, "review-packets", "review-packet.md");
       assertIncludes(fs.readFileSync(packetPath, "utf8"), "Manual completion recorded by harness.", "manual complete packet content");
+
+      const nextWithPacket = cewp(["run", "next", "--run", runId], manualRepo);
+      assertExit(nextWithPacket, 0, "operator next review packet");
+      assertIncludes(nextWithPacket.stdout, `Recommended command: cewp run dispatch exec reviewer --run ${runId} --dry-run`, "operator next reviewer dry-run command");
+      assertIncludes(nextWithPacket.stdout, "Reason: A review packet exists but no reviewer report is present.", "operator next reviewer dry-run reason");
 
       writeFile(
         path.join(manualRepo, ".cewp", "runs", runId, "reviews", "reviewer-report.md"),
@@ -721,6 +747,11 @@ async function main() {
       assertExit(statusWithPassReview, 0, "operator status reviewer PASS");
       assertIncludes(statusWithPassReview.stdout, "report: reviews/reviewer-report.md", "operator status reviewer report presence");
       assertIncludes(statusWithPassReview.stdout, `cewp run finalize --run ${runId} --dry-run`, "operator status finalize hint");
+
+      const nextWithPassReview = cewp(["run", "next", "--run", runId], manualRepo);
+      assertExit(nextWithPassReview, 0, "operator next reviewer PASS");
+      assertIncludes(nextWithPassReview.stdout, `Recommended command: cewp run finalize --run ${runId} --dry-run`, "operator next finalize dry-run command");
+      assertIncludes(nextWithPassReview.stdout, "Reason: Reviewer report reviews/reviewer-report.md contains Decision: PASS.", "operator next finalize reason");
 
       const missing = cewp(["run", "dispatch", "complete", "worker-a", "--run", runId, "--from", path.join(manualRepo, "missing.md")], manualRepo);
       assertExit(missing, 1, "manual complete missing file");
@@ -734,7 +765,16 @@ async function main() {
 
     await step("temp repo init", () => {
       flowRunId = createTwoTaskRun(coordinatorRepo);
-      assertFileExists(path.join(coordinatorRepo, ".cewp", "runs", flowRunId, "run.json"), "run.json");
+      const runRoot = path.join(coordinatorRepo, ".cewp", "runs", flowRunId);
+      assertFileExists(path.join(runRoot, "run.json"), "run.json");
+
+      const beforeNext = snapshotRunFiles(runRoot);
+      const next = cewp(["run", "next"], coordinatorRepo);
+      const afterNext = snapshotRunFiles(runRoot);
+      assertExit(next, 0, "operator next no safe action");
+      assertSnapshotsEqual(beforeNext, afterNext, "operator next no safe action should be read-only");
+      assertIncludes(next.stdout, "Recommended command: none", "operator next no safe command");
+      assertIncludes(next.stdout, "Reason: no safe next action found.", "operator next no safe reason");
     });
 
     await step("worktrees create", () => {

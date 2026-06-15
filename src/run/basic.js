@@ -294,7 +294,7 @@ function getReviewerDecision(reviewFiles) {
   return undefined;
 }
 
-function getNextActions({ runId, runRoot, artifactRoles, reportFiles, reviewFiles, reviewPacketFiles }) {
+function getRecommendedActions({ runId, runRoot, artifactRoles, reportFiles, reviewFiles, reviewPacketFiles }) {
   const actions = [];
   const reportSet = new Set([...reportFiles, ...reviewFiles]);
 
@@ -303,27 +303,39 @@ function getNextActions({ runId, runRoot, artifactRoles, reportFiles, reviewFile
     const reportPath = getExpectedReportPath(runRoot, role);
 
     if (fs.existsSync(handoffPath) && !reportSet.has(reportPath)) {
-      actions.push(`cewp run dispatch complete ${role} --run ${runId} --from <file>`);
+      actions.push({
+        command: `cewp run dispatch complete ${role} --run ${runId} --from <file>`,
+        reason: `${role} has a manual handoff but its expected report is missing.`,
+      });
     }
   }
 
   if (reportFiles.length > 0 && reviewPacketFiles.length === 0) {
-    actions.push(`cewp run collect --run ${runId}`);
+    actions.push({
+      command: `cewp run collect --run ${runId}`,
+      reason: "Worker reports exist but no review packet has been collected.",
+    });
+  }
+
+  if (reviewPacketFiles.length > 0 && reviewFiles.length === 0) {
+    actions.push({
+      command: `cewp run dispatch exec reviewer --run ${runId} --dry-run`,
+      reason: "A review packet exists but no reviewer report is present.",
+    });
   }
 
   const reviewerDecision = getReviewerDecision(reviewFiles);
   if (reviewerDecision && reviewerDecision.decision === "PASS") {
-    actions.push(`cewp run finalize --run ${runId} --dry-run`);
-  }
-
-  if (actions.length === 0) {
-    actions.push("No obvious next action detected. Inspect run artifacts before proceeding.");
+    actions.push({
+      command: `cewp run finalize --run ${runId} --dry-run`,
+      reason: `Reviewer report ${toRunRelative(runRoot, reviewerDecision.filePath)} contains Decision: PASS.`,
+    });
   }
 
   return actions;
 }
 
-function runStatus(options = {}) {
+function inspectRun(options = {}) {
   const { runId, runRoot } = findRun(options);
   const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
   const boardJson = readJsonIfExists(path.join(runRoot, "board.json"));
@@ -341,7 +353,7 @@ function runStatus(options = {}) {
     .flatMap((filePath) => readEvents(filePath).map((event) => ({ filePath, event })));
   const lastEvent = chooseLatestEvent(lastEvents);
   const artifactRoles = getArtifactRoles(boardJson);
-  const nextActions = getNextActions({
+  const recommendedActions = getRecommendedActions({
     runId,
     runRoot,
     artifactRoles,
@@ -349,6 +361,47 @@ function runStatus(options = {}) {
     reviewFiles,
     reviewPacketFiles,
   });
+
+  return {
+    runId,
+    runRoot,
+    runJson,
+    boardJson,
+    tasks,
+    reportFiles,
+    reviewFiles,
+    manualFiles,
+    lastMessageFiles,
+    reviewPacketFiles,
+    eventFiles,
+    eventCount,
+    statusCounts,
+    lastEvent,
+    artifactRoles,
+    recommendedActions,
+  };
+}
+
+function runStatus(options = {}) {
+  const inspection = inspectRun(options);
+  const {
+    runId,
+    runRoot,
+    runJson,
+    boardJson,
+    tasks,
+    reportFiles,
+    reviewFiles,
+    manualFiles,
+    lastMessageFiles,
+    reviewPacketFiles,
+    eventFiles,
+    eventCount,
+    statusCounts,
+    lastEvent,
+    artifactRoles,
+    recommendedActions,
+  } = inspection;
 
   console.log("CEWP Coordinator Mode status");
   console.log(`Run ID: ${runId}`);
@@ -411,9 +464,43 @@ function runStatus(options = {}) {
 
   console.log("");
   console.log("Next suggested actions:");
-  for (const action of nextActions) {
-    console.log(`  ${action}`);
+  if (recommendedActions.length === 0) {
+    console.log("  No safe next action found. Inspect run artifacts before proceeding.");
+  } else {
+    for (const action of recommendedActions) {
+      console.log(`  ${action.command}`);
+    }
   }
+}
+
+function runNext(options = {}) {
+  const {
+    runId,
+    runRoot,
+    runJson,
+    boardJson,
+    reportFiles,
+    reviewFiles,
+    manualFiles,
+    reviewPacketFiles,
+    recommendedActions,
+  } = inspectRun(options);
+  const action = recommendedActions[0];
+
+  console.log("CEWP Coordinator Mode next");
+  console.log(`Run ID: ${runId}`);
+  console.log(`Run root: ${runRoot}`);
+  console.log(`Current state: run=${(runJson && runJson.status) || "unknown"}, board=${(boardJson && boardJson.status) || "unknown"}, reports=${reportFiles.length}, reviews=${reviewFiles.length}, review-packets=${reviewPacketFiles.length}, manual-handoffs=${manualFiles.length}`);
+  console.log("");
+
+  if (!action) {
+    console.log("Recommended command: none");
+    console.log("Reason: no safe next action found.");
+    return;
+  }
+
+  console.log(`Recommended command: ${action.command}`);
+  console.log(`Reason: ${action.reason}`);
 }
 
 function runPrompts(options = {}) {
@@ -461,6 +548,7 @@ function runPrompt(role, options = {}) {
 module.exports = {
   runInit,
   runStatus,
+  runNext,
   runPrompts,
   runPrompt,
 };

@@ -95,7 +95,7 @@ cewp run dispatch start --run <run-id> --dry-run
 
 These commands map tasks to workers, worktrees, prompt bundles, report paths, event logs, and reviewer inputs.
 
-## Operator Status
+## Operator Status And Next
 
 Inspect the current run without changing runtime state:
 
@@ -103,9 +103,12 @@ Inspect the current run without changing runtime state:
 cewp run status
 cewp run status <run-id>
 cewp run status --run <run-id>
+cewp run next
+cewp run next <run-id>
+cewp run next --run <run-id>
 ```
 
-The status output summarizes run metadata, role/task state, worker and reviewer reports, manual handoffs, adapter last-message markers, review packets, event counts, and safe next-step hints. It can suggest commands such as manual result intake, review packet collection, or finalize dry-run, but it does not run them automatically.
+The status output summarizes run metadata, role/task state, worker and reviewer reports, manual handoffs, adapter last-message markers, review packets, event counts, and safe next-step hints. The next command prints the single most relevant safe command and a short reason. These commands can suggest manual result intake, review packet collection, reviewer dry-run, or finalize dry-run, but they do not run those actions automatically.
 
 ## Codex-Exec Adapter
 

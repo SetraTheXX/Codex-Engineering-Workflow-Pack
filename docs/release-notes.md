@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added `cewp run next [run-id]` to print the single most relevant safe next command for a run.
 - Added an operator-facing `cewp run status [run-id]` summary with artifact inventory and safe next-step hints.
 
 ## 0.4.0-beta.0

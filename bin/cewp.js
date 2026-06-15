@@ -11,6 +11,7 @@ const {
 const {
   runInit,
   runStatus,
+  runNext,
   runPrompts,
   runPrompt,
 } = require("../src/run/basic");
@@ -43,6 +44,11 @@ async function runCommand(options) {
 
   if (options.subcommand === "status") {
     runStatus(options);
+    return;
+  }
+
+  if (options.subcommand === "next") {
+    runNext(options);
     return;
   }
 
