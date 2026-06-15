@@ -619,6 +619,31 @@ async function main() {
       const manualContent = fs.readFileSync(manualPath, "utf8");
       assertIncludes(manualContent, "The manual adapter did not execute code", "manual handoff non-executing");
       assertIncludes(manualContent, "## Dispatch Prompt", "manual handoff prompt");
+
+      const manualResultPath = path.join(manualRepo, "manual-result-worker-a.md");
+      writeFile(
+        manualResultPath,
+        "# Worker Report\n\nRole: worker-a\nStatus: ready_for_review\n\nManual completion recorded by harness.\n",
+      );
+      const complete = cewp(["run", "dispatch", "complete", "worker-a", "--run", runId, "--from", manualResultPath], manualRepo);
+      assertExit(complete, 0, "manual worker complete");
+      assertIncludes(complete.stdout, "Manual result recorded", "manual complete message");
+      assertIncludes(complete.stdout, "Report: reports/worker-a-report.md", "manual complete report path");
+      assertIncludes(complete.stdout, "Last message: adapter-output/worker-a-last-message.md", "manual complete last-message path");
+
+      const reportPath = path.join(manualRepo, ".cewp", "runs", runId, "reports", "worker-a-report.md");
+      assertFileExists(reportPath, "manual complete worker report");
+      assertIncludes(fs.readFileSync(reportPath, "utf8"), "Manual completion recorded by harness.", "manual complete report content");
+      assertIncludes(fs.readFileSync(lastMessagePath, "utf8"), "Manual result recorded", "manual complete last message");
+
+      const collect = cewp(["run", "collect", "--run", runId], manualRepo);
+      assertExit(collect, 0, "manual complete collect");
+      const packetPath = path.join(manualRepo, ".cewp", "runs", runId, "review-packets", "review-packet.md");
+      assertIncludes(fs.readFileSync(packetPath, "utf8"), "Manual completion recorded by harness.", "manual complete packet content");
+
+      const missing = cewp(["run", "dispatch", "complete", "worker-a", "--run", runId, "--from", path.join(manualRepo, "missing.md")], manualRepo);
+      assertExit(missing, 1, "manual complete missing file");
+      assertIncludes(missing.stderr, "manual completion source file missing", "manual complete missing file message");
     });
 
     coordinatorRepo = makeTempRepo("cewp-harness-flow-");

@@ -4,6 +4,7 @@
 
 - Added a non-executing `manual` adapter that writes role handoff prompts and fails closed until manual action is completed.
 - Improved `manual` adapter dispatch output so handoff paths and non-execution status are visible in dry-run and actual summaries.
+- Added `cewp run dispatch complete <role> --from <file>` to record completed manual results into the expected run artifacts.
 
 ## 0.3.1-beta.0
 

@@ -20,6 +20,7 @@ const { runDispatchPlan } = require("../src/run/dispatch/plan");
 const { runDispatchCheck } = require("../src/run/dispatch/check");
 const { runDispatchPrompts } = require("../src/run/dispatch/prompts");
 const { runDispatchStart } = require("../src/run/dispatch/start");
+const { runDispatchComplete } = require("../src/run/dispatch/complete");
 const { runDispatchExec: runSingleDispatchExec } = require("../src/run/dispatch/exec");
 const { runDispatchWorkers } = require("../src/run/dispatch/workers");
 const { runDispatchPipeline } = require("../src/run/dispatch/pipeline");
@@ -116,6 +117,11 @@ async function runCommand(options) {
     } else {
       await runSingleDispatchExec(options);
     }
+    return;
+  }
+
+  if (options.subcommand === "dispatch" && options.action === "complete") {
+    runDispatchComplete(options);
     return;
   }
 

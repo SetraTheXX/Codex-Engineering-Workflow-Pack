@@ -47,6 +47,7 @@ function parseArgs(argv) {
     workers: undefined,
     reviewer: false,
     withConfig: false,
+    fromFile: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -86,7 +87,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "run" && args.subcommand === "dispatch" && args.action === "exec" && index === 3) {
+    if (args.command === "run" && args.subcommand === "dispatch" && ["exec", "complete"].includes(args.action) && index === 3) {
       args.role = arg;
       continue;
     }
@@ -186,6 +187,16 @@ function parseArgs(argv) {
         throw new Error("--adapter requires an adapter name.");
       }
       args.adapter = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "run" && arg === "--from") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--from requires a file path.");
+      }
+      args.fromFile = value;
       index += 1;
       continue;
     }

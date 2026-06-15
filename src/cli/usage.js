@@ -21,6 +21,7 @@ Usage:
   cewp run dispatch check
   cewp run dispatch prompts
   cewp run dispatch start --dry-run
+  cewp run dispatch complete <worker-a|worker-b|reviewer> --from <file>
   cewp run dispatch exec <role> --adapter codex-exec --dry-run
   cewp run dispatch exec <role> --adapter codex-exec --yes [--timeout <seconds>]
   cewp run dispatch exec workers --adapter codex-exec --yes [--timeout <seconds>]
@@ -63,6 +64,7 @@ Examples:
   cewp run dispatch check --run 20260528-232250
   cewp run dispatch prompts --run 20260528-232250
   cewp run dispatch start --run 20260528-232250 --dry-run
+  cewp run dispatch complete worker-a --run 20260528-232250 --from worker-a-report.md
   cewp run dispatch exec worker-a --run 20260528-232250 --adapter codex-exec --dry-run
   cewp run dispatch exec worker-a --run 20260528-232250 --adapter codex-exec --yes --timeout 120
   cewp run dispatch exec workers --run 20260528-232250 --adapter codex-exec --yes --timeout 120
