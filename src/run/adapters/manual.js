@@ -20,6 +20,18 @@ function getManualPromptPath(runRoot, role) {
   return path.join(getManualOutputRoot(runRoot), `${role}.md`);
 }
 
+function getManualResultOutputPath(runRoot, role) {
+  if (role === "reviewer") {
+    return path.join(runRoot, "reviews", "reviewer-report.md");
+  }
+
+  return path.join(runRoot, "reports", `${role}-report.md`);
+}
+
+function toRunRelative(runRoot, filePath) {
+  return path.relative(runRoot, filePath).replace(/\\/g, "/");
+}
+
 function checkAdapterAvailability() {
   return {
     adapter: MANUAL_ADAPTER,
@@ -37,22 +49,51 @@ function printCodexExecPreview({ runRoot, role, promptPath }) {
 
 function runDispatchAdapter({ runRoot, role, worktreePath, promptPath, outputLastMessagePath }) {
   const prompt = fs.readFileSync(promptPath, "utf8");
+  const runId = path.basename(runRoot);
   const manualPath = getManualPromptPath(runRoot, role);
+  const resultOutputPath = getManualResultOutputPath(runRoot, role);
+  const suggestedResultPath = path.join(getManualOutputRoot(runRoot), `${role}-result.md`);
   fs.mkdirSync(path.dirname(manualPath), { recursive: true });
   fs.mkdirSync(path.dirname(outputLastMessagePath), { recursive: true });
 
   const content = [
     `# Manual Adapter Handoff: ${role}`,
     "",
-    "The manual adapter did not execute code and did not call Codex or any external AI tool.",
+    "## Summary",
     "",
-    "Manual action is required:",
+    `Role: ${role}`,
+    `Run ID: ${runId}`,
+    `Run path: ${runRoot}`,
+    `Working directory: ${worktreePath}`,
+    "",
+    "## Manual Action Required",
+    "",
+    MANUAL_ACTION_REASON,
+    "The manual adapter did not execute code and did not call Codex or any external AI tool.",
+    "External command: not executed",
+    "",
+    "## Complete The Manual Result",
     "",
     "1. Review the dispatch prompt below.",
     "2. Perform the requested work yourself in the indicated working directory.",
-    "3. Write the expected CEWP report and event outputs before continuing the workflow.",
+    "3. Save your completed result to a Markdown file.",
+    "4. Record that result with CEWP so collect/review can continue.",
     "",
-    `Working directory: ${worktreePath}`,
+    `Suggested result file: ${toRunRelative(runRoot, suggestedResultPath)}`,
+    `Expected CEWP output: ${toRunRelative(runRoot, resultOutputPath)}`,
+    "",
+    "```powershell",
+    `cewp run dispatch complete ${role} --run ${runId} --from <file>`,
+    "```",
+    "",
+    "The shorter form also works from the repo when this is the latest run:",
+    "",
+    "```powershell",
+    `cewp run dispatch complete ${role} --from <file>`,
+    "```",
+    "",
+    "## Paths",
+    "",
     `Prompt source: ${promptPath}`,
     `Last-message marker: ${outputLastMessagePath}`,
     "",

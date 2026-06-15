@@ -59,7 +59,7 @@ It does not call Codex, external AI tools, local models, or provider CLIs. For d
 
 It also writes an adapter last-message marker explaining that manual action is required. Dispatch output prints the selected provider, the handoff artifact path, and `External command: not executed`. The result fails closed because CEWP has not performed the worker or reviewer work automatically.
 
-After a human completes the handoff, `cewp run dispatch complete <role> --from <file>` records the provided result text into the role's expected CEWP output path. Worker roles write `reports/<role>-report.md`; the reviewer role writes `reviews/reviewer-report.md`. The command also writes a last-message marker and event entry, but it does not bypass scope checks or the reviewer decision gate.
+The handoff file includes the role, run id, run path, original dispatch prompt, suggested result location, expected CEWP output path, and exact `cewp run dispatch complete <role> --from <file>` command. After a human completes the handoff, `cewp run dispatch complete <role> --from <file>` records the provided result text into the role's expected CEWP output path. Worker roles write `reports/<role>-report.md`; the reviewer role writes `reviews/reviewer-report.md`. The command also writes a last-message marker and event entry, but it does not bypass scope checks or the reviewer decision gate.
 
 ## Adapter Registry And Config Foundation
 

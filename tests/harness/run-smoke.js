@@ -618,6 +618,15 @@ async function main() {
       assertFileExists(lastMessagePath, "manual worker last message");
       const manualContent = fs.readFileSync(manualPath, "utf8");
       assertIncludes(manualContent, "The manual adapter did not execute code", "manual handoff non-executing");
+      assertIncludes(manualContent, `Role: worker-a`, "manual handoff role");
+      assertIncludes(manualContent, `Run ID: ${runId}`, "manual handoff run id");
+      assertIncludes(manualContent, `.cewp${path.sep}runs${path.sep}${runId}`, "manual handoff run path");
+      assertIncludes(manualContent, "manual action required; adapter did not execute code.", "manual handoff action required");
+      assertIncludes(manualContent, "External command: not executed", "manual handoff external command");
+      assertIncludes(manualContent, "Save your completed result to a Markdown file", "manual handoff result save guidance");
+      assertIncludes(manualContent, "Expected CEWP output: reports/worker-a-report.md", "manual handoff expected output path");
+      assertIncludes(manualContent, "cewp run dispatch complete worker-a --run", "manual handoff complete command");
+      assertIncludes(manualContent, "--from <file>", "manual handoff complete from placeholder");
       assertIncludes(manualContent, "## Dispatch Prompt", "manual handoff prompt");
 
       const manualResultPath = path.join(manualRepo, "manual-result-worker-a.md");
