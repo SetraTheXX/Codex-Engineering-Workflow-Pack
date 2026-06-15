@@ -11,7 +11,7 @@ Usage:
   cewp policy set <safe|trusted|full-authority>
   cewp policy reset
   cewp run init --workers <count> --reviewer
-  cewp run status
+  cewp run status [run-id]
   cewp run prompts
   cewp run prompt <manager|worker-a|worker-b|reviewer>
   cewp run worktrees plan
@@ -54,6 +54,7 @@ Examples:
   cewp policy reset
   cewp run init --workers 2 --reviewer
   cewp run status
+  cewp run status 20260528-232250
   cewp run status --run 20260528-232250
   cewp run prompts
   cewp run prompt manager --run 20260528-232250

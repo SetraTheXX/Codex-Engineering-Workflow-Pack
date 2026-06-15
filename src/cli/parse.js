@@ -77,6 +77,11 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (args.command === "run" && args.subcommand === "status" && index === 2 && !arg.startsWith("--")) {
+      args.runId = arg;
+      continue;
+    }
+
     if (args.command === "run" && args.subcommand === "worktrees" && index === 2) {
       args.action = arg;
       continue;

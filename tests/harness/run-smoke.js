@@ -172,6 +172,39 @@ function assertRunIsNotCompleted(repoRoot, runId, label) {
   assert(boardJson.status !== "completed", `${label} board.json should not be completed`);
 }
 
+function snapshotRunFiles(runRoot) {
+  const snapshot = new Map();
+
+  function visit(directory) {
+    if (!fs.existsSync(directory)) {
+      return;
+    }
+
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name);
+
+      if (entry.isDirectory()) {
+        visit(entryPath);
+        continue;
+      }
+
+      const stat = fs.statSync(entryPath);
+      snapshot.set(path.relative(runRoot, entryPath), `${stat.size}:${stat.mtimeMs}`);
+    }
+  }
+
+  visit(runRoot);
+  return snapshot;
+}
+
+function assertSnapshotsEqual(before, after, label) {
+  assert(before.size === after.size, `${label} file count changed`);
+
+  for (const [filePath, value] of before.entries()) {
+    assert(after.get(filePath) === value, `${label} changed ${filePath}`);
+  }
+}
+
 function pruneFixture(repoRoot) {
   const runsRoot = path.join(repoRoot, ".cewp", "runs");
   fs.mkdirSync(runsRoot, { recursive: true });
@@ -194,7 +227,9 @@ async function main() {
 
   try {
     await step("cli help", () => {
-      assertExit(cewp(["--help"], cewpRoot), 0, "cewp --help");
+      const help = cewp(["--help"], cewpRoot);
+      assertExit(help, 0, "cewp --help");
+      assertIncludes(help.stdout, "cewp run status [run-id]", "help includes operator run status");
     });
 
     await step("doctor", () => {
@@ -629,6 +664,28 @@ async function main() {
       assertIncludes(manualContent, "--from <file>", "manual handoff complete from placeholder");
       assertIncludes(manualContent, "## Dispatch Prompt", "manual handoff prompt");
 
+      const missingStatus = cewp(["run", "status", "20260529-999999"], manualRepo);
+      assertExit(missingStatus, 1, "operator status missing run");
+      assertIncludes(missingStatus.stderr, "CEWP run not found: 20260529-999999", "operator status missing run message");
+
+      const runRoot = path.join(manualRepo, ".cewp", "runs", runId);
+      const beforeStatus = snapshotRunFiles(runRoot);
+      const statusWithHandoff = cewp(["run", "status", runId], manualRepo);
+      const afterStatus = snapshotRunFiles(runRoot);
+      assertExit(statusWithHandoff, 0, "operator status manual handoff");
+      assertSnapshotsEqual(beforeStatus, afterStatus, "operator status should be read-only");
+      assertIncludes(statusWithHandoff.stdout, "CEWP Coordinator Mode status", "operator status heading");
+      assertIncludes(statusWithHandoff.stdout, `Run ID: ${runId}`, "operator status run id");
+      assertIncludes(statusWithHandoff.stdout, "Artifacts:", "operator status artifacts");
+      assertIncludes(statusWithHandoff.stdout, "manual handoff: manual/worker-a.md", "operator status handoff path");
+      assertIncludes(statusWithHandoff.stdout, "last message: adapter-output/worker-a-last-message.md", "operator status last message path");
+      assertIncludes(statusWithHandoff.stdout, "Manual handoffs: manual/worker-a.md", "operator status manual inventory");
+      assertIncludes(statusWithHandoff.stdout, "Last-message markers: adapter-output/worker-a-last-message.md", "operator status last-message inventory");
+      assertIncludes(statusWithHandoff.stdout, "Event files:", "operator status event files");
+      assertIncludes(statusWithHandoff.stdout, "Events:", "operator status event count");
+      assertIncludes(statusWithHandoff.stdout, "Next suggested actions:", "operator status next actions heading");
+      assertIncludes(statusWithHandoff.stdout, `cewp run dispatch complete worker-a --run ${runId} --from <file>`, "operator status manual completion hint");
+
       const manualResultPath = path.join(manualRepo, "manual-result-worker-a.md");
       writeFile(
         manualResultPath,
@@ -645,10 +702,25 @@ async function main() {
       assertIncludes(fs.readFileSync(reportPath, "utf8"), "Manual completion recorded by harness.", "manual complete report content");
       assertIncludes(fs.readFileSync(lastMessagePath, "utf8"), "Manual result recorded", "manual complete last message");
 
+      const statusWithReport = cewp(["run", "status", "--run", runId], manualRepo);
+      assertExit(statusWithReport, 0, "operator status worker report");
+      assertIncludes(statusWithReport.stdout, "report: reports/worker-a-report.md", "operator status worker report presence");
+      assertIncludes(statusWithReport.stdout, "Reports: reports/worker-a-report.md", "operator status report inventory");
+      assertIncludes(statusWithReport.stdout, `cewp run collect --run ${runId}`, "operator status collect hint");
+
       const collect = cewp(["run", "collect", "--run", runId], manualRepo);
       assertExit(collect, 0, "manual complete collect");
       const packetPath = path.join(manualRepo, ".cewp", "runs", runId, "review-packets", "review-packet.md");
       assertIncludes(fs.readFileSync(packetPath, "utf8"), "Manual completion recorded by harness.", "manual complete packet content");
+
+      writeFile(
+        path.join(manualRepo, ".cewp", "runs", runId, "reviews", "reviewer-report.md"),
+        "# Reviewer Report\n\nDecision: PASS\n\nReady to finalize.\n",
+      );
+      const statusWithPassReview = cewp(["run", "status", "--run", runId], manualRepo);
+      assertExit(statusWithPassReview, 0, "operator status reviewer PASS");
+      assertIncludes(statusWithPassReview.stdout, "report: reviews/reviewer-report.md", "operator status reviewer report presence");
+      assertIncludes(statusWithPassReview.stdout, `cewp run finalize --run ${runId} --dry-run`, "operator status finalize hint");
 
       const missing = cewp(["run", "dispatch", "complete", "worker-a", "--run", runId, "--from", path.join(manualRepo, "missing.md")], manualRepo);
       assertExit(missing, 1, "manual complete missing file");

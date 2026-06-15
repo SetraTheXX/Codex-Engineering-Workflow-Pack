@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added an operator-facing `cewp run status [run-id]` summary with artifact inventory and safe next-step hints.
+
 ## 0.4.0-beta.0
 
 ### Summary

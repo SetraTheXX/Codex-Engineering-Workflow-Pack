@@ -227,6 +227,102 @@ function chooseLatestEvent(entries) {
     .at(-1);
 }
 
+function toRunRelative(runRoot, filePath) {
+  return path.relative(runRoot, filePath).replace(/\\/g, "/");
+}
+
+function formatFileList(runRoot, files) {
+  if (files.length === 0) {
+    return "none";
+  }
+
+  return files.map((filePath) => toRunRelative(runRoot, filePath)).join(", ");
+}
+
+function countEventLines(eventFiles) {
+  return eventFiles.reduce((count, filePath) => {
+    const lines = fs
+      .readFileSync(filePath, "utf8")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    return count + lines.length;
+  }, 0);
+}
+
+function getArtifactRoles(boardJson) {
+  const roles = Object.keys((boardJson && boardJson.roles) || {});
+  const artifactRoles = roles.filter((role) => role.startsWith("worker-") || role === "reviewer");
+
+  if (artifactRoles.length === 0) {
+    return ["worker-a", "worker-b", "reviewer"];
+  }
+
+  return artifactRoles.sort();
+}
+
+function getExpectedReportPath(runRoot, role) {
+  if (role === "reviewer") {
+    return path.join(runRoot, "reviews", "reviewer-report.md");
+  }
+
+  return path.join(runRoot, "reports", `${role}-report.md`);
+}
+
+function getManualHandoffPath(runRoot, role) {
+  return path.join(runRoot, "manual", `${role}.md`);
+}
+
+function getLastMessagePath(runRoot, role) {
+  return path.join(runRoot, "adapter-output", `${role}-last-message.md`);
+}
+
+function getReviewerDecision(reviewFiles) {
+  for (const filePath of reviewFiles) {
+    const content = fs.readFileSync(filePath, "utf8");
+    const match = content.match(/^\s*Decision\s*:\s*(PASS|REQUEST_CHANGES|BLOCK)\b/im);
+
+    if (match) {
+      return {
+        decision: match[1],
+        filePath,
+      };
+    }
+  }
+
+  return undefined;
+}
+
+function getNextActions({ runId, runRoot, artifactRoles, reportFiles, reviewFiles, reviewPacketFiles }) {
+  const actions = [];
+  const reportSet = new Set([...reportFiles, ...reviewFiles]);
+
+  for (const role of artifactRoles) {
+    const handoffPath = getManualHandoffPath(runRoot, role);
+    const reportPath = getExpectedReportPath(runRoot, role);
+
+    if (fs.existsSync(handoffPath) && !reportSet.has(reportPath)) {
+      actions.push(`cewp run dispatch complete ${role} --run ${runId} --from <file>`);
+    }
+  }
+
+  if (reportFiles.length > 0 && reviewPacketFiles.length === 0) {
+    actions.push(`cewp run collect --run ${runId}`);
+  }
+
+  const reviewerDecision = getReviewerDecision(reviewFiles);
+  if (reviewerDecision && reviewerDecision.decision === "PASS") {
+    actions.push(`cewp run finalize --run ${runId} --dry-run`);
+  }
+
+  if (actions.length === 0) {
+    actions.push("No obvious next action detected. Inspect run artifacts before proceeding.");
+  }
+
+  return actions;
+}
+
 function runStatus(options = {}) {
   const { runId, runRoot } = findRun(options);
   const runJson = readJsonIfExists(path.join(runRoot, "run.json"));
@@ -235,11 +331,24 @@ function runStatus(options = {}) {
   const tasks = taskFiles.map((filePath) => readJsonIfExists(filePath)).filter(Boolean);
   const reportFiles = listFiles(path.join(runRoot, "reports"), ".md");
   const reviewFiles = listFiles(path.join(runRoot, "reviews"), ".md");
+  const manualFiles = listFiles(path.join(runRoot, "manual"), ".md");
+  const lastMessageFiles = listFiles(path.join(runRoot, "adapter-output"), "-last-message.md");
+  const reviewPacketFiles = listFiles(path.join(runRoot, "review-packets"), ".md");
   const eventFiles = listFiles(path.join(runRoot, "events"), ".jsonl");
+  const eventCount = countEventLines(eventFiles);
   const statusCounts = getTaskStatusCounts(tasks);
   const lastEvents = eventFiles
     .flatMap((filePath) => readEvents(filePath).map((event) => ({ filePath, event })));
   const lastEvent = chooseLatestEvent(lastEvents);
+  const artifactRoles = getArtifactRoles(boardJson);
+  const nextActions = getNextActions({
+    runId,
+    runRoot,
+    artifactRoles,
+    reportFiles,
+    reviewFiles,
+    reviewPacketFiles,
+  });
 
   console.log("CEWP Coordinator Mode status");
   console.log(`Run ID: ${runId}`);
@@ -270,8 +379,27 @@ function runStatus(options = {}) {
   }
 
   console.log("");
-  console.log(`Reports: ${reportFiles.length ? reportFiles.map((filePath) => path.basename(filePath)).join(", ") : "none"}`);
-  console.log(`Reviews: ${reviewFiles.length ? reviewFiles.map((filePath) => path.basename(filePath)).join(", ") : "none"}`);
+  console.log("Artifacts:");
+  for (const role of artifactRoles) {
+    const reportPath = getExpectedReportPath(runRoot, role);
+    const handoffPath = getManualHandoffPath(runRoot, role);
+    const lastMessagePath = getLastMessagePath(runRoot, role);
+
+    console.log(`  ${role}:`);
+    console.log(`    report: ${fs.existsSync(reportPath) ? toRunRelative(runRoot, reportPath) : "missing"}`);
+    console.log(`    manual handoff: ${fs.existsSync(handoffPath) ? toRunRelative(runRoot, handoffPath) : "missing"}`);
+    console.log(`    last message: ${fs.existsSync(lastMessagePath) ? toRunRelative(runRoot, lastMessagePath) : "missing"}`);
+  }
+
+  console.log("");
+  console.log("Artifact inventory:");
+  console.log(`  Reports: ${formatFileList(runRoot, reportFiles)}`);
+  console.log(`  Reviews: ${formatFileList(runRoot, reviewFiles)}`);
+  console.log(`  Manual handoffs: ${formatFileList(runRoot, manualFiles)}`);
+  console.log(`  Last-message markers: ${formatFileList(runRoot, lastMessageFiles)}`);
+  console.log(`  Review packets: ${formatFileList(runRoot, reviewPacketFiles)}`);
+  console.log(`  Event files: ${eventFiles.length}`);
+  console.log(`  Events: ${eventCount}`);
   console.log("");
 
   if (lastEvent) {
@@ -279,6 +407,12 @@ function runStatus(options = {}) {
     console.log(`Last event: ${typeof lastEvent.event.value === "string" ? lastEvent.event.value : JSON.stringify(lastEvent.event.value)}`);
   } else {
     console.log("Last event: none");
+  }
+
+  console.log("");
+  console.log("Next suggested actions:");
+  for (const action of nextActions) {
+    console.log(`  ${action}`);
   }
 }
 
