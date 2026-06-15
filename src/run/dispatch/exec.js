@@ -33,6 +33,31 @@ function findReviewerDecisionStrict(filePath) {
   return match ? match[1] : undefined;
 }
 
+function getAdapterExecutionName(adapter) {
+  return adapter.executionName || "codex exec";
+}
+
+function checkAdapterAvailability(adapter) {
+  if (adapter.checkAdapterAvailability) {
+    return adapter.checkAdapterAvailability();
+  }
+  return adapter.checkCodexExecAvailability();
+}
+
+function runDispatchAdapter(adapter, args) {
+  if (adapter.runDispatchAdapter) {
+    return adapter.runDispatchAdapter(args);
+  }
+  return adapter.runCodexExecAdapter(args);
+}
+
+function formatAdapterExitReason(adapter, exitCode) {
+  if (adapter.formatExitReason) {
+    return adapter.formatExitReason(exitCode);
+  }
+  return `codex exec exited with code ${exitCode}.`;
+}
+
 function getDispatchExecPreview(options) {
   const supportedRoles = ["worker-a", "worker-b", "reviewer"];
   const shouldPrint = options.printPreview !== false;
@@ -188,7 +213,7 @@ function getDispatchExecPreview(options) {
   }
 
   if (shouldPrint) {
-    console.log("CEWP Coordinator Mode codex-exec adapter dry-run");
+    console.log(`CEWP Coordinator Mode ${adapterName} adapter dry-run`);
     console.log(`Run ID: ${runId}`);
     console.log(`Role: ${options.role}`);
     console.log(`Adapter: ${adapterName}`);
@@ -246,7 +271,7 @@ function getDispatchExecPreview(options) {
       console.log(`  Last message: ${relativeRunPath(runRoot, preview.outputLastMessagePath)}`);
       console.log("");
       console.log("Recommended execution strategy:");
-      console.log("  Pass prompt content to codex exec from the dispatch prompt file.");
+      console.log(`  Use the ${adapterName} adapter with the dispatch prompt file.`);
       console.log("  Do not inline the full prompt in a shell command.");
       console.log("");
       adapter.printCodexExecPreview({
@@ -300,10 +325,10 @@ function runDispatchReviewerExecActual(options, preflight) {
   const { runId, runRoot, runJson, failures, warnings, preview } = preflight;
 
   if (failures.length > 0) {
-    console.log("CEWP Coordinator Mode codex-exec reviewer execution");
+    console.log("CEWP Coordinator Mode reviewer execution");
     console.log(`Run ID: ${runId}`);
     console.log("Role: reviewer");
-    console.log("Adapter: codex-exec");
+    console.log(`Adapter: ${adapterName}`);
     console.log("");
     console.log("Preflight: FAIL");
     console.log("Failures:");
@@ -326,13 +351,13 @@ function runDispatchReviewerExecActual(options, preflight) {
     });
   }
 
-  const availability = adapter.checkCodexExecAvailability();
+  const availability = checkAdapterAvailability(adapter);
   if (availability.status !== "PASS") {
     const reason = `adapter availability failed: ${availability.reason}`;
-    console.log("CEWP Coordinator Mode codex-exec reviewer execution");
+    console.log("CEWP Coordinator Mode reviewer execution");
     console.log(`Run ID: ${runId}`);
     console.log("Role: reviewer");
-    console.log("Adapter: codex-exec");
+    console.log(`Adapter: ${adapterName}`);
     console.log("");
     console.log("Preflight: FAIL");
     console.log("Failures:");
@@ -360,8 +385,10 @@ function runDispatchReviewerExecActual(options, preflight) {
   fs.mkdirSync(adapterOutputRoot, { recursive: true });
 
   console.log("");
-  console.log("Executing codex exec reviewer...");
-  const execResult = adapter.runCodexExecAdapter({
+  console.log(`Executing ${getAdapterExecutionName(adapter)} reviewer...`);
+  const execResult = runDispatchAdapter(adapter, {
+    runRoot,
+    role: "reviewer",
     worktreePath: preview.cwd,
     promptPath: preview.promptPath,
     outputLastMessagePath: preview.outputLastMessagePath,
@@ -384,11 +411,11 @@ function runDispatchReviewerExecActual(options, preflight) {
   const warningsAfterExec = [];
 
   if (timedOut) {
-    failuresAfterExec.push(`codex exec timed out after ${options.timeoutSeconds}s.`);
+    failuresAfterExec.push(`${getAdapterExecutionName(adapter)} timed out after ${options.timeoutSeconds}s.`);
   }
 
   if (exitCode !== 0) {
-    failuresAfterExec.push(`codex exec exited with code ${exitCode}.`);
+    failuresAfterExec.push(formatAdapterExitReason(adapter, exitCode));
   }
 
   if (!reportExists) {
@@ -413,7 +440,7 @@ function runDispatchReviewerExecActual(options, preflight) {
   appendRunEvent(runRoot, "cli", {
     event: status === "PASS" ? "dispatch_exec_completed" : "dispatch_exec_failed",
     runId,
-    adapter: "codex-exec",
+    adapter: adapterName,
     role: "reviewer",
     exitCode,
     status,
@@ -421,10 +448,10 @@ function runDispatchReviewerExecActual(options, preflight) {
   });
 
   console.log("");
-  console.log("CEWP Coordinator Mode codex-exec reviewer execution");
+  console.log("CEWP Coordinator Mode reviewer execution");
   console.log(`Run ID: ${runId}`);
   console.log("Role: reviewer");
-  console.log("Adapter: codex-exec");
+  console.log(`Adapter: ${adapterName}`);
   console.log("");
   console.log(`Preflight: ${warnings.length > 0 ? "WARN" : "PASS"}`);
   console.log(`Execution: ${exitCode === 0 && !timedOut ? "PASS" : "FAIL"}`);
@@ -502,10 +529,10 @@ function runDispatchExecActual(options = {}) {
   }
 
   if (failures.length > 0) {
-    console.log("CEWP Coordinator Mode codex-exec execution");
+    console.log("CEWP Coordinator Mode execution");
     console.log(`Run ID: ${runId}`);
     console.log(`Role: ${options.role}`);
-    console.log("Adapter: codex-exec");
+    console.log(`Adapter: ${adapterName}`);
     console.log("");
     console.log("Preflight: FAIL");
     console.log("Failures:");
@@ -528,13 +555,13 @@ function runDispatchExecActual(options = {}) {
     });
   }
 
-  const availability = adapter.checkCodexExecAvailability();
+  const availability = checkAdapterAvailability(adapter);
   if (availability.status !== "PASS") {
     const reason = `adapter availability failed: ${availability.reason}`;
-    console.log("CEWP Coordinator Mode codex-exec execution");
+    console.log("CEWP Coordinator Mode execution");
     console.log(`Run ID: ${runId}`);
     console.log(`Role: ${options.role}`);
-    console.log("Adapter: codex-exec");
+    console.log(`Adapter: ${adapterName}`);
     console.log("");
     console.log("Preflight: FAIL");
     console.log("Failures:");
@@ -560,8 +587,10 @@ function runDispatchExecActual(options = {}) {
   fs.mkdirSync(adapterOutputRoot, { recursive: true });
 
   console.log("");
-  console.log("Executing codex exec...");
-  const execResult = adapter.runCodexExecAdapter({
+  console.log(`Executing ${getAdapterExecutionName(adapter)}...`);
+  const execResult = runDispatchAdapter(adapter, {
+    runRoot,
+    role: options.role,
     worktreePath: preview.cwd,
     promptPath: preview.promptPath,
     outputLastMessagePath: preview.outputLastMessagePath,
@@ -604,11 +633,11 @@ function runDispatchExecActual(options = {}) {
   const warningsAfterExec = [];
 
   if (timedOut) {
-    failuresAfterExec.push(`codex exec timed out after ${options.timeoutSeconds}s.`);
+    failuresAfterExec.push(`${getAdapterExecutionName(adapter)} timed out after ${options.timeoutSeconds}s.`);
   }
 
   if (exitCode !== 0) {
-    failuresAfterExec.push(`codex exec exited with code ${exitCode}.`);
+    failuresAfterExec.push(formatAdapterExitReason(adapter, exitCode));
   }
 
   if (!preview.worktree.baseCommit) {
@@ -640,7 +669,7 @@ function runDispatchExecActual(options = {}) {
   appendRunEvent(runRoot, "cli", {
     event: status === "PASS" ? "dispatch_exec_completed" : "dispatch_exec_failed",
     runId,
-    adapter: "codex-exec",
+    adapter: adapterName,
     role: options.role,
     exitCode,
     status,
@@ -650,10 +679,10 @@ function runDispatchExecActual(options = {}) {
   });
 
   console.log("");
-  console.log("CEWP Coordinator Mode codex-exec execution");
+  console.log("CEWP Coordinator Mode execution");
   console.log(`Run ID: ${runId}`);
   console.log(`Role: ${options.role}`);
-  console.log("Adapter: codex-exec");
+  console.log(`Adapter: ${adapterName}`);
   console.log("");
   console.log(`Preflight: ${warnings.length > 0 ? "WARN" : "PASS"}`);
   console.log(`Execution: ${exitCode === 0 && !timedOut ? "PASS" : "FAIL"}`);

@@ -23,6 +23,24 @@ function validatePipelineAdapter(options) {
   }
 }
 
+function getPipelineAdapterSummary(options = {}) {
+  const providers = Object.fromEntries(
+    ["worker-a", "worker-b", "reviewer"].map((role) => [
+      role,
+      resolveAdapterProviderForRole({
+        role,
+        adapterName: options.adapter,
+        commandName: "dispatch pipeline",
+        requireAdapter: true,
+      }),
+    ]),
+  );
+  const uniqueProviders = Array.from(new Set(Object.values(providers)));
+  return uniqueProviders.length === 1
+    ? uniqueProviders[0]
+    : `worker-a=${providers["worker-a"]}, worker-b=${providers["worker-b"]}, reviewer=${providers.reviewer}`;
+}
+
 function runDispatchPipelineDryRun(options = {}) {
   validatePipelineAdapter(options);
 
@@ -35,7 +53,7 @@ function runDispatchPipelineDryRun(options = {}) {
 
   console.log("CEWP Coordinator Mode dispatch pipeline");
   console.log(`Run ID: ${runId}`);
-  console.log("Adapter: codex-exec");
+  console.log(`Adapter: ${getPipelineAdapterSummary(options)}`);
   console.log(`Mode: dry-run ${options.parallel ? "parallel" : "sequential"} preview`);
   console.log("");
 
@@ -151,7 +169,7 @@ async function runDispatchPipelineActual(options = {}) {
 
   console.log("CEWP Coordinator Mode dispatch pipeline");
   console.log(`Run ID: ${runId}`);
-  console.log("Adapter: codex-exec");
+  console.log(`Adapter: ${getPipelineAdapterSummary(options)}`);
   console.log(`Mode: ${options.parallel ? "parallel" : "sequential"}`);
   console.log("");
 

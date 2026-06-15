@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { resolveTarget, getSkillStatus } = require("./paths");
-const { checkCodexExecAvailability } = require("../run/adapters/codex-exec");
+const { getAdapter, getSupportedAdapterNames } = require("../run/adapters/registry");
 const { ADAPTER_CONFIG_FILE, ADAPTER_CONFIG_ROLES, loadAdapterConfig } = require("../run/adapters/config");
 
 function list(options) {
@@ -43,10 +43,15 @@ function doctor(options) {
     console.log(`[${state}] ${status.skill}`);
   }
 
-  const adapterAvailability = checkCodexExecAvailability();
   console.log("");
   console.log("Adapter availability:");
-  console.log(`[${adapterAvailability.status === "PASS" ? "OK" : "WARN"}] codex-exec: ${adapterAvailability.reason}`);
+  for (const adapterName of getSupportedAdapterNames()) {
+    const adapter = getAdapter(adapterName, { commandName: "doctor" });
+    const availability = adapter.checkAdapterAvailability
+      ? adapter.checkAdapterAvailability()
+      : adapter.checkCodexExecAvailability();
+    console.log(`[${availability.status === "PASS" ? "OK" : "WARN"}] ${adapterName}: ${availability.reason}`);
+  }
 
   const adapterConfig = loadAdapterConfig(process.cwd());
   const adapterConfigSource = fs.existsSync(path.join(process.cwd(), ADAPTER_CONFIG_FILE)) ? ADAPTER_CONFIG_FILE : "default";

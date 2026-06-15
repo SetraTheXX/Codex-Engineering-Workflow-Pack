@@ -1,11 +1,14 @@
 "use strict";
 
 const codexExec = require("./codex-exec");
+const manual = require("./manual");
 
 const CODEX_EXEC_ADAPTER = "codex-exec";
+const MANUAL_ADAPTER = "manual";
 
 const adapters = new Map([
   [CODEX_EXEC_ADAPTER, codexExec],
+  [MANUAL_ADAPTER, manual],
 ]);
 
 function getSupportedAdapterNames() {
@@ -45,6 +48,7 @@ function getAdapter(adapterName, options = {}) {
 
 module.exports = {
   CODEX_EXEC_ADAPTER,
+  MANUAL_ADAPTER,
   getSupportedAdapterNames,
   formatSupportedAdapters,
   missingAdapterMessage,

@@ -2,7 +2,7 @@
 
 Status: public contract note. This document describes the adapter boundary used by Coordinator Mode.
 
-CEWP currently executes agents through the guarded `codex-exec` adapter. The goal of this contract is to make the execution boundary clear without weakening Coordinator Mode guardrails. CEWP includes a minimal adapter registry and role-based config normalization foundation, but `codex-exec` is currently the only supported provider. External provider support is not implemented by this document.
+CEWP currently supports the guarded `codex-exec` execution adapter and a non-executing `manual` adapter. The goal of this contract is to make the execution boundary clear without weakening Coordinator Mode guardrails. CEWP includes a minimal adapter registry and role-based config normalization foundation. External AI provider support is not implemented by this document.
 
 ## What Is A CEWP Adapter?
 
@@ -24,7 +24,9 @@ The adapter should not own:
 
 Those controls remain CEWP responsibilities.
 
-## Current Adapter: `codex-exec`
+## Current Adapters
+
+### `codex-exec`
 
 The current production adapter is `codex-exec`.
 
@@ -45,12 +47,25 @@ Current behavior:
 
 The test harness can replace the executable through environment variables so lifecycle tests can run without real `codex exec` calls.
 
+### `manual`
+
+The `manual` adapter is a non-executing handoff adapter.
+
+It does not call Codex, external AI tools, local models, or provider CLIs. For dispatch execution, it writes a role-specific handoff prompt under:
+
+```txt
+.cewp/runs/<run-id>/manual/<role>.md
+```
+
+It also writes an adapter last-message marker explaining that manual action is required. The result fails closed because CEWP has not performed the worker or reviewer work automatically.
+
 ## Adapter Registry And Config Foundation
 
-CEWP has a minimal internal adapter registry. The registry currently supports only:
+CEWP has a minimal internal adapter registry. The registry currently supports:
 
 ```txt
 codex-exec
+manual
 ```
 
 Dispatch execution resolves the selected provider through a role-aware config normalization helper before looking it up in the registry. The recognized roles are:
@@ -77,7 +92,7 @@ CEWP may also read an optional root-level `cewp.config.json` file. Only the top-
 }
 ```
 
-When the file is missing, CEWP keeps the default `codex-exec` provider for every role. A CLI `--adapter` value overrides the selected role. Invalid JSON fails with a clear `Invalid cewp.config.json JSON` message, and unsupported providers fail through the adapter registry. The only supported provider is still `codex-exec`; external provider implementations are not included.
+When the file is missing, CEWP keeps the default `codex-exec` provider for every role. A CLI `--adapter` value overrides the selected role. Invalid JSON fails with a clear `Invalid cewp.config.json JSON` message, and unsupported providers fail through the adapter registry. Supported providers are `codex-exec` and `manual`; external provider implementations are not included.
 
 `cewp doctor` reports the adapter config source and resolved provider for each role.
 
@@ -90,7 +105,7 @@ The provider-independent lifecycle should stay stable:
    - Run CEWP policy and preflight checks before starting provider execution.
 
 2. Execute
-   - Invoke the provider with the prepared prompt and role-specific working directory.
+   - Invoke the provider with the prepared prompt and role-specific working directory, or write a non-executing manual handoff when using `manual`.
    - Use role-appropriate sandbox or permission settings.
    - Respect timeout settings.
 
@@ -213,7 +228,7 @@ Adapter execution is summarized internally as a small structured result:
 
 ## Adapter Availability
 
-`codex-exec` includes a side-effect-free availability check.
+`codex-exec` includes a side-effect-free availability check. `manual` reports itself available because it only writes local handoff files and does not execute external commands.
 
 The check:
 - accepts `CEWP_CODEX_EXEC_COMMAND` as an explicit command override,

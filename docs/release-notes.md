@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a non-executing `manual` adapter that writes role handoff prompts and fails closed until manual action is completed.
+
 ## 0.3.1-beta.0
 
 ### Summary

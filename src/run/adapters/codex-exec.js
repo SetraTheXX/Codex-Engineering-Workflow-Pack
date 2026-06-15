@@ -267,6 +267,7 @@ module.exports = {
   copyWorkerOutputToRun,
   getCodexExecCommand,
   getCodexExecPrefixArgs,
+  checkAdapterAvailability: checkCodexExecAvailability,
   checkCodexExecAvailability,
   buildCodexExecInvocation,
   runCodexExecAdapter,

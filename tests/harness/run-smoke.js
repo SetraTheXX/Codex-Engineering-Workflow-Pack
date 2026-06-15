@@ -25,6 +25,8 @@ const {
 } = require("./lib/temp-repo");
 const { createFakeCodexAdapter } = require("./lib/fake-adapter");
 const { buildCodexExecInvocation, checkCodexExecAvailability, normalizeAdapterResult } = require("../../src/run/adapters/codex-exec");
+const { normalizeAdapterResult: normalizeManualAdapterResult } = require("../../src/run/adapters/manual");
+const { getSupportedAdapterNames } = require("../../src/run/adapters/registry");
 const { loadAdapterConfig, normalizeAdapterConfig, resolveAdapterProviderForRole } = require("../../src/run/adapters/config");
 
 const cewpRoot = path.resolve(__dirname, "..", "..");
@@ -215,7 +217,7 @@ async function main() {
       writeJson(path.join(doctorConfigRepo, "cewp.config.json"), {
         adapters: {
           manager: { provider: "codex-exec" },
-          "worker-a": { provider: "codex-exec" },
+          "worker-a": { provider: "manual" },
           "worker-b": { provider: "codex-exec" },
           reviewer: { provider: "codex-exec" },
         },
@@ -225,7 +227,8 @@ async function main() {
       assertExit(validDoctor, 0, "doctor valid adapter config");
       assertIncludes(validDoctor.stdout, "Adapter config:", "doctor valid config section");
       assertIncludes(validDoctor.stdout, "Source: cewp.config.json", "doctor config file source");
-      assertIncludes(validDoctor.stdout, "worker-a: codex-exec", "doctor valid config worker-a");
+      assertIncludes(validDoctor.stdout, "manual: manual adapter writes handoff prompts", "doctor manual availability");
+      assertIncludes(validDoctor.stdout, "worker-a: manual", "doctor valid config worker-a manual");
 
       const unsupportedRepo = makeTempRepo("cewp-harness-doctor-unsupported-");
       tempRepos.push(unsupportedRepo);
@@ -237,7 +240,7 @@ async function main() {
       });
       const unsupportedDoctor = cewp(["doctor"], unsupportedRepo);
       assertExit(unsupportedDoctor, 1, "doctor unsupported adapter config");
-      assertIncludes(unsupportedDoctor.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.", "doctor unsupported config message");
+      assertIncludes(unsupportedDoctor.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.", "doctor unsupported config message");
 
       const invalidJsonRepo = makeTempRepo("cewp-harness-doctor-invalid-json-");
       tempRepos.push(invalidJsonRepo);
@@ -330,13 +333,17 @@ async function main() {
     });
 
     await step("adapter registry validation", () => {
+      const supported = getSupportedAdapterNames();
+      assert(supported.includes("codex-exec"), "registry supports codex-exec");
+      assert(supported.includes("manual"), "registry supports manual");
+
       const execUnsupported = cewp(["run", "dispatch", "exec", "worker-a", "--adapter", "not-real", "--dry-run"], cewpRoot);
       assertExit(execUnsupported, 1, "unsupported dispatch exec adapter");
-      assertIncludes(execUnsupported.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.", "unsupported exec adapter message");
+      assertIncludes(execUnsupported.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.", "unsupported exec adapter message");
 
       const pipelineUnsupported = cewp(["run", "dispatch", "pipeline", "--adapter", "not-real", "--dry-run"], cewpRoot);
       assertExit(pipelineUnsupported, 1, "unsupported dispatch pipeline adapter");
-      assertIncludes(pipelineUnsupported.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.", "unsupported pipeline adapter message");
+      assertIncludes(pipelineUnsupported.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.", "unsupported pipeline adapter message");
     });
 
     await step("adapter result shape", () => {
@@ -359,6 +366,19 @@ async function main() {
       assert(result.reason === "codex exec exited with code 7.", "adapter result reason");
       assert(Array.isArray(result.reasons) && result.reasons.length === 1, "adapter result reasons");
       assert(result.paths.stdout === "adapter-output/worker-a-stdout.log", "adapter result paths");
+
+      const manualResult = normalizeManualAdapterResult({
+        role: "worker-a",
+        status: "FAIL",
+        exitCode: 1,
+        reasons: ["manual action required; adapter did not execute code."],
+        paths: {
+          handoff: "manual/worker-a.md",
+        },
+      });
+      assert(manualResult.adapter === "manual", "manual adapter result adapter name");
+      assert(manualResult.status === "FAIL", "manual adapter result status");
+      assert(manualResult.paths.handoff === "manual/worker-a.md", "manual adapter result paths");
     });
 
     await step("codex exec command construction", () => {
@@ -408,15 +428,15 @@ async function main() {
 
       const explicit = normalizeAdapterConfig({
         roles: {
-          "worker-a": { provider: "codex-exec" },
+          "worker-a": { provider: "manual" },
           reviewer: { provider: "codex-exec" },
         },
       });
-      assert(explicit["worker-a"].provider === "codex-exec", "explicit worker-a provider");
+      assert(explicit["worker-a"].provider === "manual", "explicit worker-a manual provider");
       assert(explicit.reviewer.provider === "codex-exec", "explicit reviewer provider");
       assert(explicit["worker-b"].provider === "codex-exec", "default worker-b provider remains");
       assert(
-        resolveAdapterProviderForRole({ role: "worker-a", adapterName: "codex-exec", commandName: "dispatch exec", requireAdapter: true }) === "codex-exec",
+        resolveAdapterProviderForRole({ role: "worker-a", adapterName: "manual", commandName: "dispatch exec", requireAdapter: true }) === "manual",
         "resolve worker-a adapter provider",
       );
 
@@ -427,7 +447,7 @@ async function main() {
         unsupportedProviderError = error;
       }
       assert(
-        unsupportedProviderError && unsupportedProviderError.message === "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.",
+        unsupportedProviderError && unsupportedProviderError.message === "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.",
         "unsupported adapter provider should fail",
       );
 
@@ -486,7 +506,7 @@ async function main() {
 
       const workersDryRun = cewp(["run", "dispatch", "exec", "workers", "--run", runId, "--dry-run"], validConfigRepo);
       assertExit(workersDryRun, 0, "config file workers dry-run");
-      assertIncludes(workersDryRun.stdout, "CEWP Coordinator Mode codex-exec workers dry-run", "config file workers dry-run header");
+      assertIncludes(workersDryRun.stdout, "CEWP Coordinator Mode dispatch workers dry-run", "config file workers dry-run header");
       assertIncludes(workersDryRun.stdout, "Role: worker-a", "config file workers worker-a role");
       assertIncludes(workersDryRun.stdout, "Role: worker-b", "config file workers worker-b role");
       assertIncludes(workersDryRun.stdout, "Adapter: codex-exec", "config file workers adapter");
@@ -517,15 +537,15 @@ async function main() {
       });
       const unsupported = cewp(["run", "dispatch", "exec", "worker-a", "--dry-run"], unsupportedRepo);
       assertExit(unsupported, 1, "unsupported config provider");
-      assertIncludes(unsupported.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.", "unsupported config provider message");
+      assertIncludes(unsupported.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.", "unsupported config provider message");
 
       const unsupportedWorkers = cewp(["run", "dispatch", "exec", "workers", "--dry-run"], unsupportedRepo);
       assertExit(unsupportedWorkers, 1, "unsupported config provider workers");
-      assertIncludes(unsupportedWorkers.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.", "unsupported config provider workers message");
+      assertIncludes(unsupportedWorkers.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.", "unsupported config provider workers message");
 
       const unsupportedPipeline = cewp(["run", "dispatch", "pipeline", "--dry-run"], unsupportedRepo);
       assertExit(unsupportedPipeline, 1, "unsupported config provider pipeline");
-      assertIncludes(unsupportedPipeline.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec.", "unsupported config provider pipeline message");
+      assertIncludes(unsupportedPipeline.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.", "unsupported config provider pipeline message");
 
       const invalidJsonRepo = makeTempRepo("cewp-harness-adapter-invalid-json-");
       tempRepos.push(invalidJsonRepo);
@@ -562,6 +582,39 @@ async function main() {
       assertExit(reviewerDryRun, 0, "config reviewer dry-run");
       assertIncludes(reviewerDryRun.stdout, "Role: reviewer", "config reviewer dry-run role");
       assertIncludes(reviewerDryRun.stdout, "Adapter: codex-exec", "config reviewer dry-run adapter");
+    });
+
+    await step("manual adapter worker handoff", () => {
+      const manualRepo = makeTempRepo("cewp-harness-manual-worker-");
+      tempRepos.push(manualRepo);
+      const { runId } = setupFakeAdapterRun(manualRepo);
+
+      const dryRun = cewp(["run", "dispatch", "exec", "worker-a", "--run", runId, "--adapter", "manual", "--dry-run"], manualRepo);
+      assertExit(dryRun, 0, "manual worker dry-run");
+      assertIncludes(dryRun.stdout, "Adapter: manual", "manual dry-run adapter");
+      assertIncludes(dryRun.stdout, "Manual adapter preview:", "manual dry-run preview");
+
+      const workersDryRun = cewp(["run", "dispatch", "exec", "workers", "--run", runId, "--adapter", "manual", "--dry-run"], manualRepo);
+      assertExit(workersDryRun, 0, "manual workers dry-run");
+      assertIncludes(workersDryRun.stdout, "Adapter: manual", "manual workers dry-run adapter");
+
+      const pipelineDryRun = cewp(["run", "dispatch", "pipeline", "--run", runId, "--adapter", "manual", "--dry-run"], manualRepo);
+      assertExit(pipelineDryRun, 0, "manual pipeline dry-run");
+      assertIncludes(pipelineDryRun.stdout, "Adapter: manual", "manual pipeline dry-run adapter");
+
+      const actual = cewp(["run", "dispatch", "exec", "worker-a", "--run", runId, "--adapter", "manual", "--yes"], manualRepo);
+      assertExit(actual, 1, "manual worker actual requires manual action");
+      assertIncludes(actual.stdout, "Adapter: manual", "manual actual adapter");
+      assertIncludes(actual.stdout, "manual action required; adapter did not execute code.", "manual action reason");
+      assertIncludes(actual.stdout, "No merge/push/publish was performed.", "manual no publish guard");
+
+      const manualPath = path.join(manualRepo, ".cewp", "runs", runId, "manual", "worker-a.md");
+      const lastMessagePath = path.join(manualRepo, ".cewp", "runs", runId, "adapter-output", "worker-a-last-message.md");
+      assertFileExists(manualPath, "manual worker handoff");
+      assertFileExists(lastMessagePath, "manual worker last message");
+      const manualContent = fs.readFileSync(manualPath, "utf8");
+      assertIncludes(manualContent, "The manual adapter did not execute code", "manual handoff non-executing");
+      assertIncludes(manualContent, "## Dispatch Prompt", "manual handoff prompt");
     });
 
     coordinatorRepo = makeTempRepo("cewp-harness-flow-");

@@ -46,6 +46,23 @@ function summarizeWorkerReason(reasons) {
   return firstReason.replace(/\.$/, "");
 }
 
+function getWorkerAdapterSummary(options = {}) {
+  const workerA = resolveAdapterProviderForRole({
+    role: "worker-a",
+    adapterName: options.adapter,
+    commandName: "dispatch exec",
+    requireAdapter: true,
+  });
+  const workerB = resolveAdapterProviderForRole({
+    role: "worker-b",
+    adapterName: options.adapter,
+    commandName: "dispatch exec",
+    requireAdapter: true,
+  });
+
+  return workerA === workerB ? workerA : `worker-a=${workerA}, worker-b=${workerB}`;
+}
+
 function getParallelWorkersPreflight(options = {}) {
   const roles = ["worker-a", "worker-b"];
   const failures = [];
@@ -213,7 +230,8 @@ function runDispatchExecWorkersDryRun(options = {}) {
   const roles = ["worker-a", "worker-b"];
   let hasFailure = false;
 
-  console.log("CEWP Coordinator Mode codex-exec workers dry-run");
+  console.log("CEWP Coordinator Mode dispatch workers dry-run");
+  console.log(`Adapter: ${getWorkerAdapterSummary(options)}`);
   console.log(`Mode: ${options.parallel ? "parallel preview" : "sequential preview"}`);
   console.log("");
 
@@ -250,17 +268,16 @@ function runDispatchExecWorkersDryRun(options = {}) {
 }
 
 async function runDispatchExecWorkersParallelActual(options = {}) {
-  resolveAdapterProviderForRole({ role: "worker-a", adapterName: options.adapter, commandName: "dispatch exec", requireAdapter: true });
-  resolveAdapterProviderForRole({ role: "worker-b", adapterName: options.adapter, commandName: "dispatch exec", requireAdapter: true });
+  const adapterSummary = getWorkerAdapterSummary(options);
 
   assertPolicyAllows(process.cwd(), "runWorkers");
 
   const { runId } = findRun(options);
   const preflight = getParallelWorkersPreflight(options);
 
-  console.log("CEWP Coordinator Mode codex-exec workers execution");
+  console.log("CEWP Coordinator Mode dispatch workers execution");
   console.log(`Run ID: ${runId}`);
-  console.log("Adapter: codex-exec");
+  console.log(`Adapter: ${adapterSummary}`);
   console.log("Mode: parallel");
   console.log("");
   printParallelWorkersPreflight(preflight);
@@ -307,7 +324,7 @@ async function runDispatchExecWorkersParallelActual(options = {}) {
   const overall = results.every((result) => result.status === "PASS") ? "PASS" : "FAIL";
 
   console.log("");
-  console.log("CEWP Coordinator Mode codex-exec workers summary");
+  console.log("CEWP Coordinator Mode dispatch workers summary");
   for (const result of results) {
     console.log(`${result.role}: ${result.status}${result.reason ? ` (${result.reason})` : ""}`);
   }
@@ -338,8 +355,7 @@ async function runDispatchExecWorkersActual(options = {}) {
     return runDispatchExecWorkersParallelActual(options);
   }
 
-  resolveAdapterProviderForRole({ role: "worker-a", adapterName: options.adapter, commandName: "dispatch exec", requireAdapter: true });
-  resolveAdapterProviderForRole({ role: "worker-b", adapterName: options.adapter, commandName: "dispatch exec", requireAdapter: true });
+  const adapterSummary = getWorkerAdapterSummary(options);
 
   assertPolicyAllows(process.cwd(), "runWorkers");
 
@@ -347,9 +363,9 @@ async function runDispatchExecWorkersActual(options = {}) {
   const results = [];
   let overall = "PASS";
 
-  console.log("CEWP Coordinator Mode codex-exec workers execution");
+  console.log("CEWP Coordinator Mode dispatch workers execution");
   console.log(`Run ID: ${runId}`);
-  console.log("Adapter: codex-exec");
+  console.log(`Adapter: ${adapterSummary}`);
   console.log("Mode: sequential");
   console.log("");
   console.log("Worker order:");
@@ -384,7 +400,7 @@ async function runDispatchExecWorkersActual(options = {}) {
   overall = results.some((result) => result.status === "FAIL") ? "FAIL" : overall;
 
   console.log("");
-  console.log("CEWP Coordinator Mode codex-exec workers summary");
+  console.log("CEWP Coordinator Mode dispatch workers summary");
   for (const result of results) {
     console.log(`${result.role}: ${result.status}${result.reason ? ` (${result.reason})` : ""}`);
   }
