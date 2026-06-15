@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.4.0-beta.0
+
+### Summary
+
+Manual adapter foundation for Phase 4 adapter experiments. This release adds a non-executing `manual` provider for human-run workflows while keeping external AI providers unimplemented.
+
+### Changed
+
 - Added a non-executing `manual` adapter that writes role handoff prompts and fails closed until manual action is completed.
 - Improved `manual` adapter dispatch output so handoff paths and non-execution status are visible in dry-run and actual summaries.
 - Added `cewp run dispatch complete <role> --from <file>` to record completed manual results into the expected run artifacts.

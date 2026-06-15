@@ -22,12 +22,12 @@ Usage:
   cewp run dispatch prompts
   cewp run dispatch start --dry-run
   cewp run dispatch complete <worker-a|worker-b|reviewer> --from <file>
-  cewp run dispatch exec <role> --adapter codex-exec --dry-run
-  cewp run dispatch exec <role> --adapter codex-exec --yes [--timeout <seconds>]
-  cewp run dispatch exec workers --adapter codex-exec --yes [--timeout <seconds>]
-  cewp run dispatch exec workers --adapter codex-exec --yes --parallel [--timeout <seconds>]
-  cewp run dispatch pipeline --adapter codex-exec --yes [--timeout <seconds>]
-  cewp run dispatch pipeline --adapter codex-exec --yes --parallel [--timeout <seconds>]
+  cewp run dispatch exec <role> --adapter <codex-exec|manual> --dry-run
+  cewp run dispatch exec <role> --adapter <codex-exec|manual> --yes [--timeout <seconds>]
+  cewp run dispatch exec workers --adapter <codex-exec|manual> --yes [--timeout <seconds>]
+  cewp run dispatch exec workers --adapter <codex-exec|manual> --yes --parallel [--timeout <seconds>]
+  cewp run dispatch pipeline --adapter <codex-exec|manual> --yes [--timeout <seconds>]
+  cewp run dispatch pipeline --adapter <codex-exec|manual> --yes --parallel [--timeout <seconds>]
   cewp run collect
   cewp run finalize [--dry-run]
   cewp run cleanup [--yes]
