@@ -2,7 +2,7 @@
 
 Status: public contract note. This document describes the adapter boundary used by Coordinator Mode.
 
-CEWP currently supports the guarded `codex-exec` execution adapter, a non-executing `manual` adapter, and an experimental `opencode` dry-run-only foundation. The goal of this contract is to make the execution boundary clear without weakening Coordinator Mode guardrails. CEWP includes a minimal adapter registry and role-based config normalization foundation. Real OpenCode execution and other external AI provider support are not implemented by this document.
+CEWP currently supports the guarded `codex-exec` execution adapter, a non-executing `manual` adapter, and an experimental `opencode` execution MVP. The goal of this contract is to make the execution boundary clear without weakening Coordinator Mode guardrails. CEWP includes a minimal adapter registry and role-based config normalization foundation. OpenCode support is experimental; Claude Code, Gemini, Hermes, local model, and other provider adapters are not implemented by this document.
 
 ## What Is A CEWP Adapter?
 
@@ -63,14 +63,14 @@ The handoff file includes the role, run id, run path, original dispatch prompt, 
 
 ### `opencode`
 
-The `opencode` adapter is an experimental foundation for future OpenCode integration.
+The `opencode` adapter is an experimental OpenCode integration MVP.
 
 Current behavior:
 - `--dry-run` previews the selected provider and intended command shape without starting OpenCode,
 - availability reports whether the `opencode` binary appears to be present,
 - `cewp.config.json` may resolve a role to `"opencode"`,
-- non-dry-run dispatch fails closed with `OpenCode adapter execution is not implemented yet; use --dry-run only.`,
-- no OpenCode process is started by non-dry-run dispatch in this release.
+- non-dry-run dispatch runs OpenCode through the existing guarded dispatch flow,
+- malformed JSON output, nonzero exits, missing binaries, and timeouts fail closed with normalized adapter results.
 
 The current command contract is based on the local OpenCode CLI help surface:
 
@@ -78,9 +78,9 @@ The current command contract is based on the local OpenCode CLI help surface:
 opencode run --dir <worktree-or-run-root> --format json <prompt>
 ```
 
-CEWP plans to deliver the prepared dispatch prompt as an argv message through a spawned process, not through shell interpolation. Future execution should set the process cwd to the role work directory, pass the same path through `--dir`, use CEWP's dispatch `--timeout`, capture stdout for JSON event parsing, and capture stderr for logs/errors. OpenCode does not currently provide CEWP's `adapter-output/<role>-last-message.md` marker directly, so future execution must define that derivation before non-dry-run support is enabled.
+CEWP delivers the prepared dispatch prompt as an argv message through a spawned process with `shell: false`, not through shell interpolation. Execution sets the process cwd to the role work directory, passes the same path through `--dir`, uses CEWP's dispatch `--timeout`, captures stdout for JSON event parsing, and captures stderr for logs/errors. Because OpenCode does not currently provide CEWP's `adapter-output/<role>-last-message.md` marker directly, CEWP derives the marker from parsed JSON output or available raw output.
 
-This is not full OpenCode support. It does not add Claude Code, Gemini, Hermes, local model, or other external provider execution.
+This is experimental OpenCode support, not a production-ready provider line. It does not add Claude Code, Gemini, Hermes, local model, or other external provider execution.
 
 ## Adapter Registry And Config Foundation
 
@@ -116,7 +116,7 @@ CEWP may also read an optional root-level `cewp.config.json` file. Only the top-
 }
 ```
 
-When the file is missing, CEWP keeps the default `codex-exec` provider for every role. A CLI `--adapter` value overrides the selected role. Invalid JSON fails with a clear `Invalid cewp.config.json JSON` message, and unsupported providers fail through the adapter registry. Supported providers are `codex-exec`, `manual`, and experimental dry-run-only `opencode`; full external provider execution is not included.
+When the file is missing, CEWP keeps the default `codex-exec` provider for every role. A CLI `--adapter` value overrides the selected role. Invalid JSON fails with a clear `Invalid cewp.config.json JSON` message, and unsupported providers fail through the adapter registry. Supported providers are `codex-exec`, `manual`, and experimental `opencode`.
 
 `cewp doctor` reports the adapter config source and resolved provider for each role.
 
@@ -140,7 +140,7 @@ Each registered adapter exposes static capability metadata so CEWP can describe 
 }
 ```
 
-`codex-exec` is an executing adapter that runs an external command and requires the Codex CLI or an explicit command override. `manual` is a non-executing adapter that supports handoff and result intake without running external commands or requiring an external binary. `opencode` is marked `experimental` with `executionImplemented: false`; doctor reports it as dry-run only. `cewp doctor` prints a compact capability summary for every registered adapter.
+`codex-exec` is an executing adapter that runs an external command and requires the Codex CLI or an explicit command override. `manual` is a non-executing adapter that supports handoff and result intake without running external commands or requiring an external binary. `opencode` is marked `experimental` with `executionImplemented: true` for the MVP execution path. `cewp doctor` prints a compact capability summary for every registered adapter.
 
 ## Adapter Lifecycle
 
@@ -333,7 +333,7 @@ Each registered adapter exposes structured availability metadata for doctor outp
 
 Executing adapters use a shared side-effect-free CLI probe for availability and version reporting. The probe runs version-style commands with `shell: false`, captures stdout/stderr, records the command and args that were checked, and treats missing binaries as unavailable rather than fatal to `cewp doctor`.
 
-`codex-exec` uses the shared probe for `codex --version`. `manual` reports itself available with no requirements because it only writes local handoff files and does not execute external commands. `opencode` uses the shared probe for `opencode --version` and reports a required `opencode` binary and remediation, but that check is informational until real OpenCode execution is implemented.
+`codex-exec` uses the shared probe for `codex --version`. `manual` reports itself available with no requirements because it only writes local handoff files and does not execute external commands. `opencode` uses the shared probe for `opencode --version` and reports a required `opencode` binary and remediation before experimental execution can start.
 
 The check:
 - accepts `CEWP_CODEX_EXEC_COMMAND` as an explicit command override,
@@ -341,7 +341,7 @@ The check:
 - otherwise checks whether the `codex` executable is available with a safe version check,
 - reports a short reason and remediation when the executable is missing.
 
-`cewp doctor` reports adapter availability status, binary command, version, probe command, requirements, and remediation as informational output. Actual dispatch execution can fail before starting a provider process when the selected adapter is unavailable. Dry-run previews remain side-effect-free. This availability model does not add full external provider execution support.
+`cewp doctor` reports adapter availability status, binary command, version, probe command, requirements, and remediation as informational output. Actual dispatch execution can fail before starting a provider process when the selected adapter is unavailable. Dry-run previews remain side-effect-free. This availability model does not make experimental OpenCode support production-ready or add other external providers.
 
 ## Provider-Neutral Boundary
 

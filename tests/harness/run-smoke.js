@@ -23,7 +23,7 @@ const {
   readWorktrees,
   cleanupRepo,
 } = require("./lib/temp-repo");
-const { createFakeCodexAdapter } = require("./lib/fake-adapter");
+const { FAKE_OPENCODE_MODES, createFakeCodexAdapter, createFakeOpenCodeAdapter } = require("./lib/fake-adapter");
 const { runFakeExternalAdapterContract } = require("./lib/external-adapter-contract");
 const {
   buildCodexExecInvocation,
@@ -38,10 +38,10 @@ const {
 const { normalizeAdapterResult: normalizeManualAdapterResult } = require("../../src/run/adapters/manual");
 const {
   OPENCODE_COMMAND_CONTRACT,
-  OPENCODE_NOT_IMPLEMENTED_REASON,
   buildOpenCodeRunInvocation,
   getOpenCodeCommandCandidates,
   normalizeAdapterResult: normalizeOpenCodeAdapterResult,
+  parseOpenCodeJsonOutput,
 } = require("../../src/run/adapters/opencode");
 const { probeAdapterCli } = require("../../src/run/adapters/cli-probe");
 const { getAdapterAvailability, getAdapterCapabilities, getSupportedAdapterNames } = require("../../src/run/adapters/registry");
@@ -337,7 +337,7 @@ async function main() {
       assertIncludes(result.stdout, "codex-exec: executing, dry-run, external command", "doctor codex-exec capabilities");
       assertIncludes(result.stdout, "manual: non-executing, dry-run, handoff, result-intake, no external command", "doctor manual capabilities");
       assertIncludes(result.stdout, "opencode: executing, experimental, dry-run, external command", "doctor opencode capabilities");
-      assertIncludes(result.stdout, "dry-run only", "doctor opencode dry-run-only capability");
+      assertIncludes(result.stdout, "opencode: executing, experimental, dry-run, external command, external binary, auth, last-message", "doctor opencode execution MVP capability");
       assertIncludes(result.stdout, "Adapter config:", "doctor adapter config section");
       assertIncludes(result.stdout, "Source: default", "doctor adapter config default source");
       assertIncludes(result.stdout, "manager: codex-exec", "doctor adapter config manager provider");
@@ -683,8 +683,8 @@ async function main() {
       assert(openCodeCapabilities.supportsResultIntake === false, "opencode result intake capability");
       assert(openCodeCapabilities.requiresExternalBinary === true, "opencode external binary capability");
       assert(openCodeCapabilities.requiresAuth === true, "opencode auth capability");
-      assert(openCodeCapabilities.supportsLastMessage === false, "opencode last-message capability while execution is unimplemented");
-      assert(openCodeCapabilities.executionImplemented === false, "opencode execution is not implemented");
+      assert(openCodeCapabilities.supportsLastMessage === true, "opencode last-message capability");
+      assert(openCodeCapabilities.executionImplemented === true, "opencode execution MVP is implemented");
 
       const codexExecAvailability = getAdapterAvailability("codex-exec", {
         env: {
@@ -1230,7 +1230,7 @@ async function main() {
       assertIncludes(reviewerDryRun.stdout, "Adapter: codex-exec", "config reviewer dry-run adapter");
     });
 
-    await step("opencode adapter dry-run foundation", () => {
+    await step("opencode adapter experimental execution MVP", () => {
       const openCodeRepo = makeTempRepo("cewp-harness-opencode-");
       tempRepos.push(openCodeRepo);
       const { runId } = setupFakeAdapterRun(openCodeRepo);
@@ -1239,12 +1239,12 @@ async function main() {
       assertExit(dryRun, 0, "opencode worker dry-run");
       assertIncludes(dryRun.stdout, "Adapter: opencode", "opencode dry-run adapter");
       assertIncludes(dryRun.stdout, "OpenCode adapter preview:", "opencode dry-run preview");
-      assertIncludes(dryRun.stdout, "Status: experimental dry-run only", "opencode dry-run-only status");
+      assertIncludes(dryRun.stdout, "Status: experimental execution preview", "opencode dry-run status");
       assertIncludes(dryRun.stdout, "External command: not executed", "opencode dry-run external command");
       assertIncludes(dryRun.stdout, "opencode run --dir", "opencode dry-run planned run command");
       assertIncludes(dryRun.stdout, "--format json", "opencode dry-run json format");
       assertIncludes(dryRun.stdout, "Prompt delivery: argv message via spawn args", "opencode dry-run prompt delivery");
-      assertIncludes(dryRun.stdout, "Stdout: captured for future JSON event parsing", "opencode dry-run stdout contract");
+      assertIncludes(dryRun.stdout, "Stdout: captured and parsed as JSON event output", "opencode dry-run stdout contract");
       assertIncludes(dryRun.stdout, "No processes were started.", "opencode dry-run no process");
 
       writeJson(path.join(openCodeRepo, "cewp.config.json"), {
@@ -1256,35 +1256,117 @@ async function main() {
       assertExit(configDryRun, 0, "opencode config worker-a dry-run");
       assertIncludes(configDryRun.stdout, "Adapter: opencode", "opencode config dry-run adapter");
 
+      const fake = createFakeOpenCodeAdapter();
       const actual = cewpWithEnv(
-        ["run", "dispatch", "exec", "worker-a", "--run", runId, "--adapter", "opencode", "--yes"],
+        ["run", "dispatch", "exec", "worker-a", "--run", runId, "--adapter", "opencode", "--yes", "--timeout", "5"],
         openCodeRepo,
-        { ...process.env, CEWP_OPENCODE_COMMAND: process.execPath },
+        fake.env,
       );
-      assertExit(actual, 1, "opencode worker actual fails closed");
+      assertExit(actual, 0, "opencode worker actual fake execution");
       assertIncludes(actual.stdout, "Adapter: opencode", "opencode actual adapter");
-      assertIncludes(actual.stdout, OPENCODE_NOT_IMPLEMENTED_REASON, "opencode actual not implemented reason");
-      assertIncludes(actual.stdout, "External command: not executed", "opencode actual external command");
+      assertIncludes(actual.stdout, "Execution: PASS", "opencode actual execution pass");
+      assertIncludes(actual.stdout, "Status: PASS", "opencode actual status");
+      assertNotIncludes(actual.stdout, "not implemented", "opencode actual no longer reports not implemented");
       assertIncludes(actual.stdout, "No merge/push/publish was performed.", "opencode actual no publish guard");
 
       const runRoot = path.join(openCodeRepo, ".cewp", "runs", runId);
       const lastMessagePath = path.join(runRoot, "adapter-output", "worker-a-last-message.md");
+      const stdoutPath = path.join(runRoot, "adapter-output", "worker-a-stdout.log");
+      const stderrPath = path.join(runRoot, "adapter-output", "worker-a-stderr.log");
+      assertFileExists(lastMessagePath, "opencode last message");
+      assertFileExists(stdoutPath, "opencode stdout log");
+      assertFileExists(stderrPath, "opencode stderr log");
+      assertIncludes(fs.readFileSync(lastMessagePath, "utf8"), "Fake OpenCode result for worker-a", "opencode last message content");
+      assertIncludes(fs.readFileSync(stdoutPath, "utf8"), "Fake OpenCode completed worker-a", "opencode stdout capture");
+      assertIncludes(fs.readFileSync(stderrPath, "utf8"), "fake opencode stderr", "opencode stderr capture");
+
+      const invocation = buildOpenCodeRunInvocation({
+        command: process.execPath,
+        prefixArgs: [fake.scriptPath],
+        worktreePath: "C:/tmp/worktree",
+        prompt: "hello",
+      });
+      assert(invocation.command === process.execPath, "opencode fake command override");
+      assert(invocation.args[0] === fake.scriptPath, "opencode prefix arg comes before run");
+      assert(invocation.args[1] === "run", "opencode run subcommand after prefix");
+      assert(invocation.args.includes("--dir"), "opencode invocation includes --dir");
+      assert(invocation.args.includes("--format"), "opencode invocation includes --format");
+      assert(invocation.args[invocation.args.length - 1] === "hello", "opencode prompt is passed as argv");
+
+      const parsed = parseOpenCodeJsonOutput(fs.readFileSync(stdoutPath, "utf8"));
+      assert(parsed.ok === true, "opencode json parser success");
+      assert(parsed.lastMessage.includes("Fake OpenCode result for worker-a"), "opencode json parser last message");
+
       const openCodeResult = normalizeOpenCodeAdapterResult({
         role: "worker-a",
-        status: "FAIL",
-        exitCode: 1,
-        reasons: [OPENCODE_NOT_IMPLEMENTED_REASON],
+        status: "PASS",
+        exitCode: 0,
         paths: {
+          stdout: stdoutPath,
+          stderr: stderrPath,
           lastMessage: lastMessagePath,
         },
         runRoot,
       });
       assert(openCodeResult.schemaVersion === "adapter-result/v1", "opencode result schema version");
       assert(openCodeResult.provider === "opencode", "opencode result provider");
-      assert(openCodeResult.ok === false, "opencode result ok false");
-      assert(openCodeResult.commandExecuted === false, "opencode result command not executed");
-      assert(openCodeResult.externalCommandExecuted === false, "opencode result external command not executed");
+      assert(openCodeResult.ok === true, "opencode result ok true");
+      assert(openCodeResult.commandExecuted === true, "opencode result command executed");
+      assert(openCodeResult.externalCommandExecuted === true, "opencode result external command executed");
       assert(openCodeResult.lastMessagePath === "adapter-output/worker-a-last-message.md", "opencode result last message path");
+      assert(openCodeResult.capabilitiesUsed.includes("externalCommand"), "opencode result external command capability");
+      assert(openCodeResult.capabilitiesUsed.includes("lastMessage"), "opencode result last message capability");
+
+      const invalidJsonRepo = makeTempRepo("cewp-harness-opencode-invalid-json-");
+      tempRepos.push(invalidJsonRepo);
+      const invalidJsonRun = setupFakeAdapterRun(invalidJsonRepo).runId;
+      const invalidJsonFake = createFakeOpenCodeAdapter(FAKE_OPENCODE_MODES.INVALID_JSON);
+      const invalidJson = cewpWithEnv(
+        ["run", "dispatch", "exec", "worker-a", "--run", invalidJsonRun, "--adapter", "opencode", "--yes", "--timeout", "5"],
+        invalidJsonRepo,
+        invalidJsonFake.env,
+      );
+      assertExit(invalidJson, 1, "opencode invalid json fails");
+      assertIncludes(invalidJson.stdout, "OpenCode adapter output JSON parse failed.", "opencode invalid json reason");
+      assertIncludes(invalidJson.stdout, "Status: FAIL", "opencode invalid json status");
+
+      const nonzeroRepo = makeTempRepo("cewp-harness-opencode-nonzero-");
+      tempRepos.push(nonzeroRepo);
+      const nonzeroRun = setupFakeAdapterRun(nonzeroRepo).runId;
+      const nonzeroFake = createFakeOpenCodeAdapter(FAKE_OPENCODE_MODES.NONZERO);
+      const nonzero = cewpWithEnv(
+        ["run", "dispatch", "exec", "worker-a", "--run", nonzeroRun, "--adapter", "opencode", "--yes", "--timeout", "5"],
+        nonzeroRepo,
+        nonzeroFake.env,
+      );
+      assertExit(nonzero, 1, "opencode nonzero fails");
+      assertIncludes(nonzero.stdout, "OpenCode adapter exited with code 7.", "opencode nonzero reason");
+      assertIncludes(nonzero.stdout, "Status: FAIL", "opencode nonzero status");
+
+      const timeoutRepo = makeTempRepo("cewp-harness-opencode-timeout-");
+      tempRepos.push(timeoutRepo);
+      const timeoutRun = setupFakeAdapterRun(timeoutRepo).runId;
+      const timeoutFake = createFakeOpenCodeAdapter(FAKE_OPENCODE_MODES.TIMEOUT);
+      const timeout = cewpWithEnv(
+        ["run", "dispatch", "exec", "worker-a", "--run", timeoutRun, "--adapter", "opencode", "--yes", "--timeout", "1"],
+        timeoutRepo,
+        timeoutFake.env,
+      );
+      assertExit(timeout, 1, "opencode timeout fails");
+      assertIncludes(timeout.stdout, "OpenCode adapter timed out after 1s.", "opencode timeout reason");
+      assertIncludes(timeout.stdout, "Status: FAIL", "opencode timeout status");
+
+      const missingRepo = makeTempRepo("cewp-harness-opencode-missing-");
+      tempRepos.push(missingRepo);
+      const missingRun = setupFakeAdapterRun(missingRepo).runId;
+      const missing = cewpWithEnv(
+        ["run", "dispatch", "exec", "worker-a", "--run", missingRun, "--adapter", "opencode", "--yes", "--timeout", "5"],
+        missingRepo,
+        { ...process.env, CEWP_OPENCODE_COMMAND: "cewp-missing-opencode" },
+      );
+      assertExit(missing, 1, "opencode missing binary fails");
+      assertIncludes(missing.stdout, "adapter availability failed: opencode executable not found", "opencode missing binary reason");
+      assertIncludes(missing.stdout, "No processes were started.", "opencode missing no process");
     });
 
     await step("manual adapter worker handoff", () => {
