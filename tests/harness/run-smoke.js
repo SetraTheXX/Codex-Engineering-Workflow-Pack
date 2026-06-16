@@ -37,7 +37,10 @@ const {
 } = require("../../src/run/adapters/codex-exec");
 const { normalizeAdapterResult: normalizeManualAdapterResult } = require("../../src/run/adapters/manual");
 const {
+  OPENCODE_COMMAND_CONTRACT,
   OPENCODE_NOT_IMPLEMENTED_REASON,
+  buildOpenCodeRunInvocation,
+  getOpenCodeCommandCandidates,
   normalizeAdapterResult: normalizeOpenCodeAdapterResult,
 } = require("../../src/run/adapters/opencode");
 const { getAdapterAvailability, getAdapterCapabilities, getSupportedAdapterNames } = require("../../src/run/adapters/registry");
@@ -343,6 +346,18 @@ async function main() {
       assertNotIncludes(result.stdout, "Gemini", "doctor should not claim Gemini support");
       assertNotIncludes(result.stdout, "Claude", "doctor should not claim Claude support");
       assertNotIncludes(result.stdout, "Hermes", "doctor should not claim Hermes support");
+
+      const missingOpenCodeDoctor = cewpWithEnv(["doctor"], cewpRoot, {
+        ...process.env,
+        CEWP_CODEX_EXEC_COMMAND: process.execPath,
+        PATH: "",
+        Path: "",
+      });
+      assertExit(missingOpenCodeDoctor, 0, "doctor missing opencode remains non-fatal");
+      assertIncludes(missingOpenCodeDoctor.stdout, "[WARN] opencode: unavailable", "doctor missing opencode warning");
+      assertIncludes(missingOpenCodeDoctor.stdout, "Requirement: binary opencode: missing, required", "doctor missing opencode requirement");
+      assertIncludes(missingOpenCodeDoctor.stdout, "Remediation: Install OpenCode CLI", "doctor missing opencode remediation");
+      assertIncludes(missingOpenCodeDoctor.stdout, "Status: PASS", "doctor missing opencode still passes");
     });
 
     await step("doctor adapter config file summary", () => {
@@ -690,6 +705,45 @@ async function main() {
         && requirement.required === true
         && requirement.available === false
       )), "opencode missing availability binary requirement");
+
+      assert(OPENCODE_COMMAND_CONTRACT.provider === "opencode", "opencode command contract provider");
+      assert(OPENCODE_COMMAND_CONTRACT.binary === "opencode", "opencode command contract binary");
+      assert(OPENCODE_COMMAND_CONTRACT.envOverride === "CEWP_OPENCODE_COMMAND", "opencode command contract env override");
+      assert(OPENCODE_COMMAND_CONTRACT.availabilityArgs.includes("--version"), "opencode command contract availability args");
+      assert(OPENCODE_COMMAND_CONTRACT.runArgs.includes("run"), "opencode command contract run subcommand");
+      assert(OPENCODE_COMMAND_CONTRACT.runArgs.includes("--dir"), "opencode command contract dir arg");
+      assert(OPENCODE_COMMAND_CONTRACT.runArgs.includes("--format"), "opencode command contract format arg");
+      assert(OPENCODE_COMMAND_CONTRACT.runArgs.includes("json"), "opencode command contract json format");
+      assertIncludes(OPENCODE_COMMAND_CONTRACT.promptDelivery, "argv message", "opencode command contract prompt delivery");
+      assertIncludes(OPENCODE_COMMAND_CONTRACT.stdout, "JSON event", "opencode command contract stdout handling");
+      assertIncludes(OPENCODE_COMMAND_CONTRACT.timeout, "--timeout", "opencode command contract timeout handling");
+
+      const openCodeOverrideCandidates = getOpenCodeCommandCandidates({
+        CEWP_OPENCODE_COMMAND: "custom-opencode",
+        PATH: "",
+        Path: "",
+      });
+      assert(openCodeOverrideCandidates.length === 1 && openCodeOverrideCandidates[0] === "custom-opencode", "opencode command override candidate");
+
+      const openCodeMissingCandidates = getOpenCodeCommandCandidates({
+        PATH: "",
+        Path: "",
+      });
+      assert(openCodeMissingCandidates.includes("opencode"), "opencode default command candidate");
+
+      const openCodeInvocation = buildOpenCodeRunInvocation({
+        command: "opencode",
+        worktreePath: "C:\\repo\\worktree",
+        prompt: "Do a safe dry run.",
+      });
+      assert(openCodeInvocation.command === "opencode", "opencode invocation command");
+      assert(openCodeInvocation.cwd === "C:\\repo\\worktree", "opencode invocation cwd");
+      assert(openCodeInvocation.args[0] === "run", "opencode invocation run subcommand");
+      assert(openCodeInvocation.args.includes("--dir"), "opencode invocation dir arg");
+      assert(openCodeInvocation.args.includes("C:\\repo\\worktree"), "opencode invocation worktree arg");
+      assert(openCodeInvocation.args.includes("--format"), "opencode invocation format arg");
+      assert(openCodeInvocation.args.includes("json"), "opencode invocation json format");
+      assert(openCodeInvocation.args[openCodeInvocation.args.length - 1] === "Do a safe dry run.", "opencode invocation prompt last arg");
 
       let unsupportedCapabilitiesError;
       try {
@@ -1141,6 +1195,10 @@ async function main() {
       assertIncludes(dryRun.stdout, "OpenCode adapter preview:", "opencode dry-run preview");
       assertIncludes(dryRun.stdout, "Status: experimental dry-run only", "opencode dry-run-only status");
       assertIncludes(dryRun.stdout, "External command: not executed", "opencode dry-run external command");
+      assertIncludes(dryRun.stdout, "opencode run --dir", "opencode dry-run planned run command");
+      assertIncludes(dryRun.stdout, "--format json", "opencode dry-run json format");
+      assertIncludes(dryRun.stdout, "Prompt delivery: argv message via spawn args", "opencode dry-run prompt delivery");
+      assertIncludes(dryRun.stdout, "Stdout: captured for future JSON event parsing", "opencode dry-run stdout contract");
       assertIncludes(dryRun.stdout, "No processes were started.", "opencode dry-run no process");
 
       writeJson(path.join(openCodeRepo, "cewp.config.json"), {

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Defined the experimental OpenCode command contract around `opencode run --dir <worktree> --format json <prompt>` while keeping execution dry-run only.
 - Added an experimental dry-run-only OpenCode adapter foundation with registry, config, doctor, and availability visibility; real OpenCode execution is not implemented.
 - Added a test-only external adapter contract harness for future provider readiness without adding real external provider support.
 

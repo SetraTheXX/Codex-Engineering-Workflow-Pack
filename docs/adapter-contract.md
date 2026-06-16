@@ -72,6 +72,14 @@ Current behavior:
 - non-dry-run dispatch fails closed with `OpenCode adapter execution is not implemented yet; use --dry-run only.`,
 - no OpenCode process is started by non-dry-run dispatch in this release.
 
+The current command contract is based on the local OpenCode CLI help surface:
+
+```txt
+opencode run --dir <worktree-or-run-root> --format json <prompt>
+```
+
+CEWP plans to deliver the prepared dispatch prompt as an argv message through a spawned process, not through shell interpolation. Future execution should set the process cwd to the role work directory, pass the same path through `--dir`, use CEWP's dispatch `--timeout`, capture stdout for JSON event parsing, and capture stderr for logs/errors. OpenCode does not currently provide CEWP's `adapter-output/<role>-last-message.md` marker directly, so future execution must define that derivation before non-dry-run support is enabled.
+
 This is not full OpenCode support. It does not add Claude Code, Gemini, Hermes, local model, or other external provider execution.
 
 ## Adapter Registry And Config Foundation

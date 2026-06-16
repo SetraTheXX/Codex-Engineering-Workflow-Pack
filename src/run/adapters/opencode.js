@@ -1,6 +1,8 @@
 "use strict";
 
 const childProcess = require("node:child_process");
+const fs = require("node:fs");
+const path = require("node:path");
 const {
   getAdapterOutputPaths,
   getWorkerOutputPaths,
@@ -27,12 +29,78 @@ const capabilities = {
   executionImplemented: false,
 };
 
+const OPENCODE_COMMAND_CONTRACT = {
+  provider: OPENCODE_ADAPTER,
+  binary: "opencode",
+  envOverride: "CEWP_OPENCODE_COMMAND",
+  availabilityArgs: ["--version"],
+  runArgs: ["run", "--dir", "<worktree>", "--format", "json", "<prompt>"],
+  promptDelivery: "argv message via spawn args; no shell interpolation",
+  cwd: "worker worktree for workers; run root for reviewer",
+  stdout: "captured for future JSON event parsing",
+  stderr: "captured for logs and error diagnostics",
+  timeout: "uses dispatch --timeout seconds when execution is implemented",
+};
+
 function quote(value) {
   return `"${String(value).replace(/"/g, '\\"')}"`;
 }
 
+function formatPowerShellArg(value) {
+  if (value === "$prompt" || value === "run" || value === "json" || String(value).startsWith("--")) {
+    return value;
+  }
+
+  return quote(value);
+}
+
 function getOpenCodeCommand(env = process.env) {
   return env.CEWP_OPENCODE_COMMAND || "opencode";
+}
+
+function unique(values) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function getPathEntries(env = process.env) {
+  return String(env.PATH || env.Path || "")
+    .split(path.delimiter)
+    .filter((value) => value.length > 0);
+}
+
+function getOpenCodeCommandCandidates(env = process.env) {
+  if (env.CEWP_OPENCODE_COMMAND) {
+    return [env.CEWP_OPENCODE_COMMAND];
+  }
+
+  const candidates = [OPENCODE_COMMAND_CONTRACT.binary];
+  if (process.platform === "win32") {
+    for (const pathEntry of getPathEntries(env)) {
+      candidates.push(path.join(pathEntry, "opencode.exe"));
+      const npmPackageBinary = path.join(pathEntry, "node_modules", "opencode-ai", "bin", "opencode.exe");
+      if (fs.existsSync(npmPackageBinary)) {
+        candidates.push(npmPackageBinary);
+      }
+    }
+  }
+
+  return unique(candidates);
+}
+
+function buildOpenCodeRunInvocation({ command, worktreePath, prompt, format = "json" } = {}) {
+  return {
+    command: command || OPENCODE_COMMAND_CONTRACT.binary,
+    args: [
+      "run",
+      "--dir",
+      worktreePath,
+      "--format",
+      format,
+      prompt,
+    ],
+    cwd: worktreePath,
+    promptDelivery: OPENCODE_COMMAND_CONTRACT.promptDelivery,
+  };
 }
 
 function checkOpenCodeAvailability({ env = process.env, timeoutMs = 5000 } = {}) {
@@ -48,47 +116,69 @@ function checkOpenCodeAvailability({ env = process.env, timeoutMs = 5000 } = {})
     };
   }
 
-  const result = childProcess.spawnSync(command, ["--version"], {
-    encoding: "utf8",
-    env,
-    shell: false,
-    timeout: timeoutMs,
-    windowsHide: true,
-  });
+  const candidates = getOpenCodeCommandCandidates(env);
+  let lastResult;
+  let lastCommand = command;
 
-  if (result.error && result.error.code === "ENOENT") {
+  for (const candidate of candidates) {
+    const result = childProcess.spawnSync(candidate, OPENCODE_COMMAND_CONTRACT.availabilityArgs, {
+      encoding: "utf8",
+      env,
+      shell: false,
+      timeout: timeoutMs,
+      windowsHide: true,
+    });
+    lastResult = result;
+    lastCommand = candidate;
+
+    if (result.error && result.error.code === "ENOENT") {
+      continue;
+    }
+
+    if (result.error) {
+      return {
+        adapter: OPENCODE_ADAPTER,
+        status: "FAIL",
+        reason: `opencode availability check failed: ${result.error.message}`,
+        command: candidate,
+      };
+    }
+
+    if (result.status !== 0) {
+      return {
+        adapter: OPENCODE_ADAPTER,
+        status: "FAIL",
+        reason: `opencode --version exited with code ${typeof result.status === "number" ? result.status : 1}.`,
+        command: candidate,
+      };
+    }
+
+    const version = String(result.stdout || result.stderr || "").trim();
+    const versionSuffix = version ? ` (${version})` : "";
+
+    return {
+      adapter: OPENCODE_ADAPTER,
+      status: "PASS",
+      reason: `opencode executable is available${versionSuffix}. Authentication and model/provider configuration are managed by OpenCode.`,
+      command: candidate,
+      version,
+    };
+  }
+
+  if (lastResult && lastResult.error && lastResult.error.code === "ENOENT") {
     return {
       adapter: OPENCODE_ADAPTER,
       status: "FAIL",
       reason: "opencode executable not found. Install OpenCode CLI or set CEWP_OPENCODE_COMMAND.",
-      command,
-    };
-  }
-
-  if (result.error) {
-    return {
-      adapter: OPENCODE_ADAPTER,
-      status: "FAIL",
-      reason: `opencode availability check failed: ${result.error.message}`,
-      command,
-    };
-  }
-
-  if (result.status !== 0) {
-    return {
-      adapter: OPENCODE_ADAPTER,
-      status: "FAIL",
-      reason: `opencode --version exited with code ${typeof result.status === "number" ? result.status : 1}.`,
-      command,
+      command: lastCommand,
     };
   }
 
   return {
     adapter: OPENCODE_ADAPTER,
-    status: "PASS",
-    reason: "opencode executable is available. Authentication and model/provider configuration are managed by OpenCode.",
-    command,
-    version: String(result.stdout || result.stderr || "").trim(),
+    status: "FAIL",
+    reason: "opencode executable not found. Install OpenCode CLI or set CEWP_OPENCODE_COMMAND.",
+    command: lastCommand,
   };
 }
 
@@ -131,12 +221,23 @@ function getAdapterAvailability(options = {}) {
 
 function printCodexExecPreview({ cwd, promptPath, outputPath }) {
   const command = getOpenCodeCommand();
+  const invocation = buildOpenCodeRunInvocation({
+    command,
+    worktreePath: cwd,
+    prompt: "$prompt",
+  });
 
   console.log("OpenCode adapter preview:");
   console.log("  Status: experimental dry-run only");
   console.log("  External command: not executed");
-  console.log("  Intended command preview:");
-  console.log(`    ${command} run --cwd ${quote(cwd)} --prompt-file ${quote(promptPath)} --output-last-message ${quote(outputPath)}`);
+  console.log("  PowerShell preview:");
+  console.log(`    $prompt = Get-Content -Raw ${quote(promptPath)}`);
+  console.log(`    ${invocation.command} ${invocation.args.map(formatPowerShellArg).join(" ")}`);
+  console.log(`  Prompt delivery: ${OPENCODE_COMMAND_CONTRACT.promptDelivery}`);
+  console.log(`  Working directory: ${cwd}`);
+  console.log(`  Stdout: ${OPENCODE_COMMAND_CONTRACT.stdout}`);
+  console.log(`  Stderr: ${OPENCODE_COMMAND_CONTRACT.stderr}`);
+  console.log(`  Last-message target: ${outputPath}`);
   console.log("  Execution: not implemented");
 }
 
@@ -190,6 +291,7 @@ function normalizeAdapterResult({
 }
 
 module.exports = {
+  OPENCODE_COMMAND_CONTRACT,
   OPENCODE_ADAPTER,
   OPENCODE_NOT_IMPLEMENTED_REASON,
   capabilities,
@@ -198,7 +300,9 @@ module.exports = {
   getWorkerOutputPaths,
   copyWorkerOutputToRun,
   writeAdapterLog,
+  buildOpenCodeRunInvocation,
   getOpenCodeCommand,
+  getOpenCodeCommandCandidates,
   checkAdapterAvailability: checkOpenCodeAvailability,
   checkOpenCodeAvailability,
   getAdapterAvailability,
