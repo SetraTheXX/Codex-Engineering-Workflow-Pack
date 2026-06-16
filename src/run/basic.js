@@ -761,6 +761,82 @@ function runNext(options = {}) {
   console.log(`Reason: ${action.reason}`);
 }
 
+function getResumeSummary(serialized) {
+  const manualCompletionCommands = serialized.nextActions
+    .filter((action) => action.label === "complete-manual")
+    .map((action) => action.command);
+
+  return {
+    recommendedCommand: serialized.nextAction ? serialized.nextAction.command : null,
+    reason: serialized.nextAction ? serialized.nextAction.reason : "no safe next action found.",
+    manualCompletionCommands,
+    followUpCommands: [
+      `cewp run status ${serialized.runId}`,
+      `cewp run next ${serialized.runId}`,
+      "cewp run list",
+    ],
+  };
+}
+
+function yesNo(value) {
+  return value ? "yes" : "no";
+}
+
+function runResume(options = {}) {
+  const inspection = inspectRun(options);
+  const serialized = serializeRunInspection(inspection, {
+    command: "run resume",
+    latestRunId: getLatestRunId(),
+  });
+  const resume = getResumeSummary(serialized);
+
+  if (options.json) {
+    outputJson({
+      ...serialized,
+      resume,
+    });
+    return;
+  }
+
+  console.log("# CEWP Run Resume");
+  console.log("");
+  console.log(`Run ID: ${serialized.runId}`);
+  console.log(`Run path: ${serialized.runPath}`);
+  console.log(`Latest: ${yesNo(serialized.latest)}`);
+  console.log("");
+  console.log("## Current State");
+  console.log(`- Run: ${serialized.state.run}`);
+  console.log(`- Board: ${serialized.state.board}`);
+  console.log(`- Tasks: ${serialized.tasks.count} (${formatStatusCounts(inspection.statusCounts)})`);
+  console.log(`- Roles: ${formatRoleSummary(inspection.boardJson)}`);
+  console.log("");
+  console.log("## Artifacts");
+  console.log(`- Manual handoffs: ${yesNo(serialized.artifacts.manualHandoffs.present)} (${serialized.artifacts.manualHandoffs.count})`);
+  console.log(`- Worker reports: ${yesNo(serialized.artifacts.reports.present)} (${serialized.artifacts.reports.count})`);
+  console.log(`- Review packets: ${yesNo(serialized.artifacts.reviewPackets.present)} (${serialized.artifacts.reviewPackets.count})`);
+  console.log(`- Reviewer report: ${yesNo(serialized.reviewer.reportPresent)}`);
+  console.log(`- Reviewer decision: ${serialized.reviewer.decision || "none"}`);
+  console.log(`- Reviewer PASS: ${yesNo(serialized.reviewer.pass)}`);
+  console.log("");
+  console.log("## Recommended Next Action");
+  console.log(`- Command: ${resume.recommendedCommand || "none"}`);
+  console.log(`- Reason: ${resume.reason}`);
+
+  if (resume.manualCompletionCommands.length > 0) {
+    console.log("");
+    console.log("## Manual Completion");
+    for (const command of resume.manualCompletionCommands) {
+      console.log(`- ${command}`);
+    }
+  }
+
+  console.log("");
+  console.log("## Useful Follow-Up Commands");
+  for (const command of resume.followUpCommands) {
+    console.log(`- ${command}`);
+  }
+}
+
 function runPrompts(options = {}) {
   const { runId, runRoot } = findRun(options);
   const promptsRoot = path.join(runRoot, "prompts");
@@ -808,6 +884,7 @@ module.exports = {
   runList,
   runStatus,
   runNext,
+  runResume,
   runPrompts,
   runPrompt,
 };

@@ -14,6 +14,7 @@ Usage:
   cewp run list [--limit <count>] [--json]
   cewp run status [run-id] [--json]
   cewp run next [run-id] [--json]
+  cewp run resume [run-id] [--json]
   cewp run prompts
   cewp run prompt <manager|worker-a|worker-b|reviewer>
   cewp run worktrees plan
@@ -66,6 +67,10 @@ Examples:
   cewp run next 20260528-232250
   cewp run next --run 20260528-232250
   cewp run next 20260528-232250 --json
+  cewp run resume
+  cewp run resume 20260528-232250
+  cewp run resume --run 20260528-232250
+  cewp run resume 20260528-232250 --json
   cewp run prompts
   cewp run prompt manager --run 20260528-232250
   cewp run worktrees plan --run 20260528-232250

@@ -111,9 +111,13 @@ cewp run next
 cewp run next <run-id>
 cewp run next --run <run-id>
 cewp run next <run-id> --json
+cewp run resume
+cewp run resume <run-id>
+cewp run resume --run <run-id>
+cewp run resume <run-id> --json
 ```
 
-Use `run list` to find recent runs, see the latest run, scan artifact presence, and choose a run id. Use `run status` for the detailed inventory and suggested actions. Use `run next` when you want CEWP to print only the single most relevant safe command and a short reason. These commands support human-readable output by default and `--json` for tools, scripts, or future operator interfaces. They can suggest manual result intake, review packet collection, reviewer dry-run, or finalize dry-run, but they do not run those actions automatically.
+Use `run list` to find recent runs, see the latest run, scan artifact presence, and choose a run id. Use `run status` for the detailed inventory and suggested actions. Use `run next` when you want CEWP to print only the single most relevant safe command and a short reason. Use `run resume` when handing a run back to an operator or another agent; it prints a compact Markdown resume packet with state, artifacts, the recommended next command, manual completion hints when relevant, and useful follow-up commands. These commands support human-readable output by default and `--json` for tools, scripts, or future operator interfaces. They can suggest manual result intake, review packet collection, reviewer dry-run, or finalize dry-run, but they do not run those actions automatically.
 
 ## Codex-Exec Adapter
 

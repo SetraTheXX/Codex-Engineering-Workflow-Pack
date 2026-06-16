@@ -243,6 +243,8 @@ async function main() {
       assertIncludes(help.stdout, "cewp run status 20260528-232250 --json", "help includes operator run status json");
       assertIncludes(help.stdout, "cewp run next [run-id]", "help includes operator run next");
       assertIncludes(help.stdout, "cewp run next 20260528-232250 --json", "help includes operator run next json");
+      assertIncludes(help.stdout, "cewp run resume [run-id]", "help includes operator run resume");
+      assertIncludes(help.stdout, "cewp run resume 20260528-232250 --json", "help includes operator run resume json");
     });
 
     await step("doctor", () => {
@@ -807,6 +809,10 @@ async function main() {
       assertExit(missingNext, 1, "operator next missing run");
       assertIncludes(missingNext.stderr, "CEWP run not found: 20260529-999999", "operator next missing run message");
 
+      const missingResume = cewp(["run", "resume", "20260529-999999"], manualRepo);
+      assertExit(missingResume, 1, "operator resume missing run");
+      assertIncludes(missingResume.stderr, "CEWP run not found: 20260529-999999", "operator resume missing run message");
+
       const beforeStatus = snapshotRunFiles(runRoot);
       const statusWithHandoff = cewp(["run", "status", runId], manualRepo);
       const afterStatus = snapshotRunFiles(runRoot);
@@ -857,6 +863,37 @@ async function main() {
       assert(nextWithHandoffValue.artifacts.manualHandoffs.present === true, "operator next json manual present");
       assert(nextWithHandoffValue.nextAction.label === "complete-manual", "operator next json next label");
       assertIncludes(nextWithHandoffValue.nextAction.reason, "manual handoff", "operator next json next reason");
+
+      const beforeResume = snapshotRunFiles(runRoot);
+      const resumeWithHandoff = cewp(["run", "resume", runId], manualRepo);
+      const afterResume = snapshotRunFiles(runRoot);
+      assertExit(resumeWithHandoff, 0, "operator resume manual handoff");
+      assertSnapshotsEqual(beforeResume, afterResume, "operator resume should be read-only");
+      assertIncludes(resumeWithHandoff.stdout, "# CEWP Run Resume", "operator resume heading");
+      assertIncludes(resumeWithHandoff.stdout, `Run ID: ${runId}`, "operator resume run id");
+      assertIncludes(resumeWithHandoff.stdout, "Run path:", "operator resume run path");
+      assertIncludes(resumeWithHandoff.stdout, "## Current State", "operator resume current state");
+      assertIncludes(resumeWithHandoff.stdout, "## Artifacts", "operator resume artifacts");
+      assertIncludes(resumeWithHandoff.stdout, "- Manual handoffs: yes (1)", "operator resume manual handoff presence");
+      assertIncludes(resumeWithHandoff.stdout, "- Worker reports: no (0)", "operator resume worker reports absent");
+      assertIncludes(resumeWithHandoff.stdout, "- Reviewer PASS: no", "operator resume reviewer pass false");
+      assertIncludes(resumeWithHandoff.stdout, `- Command: cewp run dispatch complete worker-a --run ${runId} --from <file>`, "operator resume manual completion command");
+      assertIncludes(resumeWithHandoff.stdout, "- Reason: worker-a has a manual handoff but its expected report is missing.", "operator resume manual completion reason");
+      assertIncludes(resumeWithHandoff.stdout, "## Manual Completion", "operator resume manual completion section");
+      assertIncludes(resumeWithHandoff.stdout, `cewp run status ${runId}`, "operator resume status follow-up");
+      assertIncludes(resumeWithHandoff.stdout, `cewp run next ${runId}`, "operator resume next follow-up");
+      assertIncludes(resumeWithHandoff.stdout, "cewp run list", "operator resume list follow-up");
+
+      const resumeWithHandoffJson = cewp(["run", "resume", runId, "--json"], manualRepo);
+      assertExit(resumeWithHandoffJson, 0, "operator resume manual handoff json");
+      const resumeWithHandoffValue = parseJsonOutput(resumeWithHandoffJson, "operator resume manual handoff json");
+      assert(resumeWithHandoffValue.command === "run resume", "operator resume json command");
+      assert(resumeWithHandoffValue.runId === runId, "operator resume json run id");
+      assert(resumeWithHandoffValue.artifacts.manualHandoffs.present === true, "operator resume json manual present");
+      assert(resumeWithHandoffValue.nextAction.label === "complete-manual", "operator resume json next label");
+      assert(resumeWithHandoffValue.resume.manualCompletionCommands.length === 1, "operator resume json manual completion commands");
+      assertIncludes(resumeWithHandoffValue.resume.manualCompletionCommands[0], `cewp run dispatch complete worker-a --run ${runId}`, "operator resume json manual completion command");
+      assertIncludes(resumeWithHandoffValue.resume.followUpCommands, `cewp run status ${runId}`, "operator resume json status follow-up");
 
       const manualResultPath = path.join(manualRepo, "manual-result-worker-a.md");
       writeFile(
@@ -915,6 +952,12 @@ async function main() {
       assertIncludes(nextWithPassReview.stdout, `Recommended command: cewp run finalize --run ${runId} --dry-run`, "operator next finalize dry-run command");
       assertIncludes(nextWithPassReview.stdout, "Reason: Reviewer report reviews/reviewer-report.md contains Decision: PASS.", "operator next finalize reason");
 
+      const resumeWithPassReview = cewp(["run", "resume", "--run", runId], manualRepo);
+      assertExit(resumeWithPassReview, 0, "operator resume reviewer PASS");
+      assertIncludes(resumeWithPassReview.stdout, "- Reviewer PASS: yes", "operator resume reviewer pass true");
+      assertIncludes(resumeWithPassReview.stdout, `- Command: cewp run finalize --run ${runId} --dry-run`, "operator resume finalize dry-run command");
+      assertIncludes(resumeWithPassReview.stdout, "- Reason: Reviewer report reviews/reviewer-report.md contains Decision: PASS.", "operator resume finalize reason");
+
       const statusWithPassReviewJson = cewp(["run", "status", "--run", runId, "--json"], manualRepo);
       assertExit(statusWithPassReviewJson, 0, "operator status reviewer PASS json");
       const statusWithPassReviewValue = parseJsonOutput(statusWithPassReviewJson, "operator status reviewer PASS json");
@@ -927,6 +970,13 @@ async function main() {
       const nextWithPassReviewValue = parseJsonOutput(nextWithPassReviewJson, "operator next reviewer PASS json");
       assert(nextWithPassReviewValue.reviewer.pass === true, "operator next json reviewer pass");
       assert(nextWithPassReviewValue.nextAction.label === "finalize-dry-run", "operator next json finalize label");
+
+      const resumeWithPassReviewJson = cewp(["run", "resume", "--run", runId, "--json"], manualRepo);
+      assertExit(resumeWithPassReviewJson, 0, "operator resume reviewer PASS json");
+      const resumeWithPassReviewValue = parseJsonOutput(resumeWithPassReviewJson, "operator resume reviewer PASS json");
+      assert(resumeWithPassReviewValue.reviewer.pass === true, "operator resume json reviewer pass");
+      assert(resumeWithPassReviewValue.nextAction.label === "finalize-dry-run", "operator resume json finalize label");
+      assert(resumeWithPassReviewValue.resume.recommendedCommand === `cewp run finalize --run ${runId} --dry-run`, "operator resume json recommended command");
 
       const missing = cewp(["run", "dispatch", "complete", "worker-a", "--run", runId, "--from", path.join(manualRepo, "missing.md")], manualRepo);
       assertExit(missing, 1, "manual complete missing file");
