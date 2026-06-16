@@ -454,6 +454,109 @@ function getRunIds(repoRoot = process.cwd()) {
   };
 }
 
+function outputJson(value) {
+  console.log(JSON.stringify(value, null, 2));
+}
+
+function toRelativeFiles(runRoot, files) {
+  return files.map((filePath) => toRunRelative(runRoot, filePath));
+}
+
+function getLatestRunId(repoRoot = process.cwd()) {
+  const { runIds } = getRunIds(repoRoot);
+  return runIds.length === 0 ? undefined : runIds[runIds.length - 1];
+}
+
+function getRoleStatusObject(boardJson) {
+  const roles = (boardJson && boardJson.roles) || {};
+  return Object.fromEntries(
+    Object.keys(roles)
+      .sort()
+      .map((role) => [role, roles[role].status || "unknown"]),
+  );
+}
+
+function getArtifactSummary(inspection) {
+  return {
+    manualHandoffs: {
+      present: inspection.manualFiles.length > 0,
+      count: inspection.manualFiles.length,
+      files: toRelativeFiles(inspection.runRoot, inspection.manualFiles),
+    },
+    reports: {
+      present: inspection.reportFiles.length > 0,
+      count: inspection.reportFiles.length,
+      files: toRelativeFiles(inspection.runRoot, inspection.reportFiles),
+    },
+    reviews: {
+      present: inspection.reviewFiles.length > 0,
+      count: inspection.reviewFiles.length,
+      files: toRelativeFiles(inspection.runRoot, inspection.reviewFiles),
+    },
+    reviewPackets: {
+      present: inspection.reviewPacketFiles.length > 0,
+      count: inspection.reviewPacketFiles.length,
+      files: toRelativeFiles(inspection.runRoot, inspection.reviewPacketFiles),
+    },
+    lastMessages: {
+      present: inspection.lastMessageFiles.length > 0,
+      count: inspection.lastMessageFiles.length,
+      files: toRelativeFiles(inspection.runRoot, inspection.lastMessageFiles),
+    },
+    events: {
+      fileCount: inspection.eventFiles.length,
+      count: inspection.eventCount,
+      files: toRelativeFiles(inspection.runRoot, inspection.eventFiles),
+    },
+  };
+}
+
+function serializeAction(action) {
+  if (!action) {
+    return null;
+  }
+
+  return {
+    label: getNextActionLabel(action),
+    command: action.command,
+    reason: action.reason,
+  };
+}
+
+function serializeRunInspection(inspection, { command, latestRunId } = {}) {
+  const reviewerDecision = getReviewerDecision(inspection.reviewFiles);
+
+  return {
+    command,
+    runId: inspection.runId,
+    runPath: inspection.runRoot,
+    latest: Boolean(latestRunId && inspection.runId === latestRunId),
+    createdAt: (inspection.runJson && inspection.runJson.createdAt) || null,
+    modifiedAt: getRunDirectoryMtime(inspection.runRoot),
+    state: {
+      run: (inspection.runJson && inspection.runJson.status) || "unknown",
+      board: (inspection.boardJson && inspection.boardJson.status) || "unknown",
+    },
+    roles: getRoleStatusObject(inspection.boardJson),
+    tasks: {
+      count: inspection.tasks.length,
+      statusCounts: Object.fromEntries(
+        Object.keys(inspection.statusCounts)
+          .sort()
+          .map((status) => [status, inspection.statusCounts[status]]),
+      ),
+    },
+    artifacts: getArtifactSummary(inspection),
+    reviewer: {
+      reportPresent: inspection.reviewFiles.length > 0,
+      decision: reviewerDecision ? reviewerDecision.decision : null,
+      pass: Boolean(reviewerDecision && reviewerDecision.decision === "PASS"),
+    },
+    nextAction: serializeAction(inspection.recommendedActions[0]),
+    nextActions: inspection.recommendedActions.map(serializeAction),
+  };
+}
+
 function runStatus(options = {}) {
   const inspection = inspectRun(options);
   const {
@@ -474,6 +577,14 @@ function runStatus(options = {}) {
     artifactRoles,
     recommendedActions,
   } = inspection;
+
+  if (options.json) {
+    outputJson(serializeRunInspection(inspection, {
+      command: "run status",
+      latestRunId: getLatestRunId(),
+    }));
+    return;
+  }
 
   console.log("CEWP Coordinator Mode status");
   console.log(`Run ID: ${runId}`);
@@ -550,6 +661,22 @@ function runList(options = {}) {
   const { runsRoot, runIds } = getRunIds(repoRoot);
   const limit = options.limit || 10;
 
+  if (options.json) {
+    const latestRunId = runIds.length === 0 ? undefined : runIds[runIds.length - 1];
+    const recentRunIds = runIds.slice(-limit).reverse();
+    outputJson({
+      command: "run list",
+      runsRoot,
+      limit,
+      latestRunId: latestRunId || null,
+      runs: recentRunIds.map((runId) => serializeRunInspection(inspectRun({ runId }), {
+        command: "run list",
+        latestRunId,
+      })),
+    });
+    return;
+  }
+
   console.log("CEWP Coordinator Mode run list");
   console.log(`Runs root: ${runsRoot}`);
   console.log(`Limit: ${limit}`);
@@ -586,6 +713,7 @@ function runList(options = {}) {
 }
 
 function runNext(options = {}) {
+  const inspection = inspectRun(options);
   const {
     runId,
     runRoot,
@@ -596,8 +724,26 @@ function runNext(options = {}) {
     manualFiles,
     reviewPacketFiles,
     recommendedActions,
-  } = inspectRun(options);
+  } = inspection;
   const action = recommendedActions[0];
+
+  if (options.json) {
+    const serialized = serializeRunInspection(inspection, {
+      command: "run next",
+      latestRunId: getLatestRunId(),
+    });
+    outputJson({
+      command: "run next",
+      runId: serialized.runId,
+      runPath: serialized.runPath,
+      latest: serialized.latest,
+      state: serialized.state,
+      artifacts: serialized.artifacts,
+      reviewer: serialized.reviewer,
+      nextAction: serialized.nextAction,
+    });
+    return;
+  }
 
   console.log("CEWP Coordinator Mode next");
   console.log(`Run ID: ${runId}`);

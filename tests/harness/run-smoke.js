@@ -64,6 +64,14 @@ function cewpWithEnv(args, cwd, env) {
   return runNode(cewpCli, args, cwd, { env });
 }
 
+function parseJsonOutput(result, label) {
+  try {
+    return JSON.parse(result.stdout);
+  } catch (error) {
+    throw new Error(`${label} did not produce valid JSON: ${error.message}\n${result.stdout}`);
+  }
+}
+
 function initHarnessRun(repoRoot, tasks) {
   const init = cewp(["run", "init", "--workers", "2", "--reviewer"], repoRoot);
   assertExit(init, 0, "run init");
@@ -230,8 +238,11 @@ async function main() {
       const help = cewp(["--help"], cewpRoot);
       assertExit(help, 0, "cewp --help");
       assertIncludes(help.stdout, "cewp run list [--limit <count>]", "help includes operator run list");
+      assertIncludes(help.stdout, "cewp run list --json", "help includes operator run list json");
       assertIncludes(help.stdout, "cewp run status [run-id]", "help includes operator run status");
+      assertIncludes(help.stdout, "cewp run status 20260528-232250 --json", "help includes operator run status json");
       assertIncludes(help.stdout, "cewp run next [run-id]", "help includes operator run next");
+      assertIncludes(help.stdout, "cewp run next 20260528-232250 --json", "help includes operator run next json");
     });
 
     await step("doctor", () => {
@@ -331,6 +342,12 @@ async function main() {
       assertExit(emptyList, 0, "run list no runs");
       assertIncludes(emptyList.stdout, "CEWP Coordinator Mode run list", "run list heading no runs");
       assertIncludes(emptyList.stdout, "No CEWP runs found.", "run list no runs message");
+      const emptyListJson = cewp(["run", "list", "--json"], emptyRunsRepo);
+      assertExit(emptyListJson, 0, "run list no runs json");
+      const emptyListValue = parseJsonOutput(emptyListJson, "run list no runs json");
+      assert(emptyListValue.command === "run list", "run list no runs json command");
+      assert(Array.isArray(emptyListValue.runs) && emptyListValue.runs.length === 0, "run list no runs json runs");
+      assert(emptyListValue.latestRunId === null, "run list no runs json latest");
 
       const listRepo = makeTempRepo("cewp-harness-run-list-");
       tempRepos.push(listRepo);
@@ -408,10 +425,35 @@ async function main() {
       assertIncludes(list.stdout, "next: complete-manual", "run list manual next label");
       assertIncludes(list.stdout, "next: finalize-dry-run", "run list finalize next label");
 
+      const listJson = cewp(["run", "list", "--json"], listRepo);
+      assertExit(listJson, 0, "run list json");
+      const listValue = parseJsonOutput(listJson, "run list json");
+      assert(listValue.command === "run list", "run list json command");
+      assert(listValue.latestRunId === latestRunIdForList, "run list json latest run id");
+      assert(Array.isArray(listValue.runs) && listValue.runs.length === 2, "run list json runs count");
+      const latestJsonRun = listValue.runs[0];
+      const oldJsonRun = listValue.runs[1];
+      assert(latestJsonRun.runId === latestRunIdForList, "run list json latest first");
+      assert(latestJsonRun.latest === true, "run list json latest marker");
+      assert(latestJsonRun.artifacts.reports.present === true, "run list json report present");
+      assert(latestJsonRun.artifacts.reviewPackets.present === true, "run list json review packet present");
+      assert(latestJsonRun.artifacts.reviews.present === true, "run list json review present");
+      assert(latestJsonRun.reviewer.pass === true, "run list json reviewer pass");
+      assert(latestJsonRun.nextAction.label === "finalize-dry-run", "run list json next label");
+      assert(oldJsonRun.artifacts.manualHandoffs.present === true, "run list json manual handoff present");
+      assert(oldJsonRun.nextAction.label === "complete-manual", "run list json manual next label");
+
       const limited = cewp(["run", "list", "--limit", "1"], listRepo);
       assertExit(limited, 0, "run list limit");
       assertIncludes(limited.stdout, `${latestRunIdForList} (latest)`, "run list limit latest");
       assertNotIncludes(limited.stdout, oldRunId, "run list limit hides older run");
+
+      const limitedJson = cewp(["run", "list", "--limit", "1", "--json"], listRepo);
+      assertExit(limitedJson, 0, "run list limit json");
+      const limitedJsonValue = parseJsonOutput(limitedJson, "run list limit json");
+      assert(limitedJsonValue.limit === 1, "run list limit json limit");
+      assert(limitedJsonValue.runs.length === 1, "run list limit json run count");
+      assert(limitedJsonValue.runs[0].runId === latestRunIdForList, "run list limit json latest");
     });
 
     await step("docs and dispatch wording", () => {
@@ -782,6 +824,20 @@ async function main() {
       assertIncludes(statusWithHandoff.stdout, "Next suggested actions:", "operator status next actions heading");
       assertIncludes(statusWithHandoff.stdout, `cewp run dispatch complete worker-a --run ${runId} --from <file>`, "operator status manual completion hint");
 
+      const statusWithHandoffJson = cewp(["run", "status", runId, "--json"], manualRepo);
+      assertExit(statusWithHandoffJson, 0, "operator status manual handoff json");
+      const statusWithHandoffValue = parseJsonOutput(statusWithHandoffJson, "operator status manual handoff json");
+      assert(statusWithHandoffValue.command === "run status", "operator status json command");
+      assert(statusWithHandoffValue.runId === runId, "operator status json run id");
+      assert(typeof statusWithHandoffValue.runPath === "string" && statusWithHandoffValue.runPath.includes(runId), "operator status json run path");
+      assert(statusWithHandoffValue.latest === true, "operator status json latest marker");
+      assert(statusWithHandoffValue.artifacts.manualHandoffs.present === true, "operator status json manual present");
+      assert(statusWithHandoffValue.artifacts.reports.present === false, "operator status json reports absent");
+      assert(statusWithHandoffValue.artifacts.events.fileCount > 0, "operator status json event files");
+      assert(statusWithHandoffValue.reviewer.pass === false, "operator status json reviewer pass false");
+      assert(statusWithHandoffValue.nextAction.label === "complete-manual", "operator status json next label");
+      assertIncludes(statusWithHandoffValue.nextAction.command, `cewp run dispatch complete worker-a --run ${runId}`, "operator status json next command");
+
       const beforeNext = snapshotRunFiles(runRoot);
       const nextWithHandoff = cewp(["run", "next", runId], manualRepo);
       const afterNext = snapshotRunFiles(runRoot);
@@ -792,6 +848,15 @@ async function main() {
       assertIncludes(nextWithHandoff.stdout, "Current state:", "operator next state summary");
       assertIncludes(nextWithHandoff.stdout, `Recommended command: cewp run dispatch complete worker-a --run ${runId} --from <file>`, "operator next manual completion command");
       assertIncludes(nextWithHandoff.stdout, "Reason: worker-a has a manual handoff but its expected report is missing.", "operator next manual completion reason");
+
+      const nextWithHandoffJson = cewp(["run", "next", runId, "--json"], manualRepo);
+      assertExit(nextWithHandoffJson, 0, "operator next manual handoff json");
+      const nextWithHandoffValue = parseJsonOutput(nextWithHandoffJson, "operator next manual handoff json");
+      assert(nextWithHandoffValue.command === "run next", "operator next json command");
+      assert(nextWithHandoffValue.runId === runId, "operator next json run id");
+      assert(nextWithHandoffValue.artifacts.manualHandoffs.present === true, "operator next json manual present");
+      assert(nextWithHandoffValue.nextAction.label === "complete-manual", "operator next json next label");
+      assertIncludes(nextWithHandoffValue.nextAction.reason, "manual handoff", "operator next json next reason");
 
       const manualResultPath = path.join(manualRepo, "manual-result-worker-a.md");
       writeFile(
@@ -820,6 +885,12 @@ async function main() {
       assertIncludes(nextWithReport.stdout, `Recommended command: cewp run collect --run ${runId}`, "operator next collect command");
       assertIncludes(nextWithReport.stdout, "Reason: Worker reports exist but no review packet has been collected.", "operator next collect reason");
 
+      const nextWithReportJson = cewp(["run", "next", "--run", runId, "--json"], manualRepo);
+      assertExit(nextWithReportJson, 0, "operator next worker report json");
+      const nextWithReportValue = parseJsonOutput(nextWithReportJson, "operator next worker report json");
+      assert(nextWithReportValue.artifacts.reports.present === true, "operator next json report present");
+      assert(nextWithReportValue.nextAction.label === "collect", "operator next json collect label");
+
       const collect = cewp(["run", "collect", "--run", runId], manualRepo);
       assertExit(collect, 0, "manual complete collect");
       const packetPath = path.join(manualRepo, ".cewp", "runs", runId, "review-packets", "review-packet.md");
@@ -844,6 +915,19 @@ async function main() {
       assertIncludes(nextWithPassReview.stdout, `Recommended command: cewp run finalize --run ${runId} --dry-run`, "operator next finalize dry-run command");
       assertIncludes(nextWithPassReview.stdout, "Reason: Reviewer report reviews/reviewer-report.md contains Decision: PASS.", "operator next finalize reason");
 
+      const statusWithPassReviewJson = cewp(["run", "status", "--run", runId, "--json"], manualRepo);
+      assertExit(statusWithPassReviewJson, 0, "operator status reviewer PASS json");
+      const statusWithPassReviewValue = parseJsonOutput(statusWithPassReviewJson, "operator status reviewer PASS json");
+      assert(statusWithPassReviewValue.artifacts.reviews.present === true, "operator status json review present");
+      assert(statusWithPassReviewValue.reviewer.pass === true, "operator status json reviewer pass");
+      assert(statusWithPassReviewValue.nextAction.label === "finalize-dry-run", "operator status json finalize label");
+
+      const nextWithPassReviewJson = cewp(["run", "next", "--run", runId, "--json"], manualRepo);
+      assertExit(nextWithPassReviewJson, 0, "operator next reviewer PASS json");
+      const nextWithPassReviewValue = parseJsonOutput(nextWithPassReviewJson, "operator next reviewer PASS json");
+      assert(nextWithPassReviewValue.reviewer.pass === true, "operator next json reviewer pass");
+      assert(nextWithPassReviewValue.nextAction.label === "finalize-dry-run", "operator next json finalize label");
+
       const missing = cewp(["run", "dispatch", "complete", "worker-a", "--run", runId, "--from", path.join(manualRepo, "missing.md")], manualRepo);
       assertExit(missing, 1, "manual complete missing file");
       assertIncludes(missing.stderr, "manual completion source file missing", "manual complete missing file message");
@@ -866,6 +950,12 @@ async function main() {
       assertSnapshotsEqual(beforeNext, afterNext, "operator next no safe action should be read-only");
       assertIncludes(next.stdout, "Recommended command: none", "operator next no safe command");
       assertIncludes(next.stdout, "Reason: no safe next action found.", "operator next no safe reason");
+
+      const nextJson = cewp(["run", "next", "--json"], coordinatorRepo);
+      assertExit(nextJson, 0, "operator next no safe action json");
+      const nextJsonValue = parseJsonOutput(nextJson, "operator next no safe action json");
+      assert(nextJsonValue.command === "run next", "operator next no safe json command");
+      assert(nextJsonValue.nextAction === null, "operator next no safe json next action");
     });
 
     await step("worktrees create", () => {

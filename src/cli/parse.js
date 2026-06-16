@@ -49,6 +49,7 @@ function parseArgs(argv) {
     withConfig: false,
     fromFile: undefined,
     limit: undefined,
+    json: false,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -146,6 +147,11 @@ function parseArgs(argv) {
 
     if (args.command === "run" && arg === "--dry-run") {
       args.dryRun = true;
+      continue;
+    }
+
+    if (args.command === "run" && arg === "--json") {
+      args.json = true;
       continue;
     }
 

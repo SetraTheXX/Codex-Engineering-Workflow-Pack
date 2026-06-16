@@ -102,15 +102,18 @@ Browse and inspect runs without changing runtime state:
 ```bash
 cewp run list
 cewp run list --limit 10
+cewp run list --json
 cewp run status
 cewp run status <run-id>
 cewp run status --run <run-id>
+cewp run status <run-id> --json
 cewp run next
 cewp run next <run-id>
 cewp run next --run <run-id>
+cewp run next <run-id> --json
 ```
 
-Use `run list` to find recent runs, see the latest run, scan artifact presence, and choose a run id. Use `run status` for the detailed inventory and suggested actions. Use `run next` when you want CEWP to print only the single most relevant safe command and a short reason. These commands can suggest manual result intake, review packet collection, reviewer dry-run, or finalize dry-run, but they do not run those actions automatically.
+Use `run list` to find recent runs, see the latest run, scan artifact presence, and choose a run id. Use `run status` for the detailed inventory and suggested actions. Use `run next` when you want CEWP to print only the single most relevant safe command and a short reason. These commands support human-readable output by default and `--json` for tools, scripts, or future operator interfaces. They can suggest manual result intake, review packet collection, reviewer dry-run, or finalize dry-run, but they do not run those actions automatically.
 
 ## Codex-Exec Adapter
 
