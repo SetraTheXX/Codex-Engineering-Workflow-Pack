@@ -600,6 +600,125 @@ function toRelativeFiles(runRoot, files) {
   return files.map((filePath) => toRunRelative(runRoot, filePath));
 }
 
+function getFileArtifactStat(filePath) {
+  try {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) {
+      return {
+        present: false,
+        mtime: null,
+        sizeBytes: null,
+      };
+    }
+
+    return {
+      present: true,
+      mtime: stat.mtime.toISOString(),
+      sizeBytes: stat.size,
+    };
+  } catch {
+    return {
+      present: false,
+      mtime: null,
+      sizeBytes: null,
+    };
+  }
+}
+
+function makeArtifactRecord(runRoot, { type, role = null, filePath }) {
+  return {
+    type,
+    role,
+    path: toRunRelative(runRoot, filePath),
+    ...getFileArtifactStat(filePath),
+  };
+}
+
+function addArtifactRecord(records, record) {
+  const key = `${record.type}\0${record.role || ""}\0${record.path}`;
+  if (!records.keys.has(key)) {
+    records.keys.add(key);
+    records.items.push(record);
+  }
+}
+
+function inferRoleFromReportPath(filePath) {
+  const basename = path.basename(filePath);
+  if (basename === "reviewer-report.md") {
+    return "reviewer";
+  }
+
+  return basename.endsWith("-report.md")
+    ? basename.slice(0, -"-report.md".length)
+    : null;
+}
+
+function inferRoleFromManualPath(filePath) {
+  return path.basename(filePath, ".md") || null;
+}
+
+function inferRoleFromLastMessagePath(filePath) {
+  const basename = path.basename(filePath);
+  return basename.endsWith("-last-message.md")
+    ? basename.slice(0, -"-last-message.md".length)
+    : null;
+}
+
+function getArtifactInventory(inspection) {
+  const records = {
+    items: [],
+    keys: new Set(),
+  };
+  const add = (type, role, filePath) => {
+    addArtifactRecord(records, makeArtifactRecord(inspection.runRoot, { type, role, filePath }));
+  };
+
+  add("run-metadata", null, path.join(inspection.runRoot, "run.json"));
+  add("board-metadata", null, path.join(inspection.runRoot, "board.json"));
+  add("review-packet", null, path.join(inspection.runRoot, "review-packets", "review-packet.md"));
+
+  for (const role of inspection.artifactRoles) {
+    add("manual-handoff", role, getManualHandoffPath(inspection.runRoot, role));
+    add("adapter-last-message", role, getLastMessagePath(inspection.runRoot, role));
+
+    if (role === "reviewer") {
+      add("reviewer-report", role, getExpectedReportPath(inspection.runRoot, role));
+    } else {
+      add("worker-report", role, getExpectedReportPath(inspection.runRoot, role));
+    }
+  }
+
+  for (const filePath of inspection.manualFiles) {
+    add("manual-handoff", inferRoleFromManualPath(filePath), filePath);
+  }
+  for (const filePath of inspection.reportFiles) {
+    add("worker-report", inferRoleFromReportPath(filePath), filePath);
+  }
+  for (const filePath of inspection.reviewFiles) {
+    add("reviewer-report", inferRoleFromReportPath(filePath), filePath);
+  }
+  for (const filePath of inspection.reviewPacketFiles) {
+    add("review-packet", null, filePath);
+  }
+  for (const filePath of inspection.lastMessageFiles) {
+    add("adapter-last-message", inferRoleFromLastMessagePath(filePath), filePath);
+  }
+  for (const filePath of inspection.eventFiles) {
+    const source = toRunRelative(inspection.runRoot, filePath);
+    add("event-file", inferRoleFromEventSource(source), filePath);
+  }
+
+  return records.items.sort((left, right) => {
+    if (left.path !== right.path) {
+      return left.path.localeCompare(right.path);
+    }
+    if (left.type !== right.type) {
+      return left.type.localeCompare(right.type);
+    }
+    return String(left.role || "").localeCompare(String(right.role || ""));
+  });
+}
+
 function getLatestRunId(repoRoot = process.cwd()) {
   const { runIds } = getRunIds(repoRoot);
   return runIds.length === 0 ? undefined : runIds[runIds.length - 1];
@@ -614,8 +733,8 @@ function getRoleStatusObject(boardJson) {
   );
 }
 
-function getArtifactSummary(inspection) {
-  return {
+function getArtifactSummary(inspection, { includeInventory = false } = {}) {
+  const summary = {
     manualHandoffs: {
       present: inspection.manualFiles.length > 0,
       count: inspection.manualFiles.length,
@@ -647,6 +766,12 @@ function getArtifactSummary(inspection) {
       files: toRelativeFiles(inspection.runRoot, inspection.eventFiles),
     },
   };
+
+  if (includeInventory) {
+    summary.inventory = getArtifactInventory(inspection);
+  }
+
+  return summary;
 }
 
 function serializeAction(action) {
@@ -661,7 +786,7 @@ function serializeAction(action) {
   };
 }
 
-function serializeRunInspection(inspection, { command, latestRunId, includeTimeline = false } = {}) {
+function serializeRunInspection(inspection, { command, latestRunId, includeTimeline = false, includeArtifactInventory = false } = {}) {
   const reviewerDecision = getReviewerDecision(inspection.reviewFiles);
 
   const serialized = {
@@ -684,7 +809,7 @@ function serializeRunInspection(inspection, { command, latestRunId, includeTimel
           .map((status) => [status, inspection.statusCounts[status]]),
       ),
     },
-    artifacts: getArtifactSummary(inspection),
+    artifacts: getArtifactSummary(inspection, { includeInventory: includeArtifactInventory }),
     reviewer: {
       reportPresent: inspection.reviewFiles.length > 0,
       decision: reviewerDecision ? reviewerDecision.decision : null,
@@ -727,6 +852,7 @@ function runStatus(options = {}) {
       command: "run status",
       latestRunId: getLatestRunId(),
       includeTimeline: true,
+      includeArtifactInventory: true,
     }));
     return;
   }
@@ -933,6 +1059,7 @@ function runResume(options = {}) {
     command: "run resume",
     latestRunId: getLatestRunId(),
     includeTimeline: true,
+    includeArtifactInventory: true,
   });
   const resume = getResumeSummary(serialized);
 

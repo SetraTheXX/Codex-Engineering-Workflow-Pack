@@ -87,6 +87,24 @@ function parseOperatorJsonData(result, label, expectedCommand) {
   return parseOperatorJsonOutput(result, label, expectedCommand).data;
 }
 
+function findArtifact(inventory, predicate, label) {
+  const artifact = inventory.find(predicate);
+  assert(artifact, label);
+  return artifact;
+}
+
+function assertPresentArtifact(artifact, label) {
+  assert(artifact.present === true, `${label} present`);
+  assert(typeof artifact.mtime === "string" && !Number.isNaN(Date.parse(artifact.mtime)), `${label} mtime`);
+  assert(typeof artifact.sizeBytes === "number" && artifact.sizeBytes >= 0, `${label} size`);
+}
+
+function assertMissingArtifact(artifact, label) {
+  assert(artifact.present === false, `${label} missing`);
+  assert(artifact.mtime === null, `${label} missing mtime`);
+  assert(artifact.sizeBytes === null, `${label} missing size`);
+}
+
 function initHarnessRun(repoRoot, tasks) {
   const init = cewp(["run", "init", "--workers", "2", "--reviewer"], repoRoot);
   assertExit(init, 0, "run init");
@@ -1023,6 +1041,43 @@ async function main() {
       assert(statusWithHandoffValue.artifacts.manualHandoffs.present === true, "operator status json manual present");
       assert(statusWithHandoffValue.artifacts.reports.present === false, "operator status json reports absent");
       assert(statusWithHandoffValue.artifacts.events.fileCount > 0, "operator status json event files");
+      assert(Array.isArray(statusWithHandoffValue.artifacts.inventory), "operator status json artifact inventory");
+      const statusRunMetadata = findArtifact(
+        statusWithHandoffValue.artifacts.inventory,
+        (artifact) => artifact.type === "run-metadata" && artifact.path === "run.json" && artifact.role === null,
+        "operator status json run metadata artifact",
+      );
+      assertPresentArtifact(statusRunMetadata, "operator status json run metadata artifact");
+      const statusBoardMetadata = findArtifact(
+        statusWithHandoffValue.artifacts.inventory,
+        (artifact) => artifact.type === "board-metadata" && artifact.path === "board.json" && artifact.role === null,
+        "operator status json board metadata artifact",
+      );
+      assertPresentArtifact(statusBoardMetadata, "operator status json board metadata artifact");
+      const statusManualHandoffArtifact = findArtifact(
+        statusWithHandoffValue.artifacts.inventory,
+        (artifact) => artifact.type === "manual-handoff" && artifact.role === "worker-a" && artifact.path === "manual/worker-a.md",
+        "operator status json manual handoff artifact",
+      );
+      assertPresentArtifact(statusManualHandoffArtifact, "operator status json manual handoff artifact");
+      const statusMissingReportArtifact = findArtifact(
+        statusWithHandoffValue.artifacts.inventory,
+        (artifact) => artifact.type === "worker-report" && artifact.role === "worker-a" && artifact.path === "reports/worker-a-report.md",
+        "operator status json missing worker report artifact",
+      );
+      assertMissingArtifact(statusMissingReportArtifact, "operator status json missing worker report artifact");
+      const statusLastMessageArtifact = findArtifact(
+        statusWithHandoffValue.artifacts.inventory,
+        (artifact) => artifact.type === "adapter-last-message" && artifact.role === "worker-a" && artifact.path === "adapter-output/worker-a-last-message.md",
+        "operator status json last message artifact",
+      );
+      assertPresentArtifact(statusLastMessageArtifact, "operator status json last message artifact");
+      const statusEventArtifact = findArtifact(
+        statusWithHandoffValue.artifacts.inventory,
+        (artifact) => artifact.type === "event-file" && artifact.path === "events/timeline.jsonl",
+        "operator status json event file artifact",
+      );
+      assertPresentArtifact(statusEventArtifact, "operator status json event file artifact");
       assert(statusWithHandoffValue.timeline.count >= 3, "operator status json timeline count");
       assert(statusWithHandoffValue.timeline.malformedCount === 1, "operator status json malformed timeline count");
       assert(statusWithHandoffValue.timeline.events.some((event) => (
@@ -1098,6 +1153,19 @@ async function main() {
       assert(resumeWithHandoffValue.command === "run resume", "operator resume json command");
       assert(resumeWithHandoffValue.runId === runId, "operator resume json run id");
       assert(resumeWithHandoffValue.artifacts.manualHandoffs.present === true, "operator resume json manual present");
+      assert(Array.isArray(resumeWithHandoffValue.artifacts.inventory), "operator resume json artifact inventory");
+      const resumeManualHandoffArtifact = findArtifact(
+        resumeWithHandoffValue.artifacts.inventory,
+        (artifact) => artifact.type === "manual-handoff" && artifact.role === "worker-a" && artifact.path === "manual/worker-a.md",
+        "operator resume json manual handoff artifact",
+      );
+      assertPresentArtifact(resumeManualHandoffArtifact, "operator resume json manual handoff artifact");
+      const resumeMissingReportArtifact = findArtifact(
+        resumeWithHandoffValue.artifacts.inventory,
+        (artifact) => artifact.type === "worker-report" && artifact.role === "worker-a" && artifact.path === "reports/worker-a-report.md",
+        "operator resume json missing worker report artifact",
+      );
+      assertMissingArtifact(resumeMissingReportArtifact, "operator resume json missing worker report artifact");
       assert(resumeWithHandoffValue.timeline.count === statusWithHandoffValue.timeline.count, "operator resume json timeline count");
       assert(resumeWithHandoffValue.timeline.malformedCount === 1, "operator resume json malformed timeline count");
       assert(resumeWithHandoffValue.timeline.events.some((event) => event.type === "review_waiting" && event.role === "reviewer"), "operator resume json timeline event");
@@ -1177,6 +1245,24 @@ async function main() {
       assertExit(statusWithPassReviewJson, 0, "operator status reviewer PASS json");
       const statusWithPassReviewValue = parseOperatorJsonData(statusWithPassReviewJson, "operator status reviewer PASS json", "run status");
       assert(statusWithPassReviewValue.artifacts.reviews.present === true, "operator status json review present");
+      const statusWorkerReportArtifact = findArtifact(
+        statusWithPassReviewValue.artifacts.inventory,
+        (artifact) => artifact.type === "worker-report" && artifact.role === "worker-a" && artifact.path === "reports/worker-a-report.md",
+        "operator status json worker report artifact",
+      );
+      assertPresentArtifact(statusWorkerReportArtifact, "operator status json worker report artifact");
+      const statusReviewPacketArtifact = findArtifact(
+        statusWithPassReviewValue.artifacts.inventory,
+        (artifact) => artifact.type === "review-packet" && artifact.role === null && artifact.path === "review-packets/review-packet.md",
+        "operator status json review packet artifact",
+      );
+      assertPresentArtifact(statusReviewPacketArtifact, "operator status json review packet artifact");
+      const statusReviewerReportArtifact = findArtifact(
+        statusWithPassReviewValue.artifacts.inventory,
+        (artifact) => artifact.type === "reviewer-report" && artifact.role === "reviewer" && artifact.path === "reviews/reviewer-report.md",
+        "operator status json reviewer report artifact",
+      );
+      assertPresentArtifact(statusReviewerReportArtifact, "operator status json reviewer report artifact");
       assert(statusWithPassReviewValue.reviewer.pass === true, "operator status json reviewer pass");
       assert(statusWithPassReviewValue.nextAction.label === "finalize-dry-run", "operator status json finalize label");
 
@@ -1190,6 +1276,12 @@ async function main() {
       assertExit(resumeWithPassReviewJson, 0, "operator resume reviewer PASS json");
       const resumeWithPassReviewValue = parseOperatorJsonData(resumeWithPassReviewJson, "operator resume reviewer PASS json", "run resume");
       assert(resumeWithPassReviewValue.reviewer.pass === true, "operator resume json reviewer pass");
+      const resumeReviewerReportArtifact = findArtifact(
+        resumeWithPassReviewValue.artifacts.inventory,
+        (artifact) => artifact.type === "reviewer-report" && artifact.role === "reviewer" && artifact.path === "reviews/reviewer-report.md",
+        "operator resume json reviewer report artifact",
+      );
+      assertPresentArtifact(resumeReviewerReportArtifact, "operator resume json reviewer report artifact");
       assert(resumeWithPassReviewValue.nextAction.label === "finalize-dry-run", "operator resume json finalize label");
       assert(resumeWithPassReviewValue.resume.recommendedCommand === `cewp run finalize --run ${runId} --dry-run`, "operator resume json recommended command");
 
