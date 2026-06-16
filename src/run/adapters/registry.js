@@ -2,14 +2,17 @@
 
 const codexExec = require("./codex-exec");
 const manual = require("./manual");
+const opencode = require("./opencode");
 const { normalizeLegacyAvailability } = require("./availability");
 
 const CODEX_EXEC_ADAPTER = "codex-exec";
 const MANUAL_ADAPTER = "manual";
+const OPENCODE_ADAPTER = "opencode";
 
 const adapters = new Map([
   [CODEX_EXEC_ADAPTER, codexExec],
   [MANUAL_ADAPTER, manual],
+  [OPENCODE_ADAPTER, opencode],
 ]);
 
 function getSupportedAdapterNames() {
@@ -67,6 +70,7 @@ function getAdapterAvailability(adapterName, options = {}) {
 module.exports = {
   CODEX_EXEC_ADAPTER,
   MANUAL_ADAPTER,
+  OPENCODE_ADAPTER,
   getSupportedAdapterNames,
   formatSupportedAdapters,
   missingAdapterMessage,

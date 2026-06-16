@@ -22,6 +22,10 @@ function list(options) {
 function formatAdapterCapabilities(capabilities) {
   const labels = [capabilities.kind];
 
+  if (capabilities.experimental) {
+    labels.push("experimental");
+  }
+
   if (capabilities.supportsDryRun) {
     labels.push("dry-run");
   }
@@ -46,6 +50,10 @@ function formatAdapterCapabilities(capabilities) {
 
   if (capabilities.supportsLastMessage) {
     labels.push("last-message");
+  }
+
+  if (capabilities.executionImplemented === false) {
+    labels.push("dry-run only");
   }
 
   return labels.join(", ");

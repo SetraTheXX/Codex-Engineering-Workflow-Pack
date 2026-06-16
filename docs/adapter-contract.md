@@ -2,7 +2,7 @@
 
 Status: public contract note. This document describes the adapter boundary used by Coordinator Mode.
 
-CEWP currently supports the guarded `codex-exec` execution adapter and a non-executing `manual` adapter. The goal of this contract is to make the execution boundary clear without weakening Coordinator Mode guardrails. CEWP includes a minimal adapter registry and role-based config normalization foundation. External AI provider support is not implemented by this document.
+CEWP currently supports the guarded `codex-exec` execution adapter, a non-executing `manual` adapter, and an experimental `opencode` dry-run-only foundation. The goal of this contract is to make the execution boundary clear without weakening Coordinator Mode guardrails. CEWP includes a minimal adapter registry and role-based config normalization foundation. Real OpenCode execution and other external AI provider support are not implemented by this document.
 
 ## What Is A CEWP Adapter?
 
@@ -61,6 +61,19 @@ It also writes an adapter last-message marker explaining that manual action is r
 
 The handoff file includes the role, run id, run path, original dispatch prompt, suggested result location, expected CEWP output path, and exact `cewp run dispatch complete <role> --from <file>` command. After a human completes the handoff, `cewp run dispatch complete <role> --from <file>` records the provided result text into the role's expected CEWP output path. Worker roles write `reports/<role>-report.md`; the reviewer role writes `reviews/reviewer-report.md`. The command also writes a last-message marker and event entry, but it does not bypass scope checks or the reviewer decision gate.
 
+### `opencode`
+
+The `opencode` adapter is an experimental foundation for future OpenCode integration.
+
+Current behavior:
+- `--dry-run` previews the selected provider and intended command shape without starting OpenCode,
+- availability reports whether the `opencode` binary appears to be present,
+- `cewp.config.json` may resolve a role to `"opencode"`,
+- non-dry-run dispatch fails closed with `OpenCode adapter execution is not implemented yet; use --dry-run only.`,
+- no OpenCode process is started by non-dry-run dispatch in this release.
+
+This is not full OpenCode support. It does not add Claude Code, Gemini, Hermes, local model, or other external provider execution.
+
 ## Adapter Registry And Config Foundation
 
 CEWP has a minimal internal adapter registry. The registry currently supports:
@@ -68,6 +81,7 @@ CEWP has a minimal internal adapter registry. The registry currently supports:
 ```txt
 codex-exec
 manual
+opencode
 ```
 
 Dispatch execution resolves the selected provider through a role-aware config normalization helper before looking it up in the registry. The recognized roles are:
@@ -94,7 +108,7 @@ CEWP may also read an optional root-level `cewp.config.json` file. Only the top-
 }
 ```
 
-When the file is missing, CEWP keeps the default `codex-exec` provider for every role. A CLI `--adapter` value overrides the selected role. Invalid JSON fails with a clear `Invalid cewp.config.json JSON` message, and unsupported providers fail through the adapter registry. Supported providers are `codex-exec` and `manual`; external provider implementations are not included.
+When the file is missing, CEWP keeps the default `codex-exec` provider for every role. A CLI `--adapter` value overrides the selected role. Invalid JSON fails with a clear `Invalid cewp.config.json JSON` message, and unsupported providers fail through the adapter registry. Supported providers are `codex-exec`, `manual`, and experimental dry-run-only `opencode`; full external provider execution is not included.
 
 `cewp doctor` reports the adapter config source and resolved provider for each role.
 
@@ -112,11 +126,13 @@ Each registered adapter exposes static capability metadata so CEWP can describe 
   "supportsResultIntake": false,
   "requiresExternalBinary": true,
   "requiresAuth": false,
-  "supportsLastMessage": true
+  "supportsLastMessage": true,
+  "experimental": false,
+  "executionImplemented": true
 }
 ```
 
-`codex-exec` is an executing adapter that runs an external command and requires the Codex CLI or an explicit command override. `manual` is a non-executing adapter that supports handoff and result intake without running external commands or requiring an external binary. `cewp doctor` prints a compact capability summary for every registered adapter.
+`codex-exec` is an executing adapter that runs an external command and requires the Codex CLI or an explicit command override. `manual` is a non-executing adapter that supports handoff and result intake without running external commands or requiring an external binary. `opencode` is marked `experimental` with `executionImplemented: false`; doctor reports it as dry-run only. `cewp doctor` prints a compact capability summary for every registered adapter.
 
 ## Adapter Lifecycle
 
@@ -298,7 +314,7 @@ Each registered adapter exposes structured availability metadata for doctor outp
 
 `available` is the boolean readiness value. `status` is `available` or `unavailable`. `reason` is a short human-readable explanation. `remediation` is null when no action is needed and otherwise describes the next setup fix. `requirements` lists concrete checks such as required binaries.
 
-`codex-exec` includes a side-effect-free availability check. `manual` reports itself available with no requirements because it only writes local handoff files and does not execute external commands.
+`codex-exec` includes a side-effect-free availability check. `manual` reports itself available with no requirements because it only writes local handoff files and does not execute external commands. `opencode` reports a required `opencode` binary and remediation, but that check is informational until real OpenCode execution is implemented.
 
 The check:
 - accepts `CEWP_CODEX_EXEC_COMMAND` as an explicit command override,
@@ -306,7 +322,7 @@ The check:
 - otherwise checks whether the `codex` executable is available with a safe version check,
 - reports a short reason and remediation when the executable is missing.
 
-`cewp doctor` reports adapter availability status, requirements, and remediation as informational output. Actual dispatch execution can fail before starting a provider process when the selected adapter is unavailable. Dry-run previews remain side-effect-free. This availability model does not add external provider support.
+`cewp doctor` reports adapter availability status, requirements, and remediation as informational output. Actual dispatch execution can fail before starting a provider process when the selected adapter is unavailable. Dry-run previews remain side-effect-free. This availability model does not add full external provider execution support.
 
 ## Provider-Neutral Boundary
 

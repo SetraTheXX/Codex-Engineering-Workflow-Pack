@@ -36,12 +36,17 @@ const {
   writeAdapterLog,
 } = require("../../src/run/adapters/codex-exec");
 const { normalizeAdapterResult: normalizeManualAdapterResult } = require("../../src/run/adapters/manual");
+const {
+  OPENCODE_NOT_IMPLEMENTED_REASON,
+  normalizeAdapterResult: normalizeOpenCodeAdapterResult,
+} = require("../../src/run/adapters/opencode");
 const { getAdapterAvailability, getAdapterCapabilities, getSupportedAdapterNames } = require("../../src/run/adapters/registry");
 const { loadAdapterConfig, normalizeAdapterConfig, resolveAdapterProviderForRole } = require("../../src/run/adapters/config");
 
 const cewpRoot = path.resolve(__dirname, "..", "..");
 const cewpCli = path.join(cewpRoot, "bin", "cewp.js");
 const packageJson = readJson(path.join(cewpRoot, "package.json"));
+const unsupportedAdapterMessage = "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual, opencode.";
 const results = [];
 const tempRepos = [];
 
@@ -312,6 +317,7 @@ async function main() {
       assertIncludes(help.stdout, "cewp run next 20260528-232250 --json", "help includes operator run next json");
       assertIncludes(help.stdout, "cewp run resume [run-id]", "help includes operator run resume");
       assertIncludes(help.stdout, "cewp run resume 20260528-232250 --json", "help includes operator run resume json");
+      assertIncludes(help.stdout, "--adapter <codex-exec|manual|opencode>", "help includes opencode adapter option");
     });
 
     await step("doctor", () => {
@@ -321,16 +327,19 @@ async function main() {
       assertIncludes(result.stdout, "codex-exec:", "doctor codex-exec availability");
       assertIncludes(result.stdout, "Requirement: binary codex:", "doctor codex-exec binary requirement");
       assertIncludes(result.stdout, "manual: available - manual adapter does not require external binaries.", "doctor manual structured availability");
+      assertIncludes(result.stdout, "opencode:", "doctor opencode availability");
+      assertIncludes(result.stdout, "Requirement: binary opencode:", "doctor opencode binary requirement");
       assertIncludes(result.stdout, "Adapter capabilities:", "doctor adapter capabilities section");
       assertIncludes(result.stdout, "codex-exec: executing, dry-run, external command", "doctor codex-exec capabilities");
       assertIncludes(result.stdout, "manual: non-executing, dry-run, handoff, result-intake, no external command", "doctor manual capabilities");
+      assertIncludes(result.stdout, "opencode: executing, experimental, dry-run, external command", "doctor opencode capabilities");
+      assertIncludes(result.stdout, "dry-run only", "doctor opencode dry-run-only capability");
       assertIncludes(result.stdout, "Adapter config:", "doctor adapter config section");
       assertIncludes(result.stdout, "Source: default", "doctor adapter config default source");
       assertIncludes(result.stdout, "manager: codex-exec", "doctor adapter config manager provider");
       assertIncludes(result.stdout, "worker-a: codex-exec", "doctor adapter config worker-a provider");
       assertIncludes(result.stdout, "worker-b: codex-exec", "doctor adapter config worker-b provider");
       assertIncludes(result.stdout, "reviewer: codex-exec", "doctor adapter config reviewer provider");
-      assertNotIncludes(result.stdout, "OpenCode", "doctor should not claim OpenCode support");
       assertNotIncludes(result.stdout, "Gemini", "doctor should not claim Gemini support");
       assertNotIncludes(result.stdout, "Claude", "doctor should not claim Claude support");
       assertNotIncludes(result.stdout, "Hermes", "doctor should not claim Hermes support");
@@ -366,7 +375,7 @@ async function main() {
       });
       const unsupportedDoctor = cewp(["doctor"], unsupportedRepo);
       assertExit(unsupportedDoctor, 1, "doctor unsupported adapter config");
-      assertIncludes(unsupportedDoctor.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.", "doctor unsupported config message");
+      assertIncludes(unsupportedDoctor.stderr, unsupportedAdapterMessage, "doctor unsupported config message");
 
       const invalidJsonRepo = makeTempRepo("cewp-harness-doctor-invalid-json-");
       tempRepos.push(invalidJsonRepo);
@@ -583,8 +592,8 @@ async function main() {
       const supported = getSupportedAdapterNames();
       assert(supported.includes("codex-exec"), "registry supports codex-exec");
       assert(supported.includes("manual"), "registry supports manual");
-      assert(supported.length === 2, `public registry should expose only codex-exec and manual: ${supported.join(", ")}`);
-      assert(!supported.includes("opencode"), "registry should not expose OpenCode");
+      assert(supported.includes("opencode"), "registry supports experimental opencode");
+      assert(supported.length === 3, `public registry should expose only codex-exec, manual, and opencode: ${supported.join(", ")}`);
       assert(!supported.includes("gemini"), "registry should not expose Gemini");
       assert(!supported.includes("claude-code"), "registry should not expose Claude Code");
       assert(!supported.includes("hermes"), "registry should not expose Hermes");
@@ -610,6 +619,19 @@ async function main() {
       assert(manualCapabilities.requiresExternalBinary === false, "manual external binary capability");
       assert(manualCapabilities.requiresAuth === false, "manual auth capability");
       assert(manualCapabilities.supportsLastMessage === true, "manual last-message capability");
+
+      const openCodeCapabilities = getAdapterCapabilities("opencode");
+      assert(openCodeCapabilities.provider === "opencode", "opencode capability provider");
+      assert(openCodeCapabilities.kind === "executing", "opencode capability kind");
+      assert(openCodeCapabilities.experimental === true, "opencode experimental capability");
+      assert(openCodeCapabilities.executesExternalCommand === true, "opencode external command capability");
+      assert(openCodeCapabilities.supportsDryRun === true, "opencode supports dry-run");
+      assert(openCodeCapabilities.supportsManualHandoff === false, "opencode manual handoff capability");
+      assert(openCodeCapabilities.supportsResultIntake === false, "opencode result intake capability");
+      assert(openCodeCapabilities.requiresExternalBinary === true, "opencode external binary capability");
+      assert(openCodeCapabilities.requiresAuth === true, "opencode auth capability");
+      assert(openCodeCapabilities.supportsLastMessage === false, "opencode last-message capability while execution is unimplemented");
+      assert(openCodeCapabilities.executionImplemented === false, "opencode execution is not implemented");
 
       const codexExecAvailability = getAdapterAvailability("codex-exec", {
         env: {
@@ -651,6 +673,24 @@ async function main() {
       assertIncludes(manualAvailability.reason, "does not require external binaries", "manual availability reason");
       assert(Array.isArray(manualAvailability.requirements) && manualAvailability.requirements.length === 0, "manual availability requirements");
 
+      const missingOpenCodeAvailability = getAdapterAvailability("opencode", {
+        env: {
+          PATH: "",
+          Path: "",
+        },
+      });
+      assert(missingOpenCodeAvailability.provider === "opencode", "opencode availability provider");
+      assert(missingOpenCodeAvailability.available === false, "opencode missing availability false");
+      assert(missingOpenCodeAvailability.status === "unavailable", "opencode missing availability status");
+      assertIncludes(missingOpenCodeAvailability.reason, "opencode executable not found", "opencode missing availability reason");
+      assertIncludes(missingOpenCodeAvailability.remediation, "Install OpenCode CLI", "opencode missing availability remediation");
+      assert(missingOpenCodeAvailability.requirements.some((requirement) => (
+        requirement.type === "binary"
+        && requirement.name === "opencode"
+        && requirement.required === true
+        && requirement.available === false
+      )), "opencode missing availability binary requirement");
+
       let unsupportedCapabilitiesError;
       try {
         getAdapterCapabilities("not-real");
@@ -658,7 +698,7 @@ async function main() {
         unsupportedCapabilitiesError = error;
       }
       assert(
-        unsupportedCapabilitiesError && unsupportedCapabilitiesError.message === "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.",
+        unsupportedCapabilitiesError && unsupportedCapabilitiesError.message === unsupportedAdapterMessage,
         "unsupported adapter capability lookup should fail through registry validation",
       );
 
@@ -669,17 +709,17 @@ async function main() {
         unsupportedAvailabilityError = error;
       }
       assert(
-        unsupportedAvailabilityError && unsupportedAvailabilityError.message === "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.",
+        unsupportedAvailabilityError && unsupportedAvailabilityError.message === unsupportedAdapterMessage,
         "unsupported adapter availability lookup should fail through registry validation",
       );
 
       const execUnsupported = cewp(["run", "dispatch", "exec", "worker-a", "--adapter", "not-real", "--dry-run"], cewpRoot);
       assertExit(execUnsupported, 1, "unsupported dispatch exec adapter");
-      assertIncludes(execUnsupported.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.", "unsupported exec adapter message");
+      assertIncludes(execUnsupported.stderr, unsupportedAdapterMessage, "unsupported exec adapter message");
 
       const pipelineUnsupported = cewp(["run", "dispatch", "pipeline", "--adapter", "not-real", "--dry-run"], cewpRoot);
       assertExit(pipelineUnsupported, 1, "unsupported dispatch pipeline adapter");
-      assertIncludes(pipelineUnsupported.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.", "unsupported pipeline adapter message");
+      assertIncludes(pipelineUnsupported.stderr, unsupportedAdapterMessage, "unsupported pipeline adapter message");
     });
 
     await step("adapter result shape", () => {
@@ -929,16 +969,21 @@ async function main() {
 
       const explicit = normalizeAdapterConfig({
         roles: {
-          "worker-a": { provider: "manual" },
+          "worker-a": { provider: "opencode" },
+          "worker-b": { provider: "manual" },
           reviewer: { provider: "codex-exec" },
         },
       });
-      assert(explicit["worker-a"].provider === "manual", "explicit worker-a manual provider");
+      assert(explicit["worker-a"].provider === "opencode", "explicit worker-a opencode provider");
+      assert(explicit["worker-b"].provider === "manual", "explicit worker-b manual provider");
       assert(explicit.reviewer.provider === "codex-exec", "explicit reviewer provider");
-      assert(explicit["worker-b"].provider === "codex-exec", "default worker-b provider remains");
       assert(
         resolveAdapterProviderForRole({ role: "worker-a", adapterName: "manual", commandName: "dispatch exec", requireAdapter: true }) === "manual",
         "resolve worker-a adapter provider",
+      );
+      assert(
+        resolveAdapterProviderForRole({ role: "worker-a", adapterName: "opencode", commandName: "dispatch exec", requireAdapter: true }) === "opencode",
+        "resolve worker-a opencode adapter provider",
       );
 
       let unsupportedProviderError;
@@ -948,7 +993,7 @@ async function main() {
         unsupportedProviderError = error;
       }
       assert(
-        unsupportedProviderError && unsupportedProviderError.message === "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.",
+        unsupportedProviderError && unsupportedProviderError.message === unsupportedAdapterMessage,
         "unsupported adapter provider should fail",
       );
 
@@ -1038,15 +1083,15 @@ async function main() {
       });
       const unsupported = cewp(["run", "dispatch", "exec", "worker-a", "--dry-run"], unsupportedRepo);
       assertExit(unsupported, 1, "unsupported config provider");
-      assertIncludes(unsupported.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.", "unsupported config provider message");
+      assertIncludes(unsupported.stderr, unsupportedAdapterMessage, "unsupported config provider message");
 
       const unsupportedWorkers = cewp(["run", "dispatch", "exec", "workers", "--dry-run"], unsupportedRepo);
       assertExit(unsupportedWorkers, 1, "unsupported config provider workers");
-      assertIncludes(unsupportedWorkers.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.", "unsupported config provider workers message");
+      assertIncludes(unsupportedWorkers.stderr, unsupportedAdapterMessage, "unsupported config provider workers message");
 
       const unsupportedPipeline = cewp(["run", "dispatch", "pipeline", "--dry-run"], unsupportedRepo);
       assertExit(unsupportedPipeline, 1, "unsupported config provider pipeline");
-      assertIncludes(unsupportedPipeline.stderr, "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.", "unsupported config provider pipeline message");
+      assertIncludes(unsupportedPipeline.stderr, unsupportedAdapterMessage, "unsupported config provider pipeline message");
 
       const invalidJsonRepo = makeTempRepo("cewp-harness-adapter-invalid-json-");
       tempRepos.push(invalidJsonRepo);
@@ -1083,6 +1128,59 @@ async function main() {
       assertExit(reviewerDryRun, 0, "config reviewer dry-run");
       assertIncludes(reviewerDryRun.stdout, "Role: reviewer", "config reviewer dry-run role");
       assertIncludes(reviewerDryRun.stdout, "Adapter: codex-exec", "config reviewer dry-run adapter");
+    });
+
+    await step("opencode adapter dry-run foundation", () => {
+      const openCodeRepo = makeTempRepo("cewp-harness-opencode-");
+      tempRepos.push(openCodeRepo);
+      const { runId } = setupFakeAdapterRun(openCodeRepo);
+
+      const dryRun = cewp(["run", "dispatch", "exec", "worker-a", "--run", runId, "--adapter", "opencode", "--dry-run"], openCodeRepo);
+      assertExit(dryRun, 0, "opencode worker dry-run");
+      assertIncludes(dryRun.stdout, "Adapter: opencode", "opencode dry-run adapter");
+      assertIncludes(dryRun.stdout, "OpenCode adapter preview:", "opencode dry-run preview");
+      assertIncludes(dryRun.stdout, "Status: experimental dry-run only", "opencode dry-run-only status");
+      assertIncludes(dryRun.stdout, "External command: not executed", "opencode dry-run external command");
+      assertIncludes(dryRun.stdout, "No processes were started.", "opencode dry-run no process");
+
+      writeJson(path.join(openCodeRepo, "cewp.config.json"), {
+        adapters: {
+          "worker-a": { provider: "opencode" },
+        },
+      });
+      const configDryRun = cewp(["run", "dispatch", "exec", "worker-a", "--run", runId, "--dry-run"], openCodeRepo);
+      assertExit(configDryRun, 0, "opencode config worker-a dry-run");
+      assertIncludes(configDryRun.stdout, "Adapter: opencode", "opencode config dry-run adapter");
+
+      const actual = cewpWithEnv(
+        ["run", "dispatch", "exec", "worker-a", "--run", runId, "--adapter", "opencode", "--yes"],
+        openCodeRepo,
+        { ...process.env, CEWP_OPENCODE_COMMAND: process.execPath },
+      );
+      assertExit(actual, 1, "opencode worker actual fails closed");
+      assertIncludes(actual.stdout, "Adapter: opencode", "opencode actual adapter");
+      assertIncludes(actual.stdout, OPENCODE_NOT_IMPLEMENTED_REASON, "opencode actual not implemented reason");
+      assertIncludes(actual.stdout, "External command: not executed", "opencode actual external command");
+      assertIncludes(actual.stdout, "No merge/push/publish was performed.", "opencode actual no publish guard");
+
+      const runRoot = path.join(openCodeRepo, ".cewp", "runs", runId);
+      const lastMessagePath = path.join(runRoot, "adapter-output", "worker-a-last-message.md");
+      const openCodeResult = normalizeOpenCodeAdapterResult({
+        role: "worker-a",
+        status: "FAIL",
+        exitCode: 1,
+        reasons: [OPENCODE_NOT_IMPLEMENTED_REASON],
+        paths: {
+          lastMessage: lastMessagePath,
+        },
+        runRoot,
+      });
+      assert(openCodeResult.schemaVersion === "adapter-result/v1", "opencode result schema version");
+      assert(openCodeResult.provider === "opencode", "opencode result provider");
+      assert(openCodeResult.ok === false, "opencode result ok false");
+      assert(openCodeResult.commandExecuted === false, "opencode result command not executed");
+      assert(openCodeResult.externalCommandExecuted === false, "opencode result external command not executed");
+      assert(openCodeResult.lastMessagePath === "adapter-output/worker-a-last-message.md", "opencode result last message path");
     });
 
     await step("manual adapter worker handoff", () => {
