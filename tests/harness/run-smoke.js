@@ -24,7 +24,17 @@ const {
   cleanupRepo,
 } = require("./lib/temp-repo");
 const { createFakeCodexAdapter } = require("./lib/fake-adapter");
-const { buildCodexExecInvocation, checkCodexExecAvailability, normalizeAdapterResult } = require("../../src/run/adapters/codex-exec");
+const { runFakeExternalAdapterContract } = require("./lib/external-adapter-contract");
+const {
+  buildCodexExecInvocation,
+  checkCodexExecAvailability,
+  didAdapterTimeOut,
+  getAdapterExitCode,
+  getAdapterOutputPaths,
+  normalizeAdapterResult,
+  runCodexExecAdapter,
+  writeAdapterLog,
+} = require("../../src/run/adapters/codex-exec");
 const { normalizeAdapterResult: normalizeManualAdapterResult } = require("../../src/run/adapters/manual");
 const { getAdapterAvailability, getAdapterCapabilities, getSupportedAdapterNames } = require("../../src/run/adapters/registry");
 const { loadAdapterConfig, normalizeAdapterConfig, resolveAdapterProviderForRole } = require("../../src/run/adapters/config");
@@ -85,6 +95,30 @@ function parseOperatorJsonOutput(result, label, expectedCommand) {
 
 function parseOperatorJsonData(result, label, expectedCommand) {
   return parseOperatorJsonOutput(result, label, expectedCommand).data;
+}
+
+function withTemporaryEnv(values, callback) {
+  const previous = {};
+  for (const key of Object.keys(values)) {
+    previous[key] = process.env[key];
+    if (values[key] === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = values[key];
+    }
+  }
+
+  try {
+    return callback();
+  } finally {
+    for (const key of Object.keys(values)) {
+      if (previous[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = previous[key];
+      }
+    }
+  }
 }
 
 function findArtifact(inventory, predicate, label) {
@@ -296,6 +330,10 @@ async function main() {
       assertIncludes(result.stdout, "worker-a: codex-exec", "doctor adapter config worker-a provider");
       assertIncludes(result.stdout, "worker-b: codex-exec", "doctor adapter config worker-b provider");
       assertIncludes(result.stdout, "reviewer: codex-exec", "doctor adapter config reviewer provider");
+      assertNotIncludes(result.stdout, "OpenCode", "doctor should not claim OpenCode support");
+      assertNotIncludes(result.stdout, "Gemini", "doctor should not claim Gemini support");
+      assertNotIncludes(result.stdout, "Claude", "doctor should not claim Claude support");
+      assertNotIncludes(result.stdout, "Hermes", "doctor should not claim Hermes support");
     });
 
     await step("doctor adapter config file summary", () => {
@@ -545,6 +583,11 @@ async function main() {
       const supported = getSupportedAdapterNames();
       assert(supported.includes("codex-exec"), "registry supports codex-exec");
       assert(supported.includes("manual"), "registry supports manual");
+      assert(supported.length === 2, `public registry should expose only codex-exec and manual: ${supported.join(", ")}`);
+      assert(!supported.includes("opencode"), "registry should not expose OpenCode");
+      assert(!supported.includes("gemini"), "registry should not expose Gemini");
+      assert(!supported.includes("claude-code"), "registry should not expose Claude Code");
+      assert(!supported.includes("hermes"), "registry should not expose Hermes");
 
       const codexExecCapabilities = getAdapterCapabilities("codex-exec");
       assert(codexExecCapabilities.provider === "codex-exec", "codex-exec capability provider");
@@ -716,6 +759,44 @@ async function main() {
       assert(manualResult.capabilitiesUsed.includes("lastMessage"), "manual adapter result last-message capability used");
     });
 
+    await step("fake external adapter contract", () => {
+      const contract = runFakeExternalAdapterContract({
+        nodePath: process.execPath,
+        tempRoot: makeTempRepo("cewp-harness-external-adapter-"),
+      });
+      tempRepos.push(contract.tempRoot);
+
+      assert(contract.success.result.schemaVersion === "adapter-result/v1", "fake external success schema");
+      assert(contract.success.result.provider === "fake-external", "fake external success provider");
+      assert(contract.success.result.status === "PASS", "fake external success status");
+      assert(contract.success.result.ok === true, "fake external success ok");
+      assert(contract.success.result.commandExecuted === true, "fake external success command executed");
+      assert(contract.success.result.externalCommandExecuted === true, "fake external success external command executed");
+      assert(contract.success.result.capabilitiesUsed.includes("externalCommand"), "fake external success capability");
+      assert(contract.success.result.capabilitiesUsed.includes("structuredJson"), "fake external structured capability");
+      assert(contract.success.result.capabilitiesUsed.includes("lastMessage"), "fake external last-message capability");
+      assert(contract.success.result.artifacts.some((artifact) => artifact.type === "stdout-log" && artifact.present === true), "fake external stdout artifact");
+      assert(contract.success.result.artifacts.some((artifact) => artifact.type === "stderr-log" && artifact.present === true), "fake external stderr artifact");
+      assert(contract.success.result.lastMessagePath === "adapter-output/worker-a-last-message.md", "fake external last-message path");
+      assert(contract.success.parsed.ok === true, "fake external parsed ok");
+      assert(contract.success.parsed.cwd === contract.worktreePath, "fake external cwd captured");
+      assert(contract.success.parsed.prompt === "Fake external adapter prompt", "fake external prompt captured");
+      assertIncludes(contract.success.stdout, "structured-json", "fake external stdout captured");
+      assertIncludes(contract.success.stderr, "fake external stderr", "fake external stderr captured");
+
+      assert(contract.invalidJson.result.status === "FAIL", "fake external invalid json status");
+      assertIncludes(contract.invalidJson.result.reason, "structured JSON parse failed", "fake external invalid json reason");
+      assert(contract.invalidJson.result.exitCode === 0, "fake external invalid json exit code");
+
+      assert(contract.nonzero.result.status === "FAIL", "fake external nonzero status");
+      assert(contract.nonzero.result.exitCode === 7, "fake external nonzero exit code");
+      assertIncludes(contract.nonzero.result.reason, "fake external cli exited with code 7", "fake external nonzero reason");
+
+      assert(contract.timeout.result.status === "FAIL", "fake external timeout status");
+      assert(contract.timeout.result.timedOut === true, "fake external timeout flag");
+      assertIncludes(contract.timeout.result.reason, "timed out", "fake external timeout reason");
+    });
+
     await step("codex exec command construction", () => {
       const invocation = buildCodexExecInvocation({
         command: "node",
@@ -733,6 +814,91 @@ async function main() {
       assert(invocation.args.includes("--cd"), "codex exec invocation cd arg");
       assert(invocation.args.includes("--output-last-message"), "codex exec invocation output arg");
       assert(invocation.args[invocation.args.length - 1] === "Do the task", "codex exec invocation prompt last");
+    });
+
+    await step("codex exec external contract audit", () => {
+      const fake = createFakeCodexAdapter();
+      const auditRepo = makeTempRepo("cewp-harness-codex-contract-");
+      tempRepos.push(auditRepo);
+      const runRoot = path.join(auditRepo, ".cewp", "runs", "codex-contract-run");
+      const worktreePath = path.join(auditRepo, "worktree");
+      const promptPath = path.join(runRoot, "dispatch-prompts", "worker-a-prompt.md");
+      const outputPaths = getAdapterOutputPaths(runRoot, "worker-a");
+      fs.mkdirSync(worktreePath, { recursive: true });
+      fs.mkdirSync(path.dirname(promptPath), { recursive: true });
+      fs.mkdirSync(outputPaths.adapterOutputRoot, { recursive: true });
+      fs.writeFileSync(promptPath, [
+        "Role: worker-a",
+        "Task: codex-contract",
+        "",
+        "Exercise codex-exec external adapter contract.",
+      ].join("\n"));
+
+      try {
+        withTemporaryEnv({
+          CEWP_CODEX_EXEC_COMMAND: fake.env.CEWP_CODEX_EXEC_COMMAND,
+          CEWP_CODEX_EXEC_PREFIX_ARGS: fake.env.CEWP_CODEX_EXEC_PREFIX_ARGS,
+          CEWP_FAKE_CODEX_MODE: fake.env.CEWP_FAKE_CODEX_MODE,
+        }, () => {
+          const execResult = runCodexExecAdapter({
+            worktreePath,
+            promptPath,
+            outputLastMessagePath: outputPaths.outputLastMessagePath,
+            timeoutSeconds: 5,
+          });
+          writeAdapterLog(outputPaths.stdoutPath, execResult.stdout);
+          writeAdapterLog(outputPaths.stderrPath, execResult.stderr);
+
+          assert(getAdapterExitCode(execResult) === 0, "codex-exec fake exit code");
+          assert(didAdapterTimeOut(execResult) === false, "codex-exec fake should not time out");
+          assertIncludes(execResult.stdout, "fake codex stdout: worker-a codex-contract", "codex-exec stdout capture");
+          assertIncludes(execResult.stderr, "fake codex stderr: worker-a codex-contract", "codex-exec stderr capture");
+          assertFileExists(outputPaths.outputLastMessagePath, "codex-exec last message");
+          assertIncludes(fs.readFileSync(outputPaths.outputLastMessagePath, "utf8"), "Fake codex completed worker-a", "codex-exec last message content");
+
+          const runtimeResult = normalizeAdapterResult({
+            role: "worker-a",
+            status: "PASS",
+            exitCode: getAdapterExitCode(execResult),
+            timedOut: didAdapterTimeOut(execResult),
+            paths: {
+              stdout: outputPaths.stdoutPath,
+              stderr: outputPaths.stderrPath,
+              lastMessage: outputPaths.outputLastMessagePath,
+            },
+            runRoot,
+          });
+          assert(runtimeResult.schemaVersion === "adapter-result/v1", "codex-exec audit schema");
+          assert(runtimeResult.provider === "codex-exec", "codex-exec audit provider");
+          assert(runtimeResult.commandExecuted === true, "codex-exec audit command executed");
+          assert(runtimeResult.externalCommandExecuted === true, "codex-exec audit external command executed");
+          assert(runtimeResult.capabilitiesUsed.includes("externalCommand"), "codex-exec audit external command capability");
+          assert(runtimeResult.capabilitiesUsed.includes("lastMessage"), "codex-exec audit last-message capability");
+          assert(runtimeResult.artifacts.some((artifact) => artifact.type === "stdout-log" && artifact.present === true), "codex-exec audit stdout artifact");
+          assert(runtimeResult.artifacts.some((artifact) => artifact.type === "stderr-log" && artifact.present === true), "codex-exec audit stderr artifact");
+          assert(runtimeResult.artifacts.some((artifact) => artifact.type === "last-message" && artifact.present === true), "codex-exec audit last-message artifact");
+        });
+
+        withTemporaryEnv({
+          CEWP_CODEX_EXEC_COMMAND: process.execPath,
+          CEWP_CODEX_EXEC_PREFIX_ARGS: JSON.stringify([
+            path.join(__dirname, "fixtures", "fake-external-cli.js"),
+            "--mode",
+            "timeout",
+          ]),
+        }, () => {
+          const timeoutResult = runCodexExecAdapter({
+            worktreePath,
+            promptPath,
+            outputLastMessagePath: outputPaths.outputLastMessagePath,
+            timeoutSeconds: 1,
+          });
+          assert(didAdapterTimeOut(timeoutResult) === true, "codex-exec timeout detection");
+          assert(getAdapterExitCode(timeoutResult) === 1, "codex-exec timeout fallback exit code");
+        });
+      } finally {
+        fs.rmSync(fake.fakeRoot, { recursive: true, force: true });
+      }
     });
 
     await step("codex exec availability", () => {

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added a test-only external adapter contract harness for future provider readiness without adding real external provider support.
+
 ## 0.6.0-beta.0
 
 ### Summary
