@@ -4,6 +4,18 @@ const fs = require("node:fs");
 const path = require("node:path");
 const childProcess = require("node:child_process");
 
+const capabilities = {
+  provider: "codex-exec",
+  kind: "executing",
+  executesExternalCommand: true,
+  supportsDryRun: true,
+  supportsManualHandoff: false,
+  supportsResultIntake: false,
+  requiresExternalBinary: true,
+  requiresAuth: false,
+  supportsLastMessage: true,
+};
+
 function quote(value) {
   return `"${String(value).replace(/"/g, '\\"')}"`;
 }
@@ -258,6 +270,7 @@ function normalizeAdapterResult({
 }
 
 module.exports = {
+  capabilities,
   validateTimeoutSeconds,
   getAdapterOutputRoot,
   getAdapterOutputPaths,

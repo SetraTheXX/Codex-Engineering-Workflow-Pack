@@ -98,6 +98,26 @@ When the file is missing, CEWP keeps the default `codex-exec` provider for every
 
 `cewp doctor` reports the adapter config source and resolved provider for each role.
 
+## Adapter Capability Metadata
+
+Each registered adapter exposes static capability metadata so CEWP can describe provider behavior without executing it. Current metadata fields are:
+
+```json
+{
+  "provider": "codex-exec",
+  "kind": "executing",
+  "executesExternalCommand": true,
+  "supportsDryRun": true,
+  "supportsManualHandoff": false,
+  "supportsResultIntake": false,
+  "requiresExternalBinary": true,
+  "requiresAuth": false,
+  "supportsLastMessage": true
+}
+```
+
+`codex-exec` is an executing adapter that runs an external command and requires the Codex CLI or an explicit command override. `manual` is a non-executing adapter that supports handoff and result intake without running external commands or requiring an external binary. `cewp doctor` prints a compact capability summary for every registered adapter.
+
 ## Adapter Lifecycle
 
 The provider-independent lifecycle should stay stable:

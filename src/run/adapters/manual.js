@@ -11,6 +11,17 @@ const {
 
 const MANUAL_ADAPTER = "manual";
 const MANUAL_ACTION_REASON = "manual action required; adapter did not execute code.";
+const capabilities = {
+  provider: MANUAL_ADAPTER,
+  kind: "non-executing",
+  executesExternalCommand: false,
+  supportsDryRun: true,
+  supportsManualHandoff: true,
+  supportsResultIntake: true,
+  requiresExternalBinary: false,
+  requiresAuth: false,
+  supportsLastMessage: true,
+};
 
 function getManualOutputRoot(runRoot) {
   return path.join(runRoot, "manual");
@@ -158,6 +169,7 @@ function normalizeAdapterResult({
 module.exports = {
   MANUAL_ADAPTER,
   MANUAL_ACTION_REASON,
+  capabilities,
   executionName: "manual adapter",
   getAdapterOutputPaths,
   getWorkerOutputPaths,

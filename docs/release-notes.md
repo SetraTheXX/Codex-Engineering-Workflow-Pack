@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added static adapter capability metadata for `codex-exec` and `manual`, with compact `cewp doctor` summaries.
+
 ## 0.5.0-beta.0
 
 ### Summary

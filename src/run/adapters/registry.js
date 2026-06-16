@@ -46,6 +46,11 @@ function getAdapter(adapterName, options = {}) {
   return adapters.get(adapterName);
 }
 
+function getAdapterCapabilities(adapterName, options = {}) {
+  const adapter = getAdapter(adapterName, options);
+  return { ...adapter.capabilities };
+}
+
 module.exports = {
   CODEX_EXEC_ADAPTER,
   MANUAL_ADAPTER,
@@ -55,4 +60,5 @@ module.exports = {
   unsupportedAdapterMessage,
   validateAdapterName,
   getAdapter,
+  getAdapterCapabilities,
 };

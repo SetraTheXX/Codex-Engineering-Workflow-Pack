@@ -26,7 +26,7 @@ const {
 const { createFakeCodexAdapter } = require("./lib/fake-adapter");
 const { buildCodexExecInvocation, checkCodexExecAvailability, normalizeAdapterResult } = require("../../src/run/adapters/codex-exec");
 const { normalizeAdapterResult: normalizeManualAdapterResult } = require("../../src/run/adapters/manual");
-const { getSupportedAdapterNames } = require("../../src/run/adapters/registry");
+const { getAdapterCapabilities, getSupportedAdapterNames } = require("../../src/run/adapters/registry");
 const { loadAdapterConfig, normalizeAdapterConfig, resolveAdapterProviderForRole } = require("../../src/run/adapters/config");
 
 const cewpRoot = path.resolve(__dirname, "..", "..");
@@ -252,6 +252,9 @@ async function main() {
       assertExit(result, 0, "cewp doctor");
       assertIncludes(result.stdout, "Adapter availability:", "doctor adapter availability section");
       assertIncludes(result.stdout, "codex-exec:", "doctor codex-exec availability");
+      assertIncludes(result.stdout, "Adapter capabilities:", "doctor adapter capabilities section");
+      assertIncludes(result.stdout, "codex-exec: executing, dry-run, external command", "doctor codex-exec capabilities");
+      assertIncludes(result.stdout, "manual: non-executing, dry-run, handoff, result-intake, no external command", "doctor manual capabilities");
       assertIncludes(result.stdout, "Adapter config:", "doctor adapter config section");
       assertIncludes(result.stdout, "Source: default", "doctor adapter config default source");
       assertIncludes(result.stdout, "manager: codex-exec", "doctor adapter config manager provider");
@@ -507,6 +510,39 @@ async function main() {
       const supported = getSupportedAdapterNames();
       assert(supported.includes("codex-exec"), "registry supports codex-exec");
       assert(supported.includes("manual"), "registry supports manual");
+
+      const codexExecCapabilities = getAdapterCapabilities("codex-exec");
+      assert(codexExecCapabilities.provider === "codex-exec", "codex-exec capability provider");
+      assert(codexExecCapabilities.kind === "executing", "codex-exec capability kind");
+      assert(codexExecCapabilities.executesExternalCommand === true, "codex-exec executes external command");
+      assert(codexExecCapabilities.supportsDryRun === true, "codex-exec supports dry-run");
+      assert(codexExecCapabilities.supportsManualHandoff === false, "codex-exec manual handoff capability");
+      assert(codexExecCapabilities.supportsResultIntake === false, "codex-exec result intake capability");
+      assert(codexExecCapabilities.requiresExternalBinary === true, "codex-exec external binary capability");
+      assert(codexExecCapabilities.requiresAuth === false, "codex-exec auth capability");
+      assert(codexExecCapabilities.supportsLastMessage === true, "codex-exec last-message capability");
+
+      const manualCapabilities = getAdapterCapabilities("manual");
+      assert(manualCapabilities.provider === "manual", "manual capability provider");
+      assert(manualCapabilities.kind === "non-executing", "manual capability kind");
+      assert(manualCapabilities.executesExternalCommand === false, "manual external command capability");
+      assert(manualCapabilities.supportsDryRun === true, "manual supports dry-run");
+      assert(manualCapabilities.supportsManualHandoff === true, "manual handoff capability");
+      assert(manualCapabilities.supportsResultIntake === true, "manual result intake capability");
+      assert(manualCapabilities.requiresExternalBinary === false, "manual external binary capability");
+      assert(manualCapabilities.requiresAuth === false, "manual auth capability");
+      assert(manualCapabilities.supportsLastMessage === true, "manual last-message capability");
+
+      let unsupportedCapabilitiesError;
+      try {
+        getAdapterCapabilities("not-real");
+      } catch (error) {
+        unsupportedCapabilitiesError = error;
+      }
+      assert(
+        unsupportedCapabilitiesError && unsupportedCapabilitiesError.message === "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.",
+        "unsupported adapter capability lookup should fail through registry validation",
+      );
 
       const execUnsupported = cewp(["run", "dispatch", "exec", "worker-a", "--adapter", "not-real", "--dry-run"], cewpRoot);
       assertExit(execUnsupported, 1, "unsupported dispatch exec adapter");

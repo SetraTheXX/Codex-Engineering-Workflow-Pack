@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { resolveTarget, getSkillStatus } = require("./paths");
-const { getAdapter, getSupportedAdapterNames } = require("../run/adapters/registry");
+const { getAdapter, getAdapterCapabilities, getSupportedAdapterNames } = require("../run/adapters/registry");
 const { ADAPTER_CONFIG_FILE, ADAPTER_CONFIG_ROLES, loadAdapterConfig } = require("../run/adapters/config");
 
 function list(options) {
@@ -17,6 +17,38 @@ function list(options) {
     const state = status.hasDirectory && status.hasSkillFile ? "OK" : "MISSING";
     console.log(`[${state}] ${status.skill}`);
   }
+}
+
+function formatAdapterCapabilities(capabilities) {
+  const labels = [capabilities.kind];
+
+  if (capabilities.supportsDryRun) {
+    labels.push("dry-run");
+  }
+
+  if (capabilities.supportsManualHandoff) {
+    labels.push("handoff");
+  }
+
+  if (capabilities.supportsResultIntake) {
+    labels.push("result-intake");
+  }
+
+  labels.push(capabilities.executesExternalCommand ? "external command" : "no external command");
+
+  if (capabilities.requiresExternalBinary) {
+    labels.push("external binary");
+  }
+
+  if (capabilities.requiresAuth) {
+    labels.push("auth");
+  }
+
+  if (capabilities.supportsLastMessage) {
+    labels.push("last-message");
+  }
+
+  return labels.join(", ");
 }
 
 function doctor(options) {
@@ -51,6 +83,12 @@ function doctor(options) {
       ? adapter.checkAdapterAvailability()
       : adapter.checkCodexExecAvailability();
     console.log(`[${availability.status === "PASS" ? "OK" : "WARN"}] ${adapterName}: ${availability.reason}`);
+  }
+
+  console.log("");
+  console.log("Adapter capabilities:");
+  for (const adapterName of getSupportedAdapterNames()) {
+    console.log(`  ${adapterName}: ${formatAdapterCapabilities(getAdapterCapabilities(adapterName, { commandName: "doctor" }))}`);
   }
 
   const adapterConfig = loadAdapterConfig(process.cwd());
