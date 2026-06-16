@@ -1,14 +1,12 @@
 "use strict";
 
-const childProcess = require("node:child_process");
-const fs = require("node:fs");
-const path = require("node:path");
 const {
   getAdapterOutputPaths,
   getWorkerOutputPaths,
   copyWorkerOutputToRun,
   writeAdapterLog,
 } = require("./codex-exec");
+const { buildAdapterCliCommandCandidates, probeAdapterCli } = require("./cli-probe");
 const { normalizeLegacyAvailability } = require("./availability");
 const { normalizeAdapterResult: normalizeAdapterResultBase } = require("./result");
 
@@ -58,33 +56,15 @@ function getOpenCodeCommand(env = process.env) {
   return env.CEWP_OPENCODE_COMMAND || "opencode";
 }
 
-function unique(values) {
-  return Array.from(new Set(values.filter(Boolean)));
-}
-
-function getPathEntries(env = process.env) {
-  return String(env.PATH || env.Path || "")
-    .split(path.delimiter)
-    .filter((value) => value.length > 0);
-}
-
 function getOpenCodeCommandCandidates(env = process.env) {
-  if (env.CEWP_OPENCODE_COMMAND) {
-    return [env.CEWP_OPENCODE_COMMAND];
-  }
-
-  const candidates = [OPENCODE_COMMAND_CONTRACT.binary];
-  if (process.platform === "win32") {
-    for (const pathEntry of getPathEntries(env)) {
-      candidates.push(path.join(pathEntry, "opencode.exe"));
-      const npmPackageBinary = path.join(pathEntry, "node_modules", "opencode-ai", "bin", "opencode.exe");
-      if (fs.existsSync(npmPackageBinary)) {
-        candidates.push(npmPackageBinary);
-      }
-    }
-  }
-
-  return unique(candidates);
+  return buildAdapterCliCommandCandidates({
+    binary: OPENCODE_COMMAND_CONTRACT.binary,
+    envOverride: OPENCODE_COMMAND_CONTRACT.envOverride,
+    env,
+    windowsPackageBinaries: [
+      ["node_modules", "opencode-ai", "bin", "opencode.exe"],
+    ],
+  });
 }
 
 function buildOpenCodeRunInvocation({ command, worktreePath, prompt, format = "json" } = {}) {
@@ -104,82 +84,21 @@ function buildOpenCodeRunInvocation({ command, worktreePath, prompt, format = "j
 }
 
 function checkOpenCodeAvailability({ env = process.env, timeoutMs = 5000 } = {}) {
-  const command = getOpenCodeCommand(env);
-
-  if (env.CEWP_OPENCODE_COMMAND) {
-    return {
-      adapter: OPENCODE_ADAPTER,
-      status: "PASS",
-      reason: "CEWP_OPENCODE_COMMAND override is set; adapter command is managed by the caller.",
-      command,
-      override: true,
-    };
-  }
-
-  const candidates = getOpenCodeCommandCandidates(env);
-  let lastResult;
-  let lastCommand = command;
-
-  for (const candidate of candidates) {
-    const result = childProcess.spawnSync(candidate, OPENCODE_COMMAND_CONTRACT.availabilityArgs, {
-      encoding: "utf8",
-      env,
-      shell: false,
-      timeout: timeoutMs,
-      windowsHide: true,
-    });
-    lastResult = result;
-    lastCommand = candidate;
-
-    if (result.error && result.error.code === "ENOENT") {
-      continue;
-    }
-
-    if (result.error) {
-      return {
-        adapter: OPENCODE_ADAPTER,
-        status: "FAIL",
-        reason: `opencode availability check failed: ${result.error.message}`,
-        command: candidate,
-      };
-    }
-
-    if (result.status !== 0) {
-      return {
-        adapter: OPENCODE_ADAPTER,
-        status: "FAIL",
-        reason: `opencode --version exited with code ${typeof result.status === "number" ? result.status : 1}.`,
-        command: candidate,
-      };
-    }
-
-    const version = String(result.stdout || result.stderr || "").trim();
-    const versionSuffix = version ? ` (${version})` : "";
-
-    return {
-      adapter: OPENCODE_ADAPTER,
-      status: "PASS",
-      reason: `opencode executable is available${versionSuffix}. Authentication and model/provider configuration are managed by OpenCode.`,
-      command: candidate,
-      version,
-    };
-  }
-
-  if (lastResult && lastResult.error && lastResult.error.code === "ENOENT") {
-    return {
-      adapter: OPENCODE_ADAPTER,
-      status: "FAIL",
-      reason: "opencode executable not found. Install OpenCode CLI or set CEWP_OPENCODE_COMMAND.",
-      command: lastCommand,
-    };
-  }
-
-  return {
-    adapter: OPENCODE_ADAPTER,
-    status: "FAIL",
-    reason: "opencode executable not found. Install OpenCode CLI or set CEWP_OPENCODE_COMMAND.",
-    command: lastCommand,
-  };
+  return probeAdapterCli({
+    provider: OPENCODE_ADAPTER,
+    binary: OPENCODE_COMMAND_CONTRACT.binary,
+    envOverride: OPENCODE_COMMAND_CONTRACT.envOverride,
+    versionArgs: OPENCODE_COMMAND_CONTRACT.availabilityArgs,
+    env,
+    timeoutMs,
+    commandCandidates: getOpenCodeCommandCandidates(env),
+    missingReason: "opencode executable not found. Install OpenCode CLI or set CEWP_OPENCODE_COMMAND.",
+    availableReason: ({ override }) => (
+      override
+        ? "CEWP_OPENCODE_COMMAND override is set; adapter command is managed by the caller."
+        : "opencode executable is available. Authentication and model/provider configuration are managed by OpenCode."
+    ),
+  });
 }
 
 function getOpenCodeAvailabilityRemediation(availability) {

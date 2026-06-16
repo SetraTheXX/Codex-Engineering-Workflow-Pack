@@ -20,6 +20,9 @@ function normalizeAdapterAvailability({
   reason = null,
   remediation = null,
   requirements = [],
+  command = null,
+  version = null,
+  probe = null,
 } = {}) {
   return {
     provider,
@@ -28,6 +31,9 @@ function normalizeAdapterAvailability({
     reason,
     remediation,
     requirements: requirements.map(normalizeRequirement),
+    ...(command ? { command } : {}),
+    ...(version ? { version } : {}),
+    ...(probe ? { probe } : {}),
   };
 }
 
@@ -41,6 +47,9 @@ function normalizeLegacyAvailability(legacyAvailability = {}, options = {}) {
     reason: legacyAvailability.reason || null,
     remediation: legacyAvailability.remediation || null,
     requirements: options.requirements || [],
+    command: legacyAvailability.command || null,
+    version: legacyAvailability.version || null,
+    probe: legacyAvailability.probe || null,
   });
 }
 

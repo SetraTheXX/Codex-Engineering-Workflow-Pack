@@ -308,6 +308,15 @@ Each registered adapter exposes structured availability metadata for doctor outp
   "status": "available",
   "reason": "codex executable is available.",
   "remediation": null,
+  "command": "codex",
+  "version": "codex-cli 0.137.0",
+  "probe": {
+    "command": "codex",
+    "args": ["--version"],
+    "stdout": "codex-cli 0.137.0",
+    "stderr": "",
+    "exitCode": 0
+  },
   "requirements": [
     {
       "type": "binary",
@@ -322,7 +331,9 @@ Each registered adapter exposes structured availability metadata for doctor outp
 
 `available` is the boolean readiness value. `status` is `available` or `unavailable`. `reason` is a short human-readable explanation. `remediation` is null when no action is needed and otherwise describes the next setup fix. `requirements` lists concrete checks such as required binaries.
 
-`codex-exec` includes a side-effect-free availability check. `manual` reports itself available with no requirements because it only writes local handoff files and does not execute external commands. `opencode` reports a required `opencode` binary and remediation, but that check is informational until real OpenCode execution is implemented.
+Executing adapters use a shared side-effect-free CLI probe for availability and version reporting. The probe runs version-style commands with `shell: false`, captures stdout/stderr, records the command and args that were checked, and treats missing binaries as unavailable rather than fatal to `cewp doctor`.
+
+`codex-exec` uses the shared probe for `codex --version`. `manual` reports itself available with no requirements because it only writes local handoff files and does not execute external commands. `opencode` uses the shared probe for `opencode --version` and reports a required `opencode` binary and remediation, but that check is informational until real OpenCode execution is implemented.
 
 The check:
 - accepts `CEWP_CODEX_EXEC_COMMAND` as an explicit command override,
@@ -330,7 +341,7 @@ The check:
 - otherwise checks whether the `codex` executable is available with a safe version check,
 - reports a short reason and remediation when the executable is missing.
 
-`cewp doctor` reports adapter availability status, requirements, and remediation as informational output. Actual dispatch execution can fail before starting a provider process when the selected adapter is unavailable. Dry-run previews remain side-effect-free. This availability model does not add full external provider execution support.
+`cewp doctor` reports adapter availability status, binary command, version, probe command, requirements, and remediation as informational output. Actual dispatch execution can fail before starting a provider process when the selected adapter is unavailable. Dry-run previews remain side-effect-free. This availability model does not add full external provider execution support.
 
 ## Provider-Neutral Boundary
 

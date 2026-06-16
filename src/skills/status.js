@@ -66,6 +66,15 @@ function formatAdapterRequirement(requirement) {
   return `${requirement.type} ${requirement.name}: ${state}, ${required}${command}`;
 }
 
+function formatAdapterProbe(probe) {
+  if (!probe || !probe.command) {
+    return undefined;
+  }
+
+  const args = Array.isArray(probe.args) ? probe.args.join(" ") : "";
+  return `${probe.command}${args ? ` ${args}` : ""}`;
+}
+
 function doctor(options) {
   const targetRoot = resolveTarget(options);
   const statuses = getSkillStatus(targetRoot);
@@ -95,6 +104,16 @@ function doctor(options) {
   for (const adapterName of getSupportedAdapterNames()) {
     const availability = getAdapterAvailability(adapterName, { commandName: "doctor" });
     console.log(`[${availability.available ? "OK" : "WARN"}] ${adapterName}: ${availability.status} - ${availability.reason || "no details"}`);
+    if (availability.command) {
+      console.log(`  Binary: ${availability.command}`);
+    }
+    if (availability.version) {
+      console.log(`  Version: ${availability.version}`);
+    }
+    const probe = formatAdapterProbe(availability.probe);
+    if (probe) {
+      console.log(`  Probe: ${probe}`);
+    }
     for (const requirement of availability.requirements) {
       console.log(`  Requirement: ${formatAdapterRequirement(requirement)}`);
     }

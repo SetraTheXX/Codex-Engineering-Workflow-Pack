@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const childProcess = require("node:child_process");
+const { probeAdapterCli } = require("./cli-probe");
 const { normalizeLegacyAvailability } = require("./availability");
 const { normalizeAdapterResult: normalizeAdapterResultBase } = require("./result");
 
@@ -129,63 +130,22 @@ function checkCodexExecAvailability({ env = process.env, timeoutMs = 5000 } = {}
     };
   }
 
-  const command = getCodexExecCommand(env);
-  if (env.CEWP_CODEX_EXEC_COMMAND) {
-    return {
-      adapter: "codex-exec",
-      status: "PASS",
-      reason: "CEWP_CODEX_EXEC_COMMAND override is set; adapter command is managed by the caller.",
-      command,
-      prefixArgs,
-      override: true,
-    };
-  }
-
-  const result = childProcess.spawnSync(command, ["--version"], {
-    encoding: "utf8",
-    env,
-    shell: false,
-    timeout: timeoutMs,
-    windowsHide: true,
-  });
-
-  if (result.error && result.error.code === "ENOENT") {
-    return {
-      adapter: "codex-exec",
-      status: "FAIL",
-      reason: "codex executable not found. Install Codex CLI or set CEWP_CODEX_EXEC_COMMAND.",
-      command,
-      prefixArgs,
-    };
-  }
-
-  if (result.error) {
-    return {
-      adapter: "codex-exec",
-      status: "FAIL",
-      reason: `codex availability check failed: ${result.error.message}`,
-      command,
-      prefixArgs,
-    };
-  }
-
-  if (result.status !== 0) {
-    return {
-      adapter: "codex-exec",
-      status: "FAIL",
-      reason: `codex --version exited with code ${typeof result.status === "number" ? result.status : 1}.`,
-      command,
-      prefixArgs,
-    };
-  }
-
   return {
-    adapter: "codex-exec",
-    status: "PASS",
-    reason: "codex executable is available.",
-    command,
+    ...probeAdapterCli({
+      provider: "codex-exec",
+      binary: "codex",
+      envOverride: "CEWP_CODEX_EXEC_COMMAND",
+      versionArgs: ["--version"],
+      env,
+      timeoutMs,
+      missingReason: "codex executable not found. Install Codex CLI or set CEWP_CODEX_EXEC_COMMAND.",
+      availableReason: ({ override }) => (
+        override
+          ? "CEWP_CODEX_EXEC_COMMAND override is set; adapter command is managed by the caller."
+          : "codex executable is available."
+      ),
+    }),
     prefixArgs,
-    version: String(result.stdout || result.stderr || "").trim(),
   };
 }
 

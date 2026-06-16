@@ -43,6 +43,7 @@ const {
   getOpenCodeCommandCandidates,
   normalizeAdapterResult: normalizeOpenCodeAdapterResult,
 } = require("../../src/run/adapters/opencode");
+const { probeAdapterCli } = require("../../src/run/adapters/cli-probe");
 const { getAdapterAvailability, getAdapterCapabilities, getSupportedAdapterNames } = require("../../src/run/adapters/registry");
 const { loadAdapterConfig, normalizeAdapterConfig, resolveAdapterProviderForRole } = require("../../src/run/adapters/config");
 
@@ -358,6 +359,16 @@ async function main() {
       assertIncludes(missingOpenCodeDoctor.stdout, "Requirement: binary opencode: missing, required", "doctor missing opencode requirement");
       assertIncludes(missingOpenCodeDoctor.stdout, "Remediation: Install OpenCode CLI", "doctor missing opencode remediation");
       assertIncludes(missingOpenCodeDoctor.stdout, "Status: PASS", "doctor missing opencode still passes");
+
+      const versionDoctor = cewpWithEnv(["doctor"], cewpRoot, {
+        ...process.env,
+        CEWP_CODEX_EXEC_COMMAND: process.execPath,
+        PATH: "",
+        Path: "",
+      });
+      assertExit(versionDoctor, 0, "doctor reports adapter probe version");
+      assertIncludes(versionDoctor.stdout, `Version: ${process.version}`, "doctor adapter version line");
+      assertIncludes(versionDoctor.stdout, `Probe: ${process.execPath} --version`, "doctor adapter probe command");
     });
 
     await step("doctor adapter config file summary", () => {
@@ -635,6 +646,33 @@ async function main() {
       assert(manualCapabilities.requiresAuth === false, "manual auth capability");
       assert(manualCapabilities.supportsLastMessage === true, "manual last-message capability");
 
+      const installedProbe = probeAdapterCli({
+        provider: "node",
+        binary: process.execPath,
+        versionArgs: ["--version"],
+        env: process.env,
+      });
+      assert(installedProbe.status === "PASS", "shared cli probe installed status");
+      assert(installedProbe.command === process.execPath, "shared cli probe installed command");
+      assert(installedProbe.version === process.version, "shared cli probe installed version");
+      assertIncludes(installedProbe.stdout, process.version, "shared cli probe stdout capture");
+      assert(Array.isArray(installedProbe.probe.args) && installedProbe.probe.args[0] === "--version", "shared cli probe args");
+
+      const missingProbe = probeAdapterCli({
+        provider: "missing-cli",
+        binary: "cewp-missing-cli",
+        versionArgs: ["--version"],
+        env: {
+          PATH: "",
+          Path: "",
+        },
+        missingReason: "missing cli not found.",
+      });
+      assert(missingProbe.status === "FAIL", "shared cli probe missing status");
+      assert(missingProbe.command === "cewp-missing-cli", "shared cli probe missing command");
+      assertIncludes(missingProbe.reason, "missing cli not found", "shared cli probe missing reason");
+      assert(missingProbe.probe.errorCode === "ENOENT", "shared cli probe missing error code");
+
       const openCodeCapabilities = getAdapterCapabilities("opencode");
       assert(openCodeCapabilities.provider === "opencode", "opencode capability provider");
       assert(openCodeCapabilities.kind === "executing", "opencode capability kind");
@@ -657,6 +695,9 @@ async function main() {
       assert(codexExecAvailability.provider === "codex-exec", "codex-exec availability provider");
       assert(codexExecAvailability.available === true, "codex-exec availability available");
       assert(codexExecAvailability.status === "available", "codex-exec availability status");
+      assert(codexExecAvailability.version === process.version, "codex-exec availability version");
+      assert(codexExecAvailability.probe.command === process.execPath, "codex-exec availability probe command");
+      assert(codexExecAvailability.probe.args[0] === "--version", "codex-exec availability probe args");
       assert(codexExecAvailability.requirements.some((requirement) => (
         requirement.type === "binary"
         && requirement.name === "codex"
@@ -674,6 +715,7 @@ async function main() {
       assert(missingCodexExecAvailability.status === "unavailable", "codex-exec missing availability status");
       assertIncludes(missingCodexExecAvailability.reason, "codex executable not found", "codex-exec missing availability reason");
       assertIncludes(missingCodexExecAvailability.remediation, "Install Codex CLI", "codex-exec missing availability remediation");
+      assert(missingCodexExecAvailability.probe.errorCode === "ENOENT", "codex-exec missing availability probe error");
       assert(missingCodexExecAvailability.requirements.some((requirement) => (
         requirement.type === "binary"
         && requirement.name === "codex"
@@ -686,6 +728,9 @@ async function main() {
       assert(manualAvailability.available === true, "manual availability available");
       assert(manualAvailability.status === "available", "manual availability status");
       assertIncludes(manualAvailability.reason, "does not require external binaries", "manual availability reason");
+      assert(!manualAvailability.command, "manual availability has no binary command");
+      assert(!manualAvailability.version, "manual availability has no version");
+      assert(!manualAvailability.probe, "manual availability has no cli probe");
       assert(Array.isArray(manualAvailability.requirements) && manualAvailability.requirements.length === 0, "manual availability requirements");
 
       const missingOpenCodeAvailability = getAdapterAvailability("opencode", {
@@ -699,6 +744,7 @@ async function main() {
       assert(missingOpenCodeAvailability.status === "unavailable", "opencode missing availability status");
       assertIncludes(missingOpenCodeAvailability.reason, "opencode executable not found", "opencode missing availability reason");
       assertIncludes(missingOpenCodeAvailability.remediation, "Install OpenCode CLI", "opencode missing availability remediation");
+      assert(missingOpenCodeAvailability.probe.errorCode === "ENOENT", "opencode missing availability probe error");
       assert(missingOpenCodeAvailability.requirements.some((requirement) => (
         requirement.type === "binary"
         && requirement.name === "opencode"
