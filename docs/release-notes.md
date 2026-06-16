@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.6.0-beta.0
+
+### Summary
+
+Adapter contract hardening and runtime observability for Phase 6. This release adds structured metadata and read-only operator projections for the existing `codex-exec` and `manual` providers; external provider implementations are not included.
+
+### Changed
+
 - Added typed, read-only run artifact inventory to operator status/resume JSON output.
 - Added beta `operator-json/v1` envelopes for operator JSON commands while preserving payloads under `data`.
 - Added read-only run timeline projection to operator status/resume JSON output.
