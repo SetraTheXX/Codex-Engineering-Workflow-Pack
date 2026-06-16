@@ -562,17 +562,49 @@ async function main() {
         reasons: ["codex exec exited with code 7."],
         paths: {
           stdout: "adapter-output/worker-a-stdout.log",
+          lastMessage: "adapter-output/worker-a-last-message.md",
         },
       });
 
       assert(result.adapter === "codex-exec", "adapter result adapter name");
+      assert(result.provider === "codex-exec", "adapter result provider");
+      assert(result.schemaVersion === "adapter-result/v1", "adapter result schema version");
       assert(result.role === "worker-a", "adapter result role");
       assert(result.status === "FAIL", "adapter result status");
+      assert(result.ok === false, "adapter result ok false");
       assert(result.exitCode === 7, "adapter result exit code");
       assert(result.timedOut === false, "adapter result timeout");
       assert(result.reason === "codex exec exited with code 7.", "adapter result reason");
       assert(Array.isArray(result.reasons) && result.reasons.length === 1, "adapter result reasons");
       assert(result.paths.stdout === "adapter-output/worker-a-stdout.log", "adapter result paths");
+      assert(result.lastMessagePath === "adapter-output/worker-a-last-message.md", "adapter result last message path");
+      assert(result.commandExecuted === true, "adapter result command executed");
+      assert(result.externalCommandExecuted === true, "adapter result external command executed");
+      assert(result.artifacts.some((artifact) => artifact.type === "stdout-log" && artifact.role === "worker-a"), "adapter result stdout artifact");
+      assert(result.capabilitiesUsed.includes("externalCommand"), "adapter result external command capability used");
+      assert(result.capabilitiesUsed.includes("lastMessage"), "adapter result last-message capability used");
+
+      const resultRepo = makeTempRepo("cewp-harness-adapter-result-");
+      tempRepos.push(resultRepo);
+      const resultRunRoot = path.join(resultRepo, ".cewp", "runs", "20260616-000000");
+      const resultStdoutPath = path.join(resultRunRoot, "adapter-output", "worker-a-stdout.log");
+      const resultLastMessagePath = path.join(resultRunRoot, "adapter-output", "worker-a-last-message.md");
+      writeFile(resultStdoutPath, "fake stdout\n");
+      writeFile(resultLastMessagePath, "fake last message\n");
+      const runtimeResult = normalizeAdapterResult({
+        role: "worker-a",
+        status: "PASS",
+        exitCode: 0,
+        paths: {
+          stdout: resultStdoutPath,
+          lastMessage: resultLastMessagePath,
+        },
+        runRoot: resultRunRoot,
+      });
+      assert(runtimeResult.ok === true, "adapter runtime result ok true");
+      assert(runtimeResult.lastMessagePath === "adapter-output/worker-a-last-message.md", "adapter runtime result relative last message path");
+      assert(runtimeResult.artifacts.some((artifact) => artifact.type === "stdout-log" && artifact.present === true), "adapter runtime result stdout present");
+      assert(runtimeResult.artifacts.some((artifact) => artifact.type === "last-message" && artifact.present === true), "adapter runtime result last-message present");
 
       const manualResult = normalizeManualAdapterResult({
         role: "worker-a",
@@ -581,11 +613,21 @@ async function main() {
         reasons: ["manual action required; adapter did not execute code."],
         paths: {
           handoff: "manual/worker-a.md",
+          lastMessage: "adapter-output/worker-a-last-message.md",
         },
       });
       assert(manualResult.adapter === "manual", "manual adapter result adapter name");
+      assert(manualResult.provider === "manual", "manual adapter result provider");
+      assert(manualResult.schemaVersion === "adapter-result/v1", "manual adapter result schema version");
       assert(manualResult.status === "FAIL", "manual adapter result status");
+      assert(manualResult.ok === false, "manual adapter result ok false");
+      assert(manualResult.commandExecuted === false, "manual adapter result command not executed");
+      assert(manualResult.externalCommandExecuted === false, "manual adapter result external command not executed");
+      assert(manualResult.lastMessagePath === "adapter-output/worker-a-last-message.md", "manual adapter result last message path");
       assert(manualResult.paths.handoff === "manual/worker-a.md", "manual adapter result paths");
+      assert(manualResult.artifacts.some((artifact) => artifact.type === "manual-handoff" && artifact.role === "worker-a"), "manual adapter result handoff artifact");
+      assert(manualResult.capabilitiesUsed.includes("manualHandoff"), "manual adapter result handoff capability used");
+      assert(manualResult.capabilitiesUsed.includes("lastMessage"), "manual adapter result last-message capability used");
     });
 
     await step("codex exec command construction", () => {
@@ -835,6 +877,22 @@ async function main() {
       assertIncludes(manualContent, "cewp run dispatch complete worker-a --run", "manual handoff complete command");
       assertIncludes(manualContent, "--from <file>", "manual handoff complete from placeholder");
       assertIncludes(manualContent, "## Dispatch Prompt", "manual handoff prompt");
+
+      const manualRuntimeResult = normalizeManualAdapterResult({
+        role: "worker-a",
+        status: "FAIL",
+        exitCode: 1,
+        reasons: ["manual action required; adapter did not execute code."],
+        paths: {
+          handoff: manualPath,
+          lastMessage: lastMessagePath,
+        },
+        runRoot: path.join(manualRepo, ".cewp", "runs", runId),
+      });
+      assert(manualRuntimeResult.schemaVersion === "adapter-result/v1", "manual runtime result schema version");
+      assert(manualRuntimeResult.lastMessagePath === "adapter-output/worker-a-last-message.md", "manual runtime result last message path");
+      assert(manualRuntimeResult.artifacts.some((artifact) => artifact.type === "manual-handoff" && artifact.present === true), "manual runtime result handoff present");
+      assert(manualRuntimeResult.artifacts.some((artifact) => artifact.type === "last-message" && artifact.present === true), "manual runtime result last-message present");
 
       const missingStatus = cewp(["run", "status", "20260529-999999"], manualRepo);
       assertExit(missingStatus, 1, "operator status missing run");

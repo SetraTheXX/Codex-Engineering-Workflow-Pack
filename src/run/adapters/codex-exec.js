@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const childProcess = require("node:child_process");
+const { normalizeAdapterResult: normalizeAdapterResultBase } = require("./result");
 
 const capabilities = {
   provider: "codex-exec",
@@ -250,23 +251,36 @@ function normalizeAdapterResult({
   reasons,
   paths,
   decision,
+  runRoot,
+  commandExecuted,
+  externalCommandExecuted,
 } = {}) {
-  const normalizedReasons = Array.isArray(reasons)
-    ? reasons.filter((value) => typeof value === "string" && value.length > 0)
-    : [];
-  const firstReason = reason || normalizedReasons[0];
+  const didExecuteCommand = commandExecuted === undefined
+    ? typeof exitCode === "number"
+    : Boolean(commandExecuted);
+  const capabilitiesUsed = [];
+  if (didExecuteCommand) {
+    capabilitiesUsed.push("externalCommand");
+  }
+  if (paths && paths.lastMessage) {
+    capabilitiesUsed.push("lastMessage");
+  }
 
-  return {
-    adapter: "codex-exec",
+  return normalizeAdapterResultBase({
+    provider: "codex-exec",
     role,
-    status: status || (normalizedReasons.length > 0 ? "FAIL" : "PASS"),
-    exitCode: typeof exitCode === "number" ? exitCode : undefined,
-    timedOut: Boolean(timedOut),
-    reason: firstReason,
-    reasons: normalizedReasons,
-    paths: paths || {},
+    status,
+    exitCode,
+    timedOut,
+    reason,
+    reasons,
+    paths,
     decision,
-  };
+    runRoot,
+    commandExecuted: didExecuteCommand,
+    externalCommandExecuted: externalCommandExecuted === undefined ? didExecuteCommand : externalCommandExecuted,
+    capabilitiesUsed,
+  });
 }
 
 module.exports = {

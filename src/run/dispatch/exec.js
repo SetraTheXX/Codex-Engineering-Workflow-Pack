@@ -345,6 +345,7 @@ function runDispatchReviewerExecActual(options, preflight) {
       role: "reviewer",
       status: "FAIL",
       reasons: failures,
+      runRoot,
       paths: {
         report: preview && preview.reportPath,
         event: preview && preview.eventPath,
@@ -373,6 +374,7 @@ function runDispatchReviewerExecActual(options, preflight) {
       status: "FAIL",
       reason,
       reasons: [reason],
+      runRoot,
       paths: {
         report: preview && preview.reportPath,
         event: preview && preview.eventPath,
@@ -504,6 +506,7 @@ function runDispatchReviewerExecActual(options, preflight) {
     reason: failuresAfterExec[0],
     reasons: failuresAfterExec,
     decision: decision || "not_found",
+    runRoot,
     paths: {
       stdout: stdoutPath,
       stderr: stderrPath,
@@ -556,6 +559,7 @@ function runDispatchExecActual(options = {}) {
       role: options.role,
       status: "FAIL",
       reasons: failures,
+      runRoot,
       paths: {
         report: preview && preview.reportPath,
         event: preview && preview.eventPath,
@@ -584,6 +588,7 @@ function runDispatchExecActual(options = {}) {
       status: "FAIL",
       reason,
       reasons: [reason],
+      runRoot,
       paths: {
         report: preview && preview.reportPath,
         event: preview && preview.eventPath,
@@ -775,6 +780,7 @@ function runDispatchExecActual(options = {}) {
     timedOut,
     reason: failuresAfterExec[0],
     reasons: failuresAfterExec,
+    runRoot,
     paths: {
       stdout: stdoutPath,
       stderr: stderrPath,

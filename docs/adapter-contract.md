@@ -218,19 +218,40 @@ For providers that do not support a native last-message output, CEWP should eith
 
 Silent missing output should be avoided.
 
-## Adapter Result Shape Draft
+## Adapter Result Shape
 
-Adapter execution is summarized internally as a small structured result:
+Adapter execution is summarized internally as a beta `adapter-result/v1` structured result. The shape extends the previous `adapter`, `status`, `reason`, `reasons`, `paths`, and `decision` fields without changing dispatch behavior:
 
 ```json
 {
+  "schemaVersion": "adapter-result/v1",
+  "provider": "codex-exec",
   "adapter": "codex-exec",
   "role": "worker-a",
   "status": "PASS",
+  "ok": true,
   "exitCode": 0,
   "timedOut": false,
   "reason": "",
   "reasons": [],
+  "commandExecuted": true,
+  "externalCommandExecuted": true,
+  "artifacts": [
+    {
+      "type": "last-message",
+      "role": "worker-a",
+      "path": "adapter-output/worker-a-last-message.md",
+      "present": true
+    },
+    {
+      "type": "report",
+      "role": "worker-a",
+      "path": "reports/worker-a-report.md",
+      "present": true
+    }
+  ],
+  "lastMessagePath": "adapter-output/worker-a-last-message.md",
+  "capabilitiesUsed": ["externalCommand", "lastMessage"],
   "paths": {
     "stdout": ".cewp/runs/<run-id>/adapter-output/worker-a-stdout.log",
     "stderr": ".cewp/runs/<run-id>/adapter-output/worker-a-stderr.log",
@@ -246,7 +267,11 @@ Adapter execution is summarized internally as a small structured result:
 - `FAIL`: provider execution or CEWP post-checks failed.
 - `SKIPPED`: CEWP intentionally did not run the provider.
 
-`reason` should be a short single-line reason for summaries. `reasons` may include detailed post-check failures such as adapter non-zero exit, timeout, missing report, forbidden file change, or outside-allowedFiles change.
+`ok` is derived from `status === "PASS"`. `reason` should be a short single-line reason for summaries. `reasons` may include detailed post-check failures such as adapter non-zero exit, timeout, missing report, forbidden file change, or outside-allowedFiles change.
+
+`artifacts` is a normalized inventory of known adapter outputs such as `stdout-log`, `stderr-log`, `last-message`, `report`, `event-log`, and `manual-handoff`. When CEWP has the run root, artifact paths and `lastMessagePath` are run-relative. `paths` is kept for backward compatibility with existing dispatch orchestration.
+
+For the non-executing `manual` adapter, `commandExecuted` and `externalCommandExecuted` are false, `ok` is false until manual result intake completes the expected output, and `capabilitiesUsed` can include `manualHandoff` and `lastMessage`. This internal result contract does not add external provider support.
 
 ## Adapter Availability
 

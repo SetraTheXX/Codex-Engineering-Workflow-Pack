@@ -8,6 +8,7 @@ const {
   copyWorkerOutputToRun,
   writeAdapterLog,
 } = require("./codex-exec");
+const { normalizeAdapterResult: normalizeAdapterResultBase } = require("./result");
 
 const MANUAL_ADAPTER = "manual";
 const MANUAL_ACTION_REASON = "manual action required; adapter did not execute code.";
@@ -147,23 +148,31 @@ function normalizeAdapterResult({
   reasons,
   paths,
   decision,
+  runRoot,
 } = {}) {
-  const normalizedReasons = Array.isArray(reasons)
-    ? reasons.filter((value) => typeof value === "string" && value.length > 0)
-    : [];
-  const firstReason = reason || normalizedReasons[0];
+  const capabilitiesUsed = [];
+  if (paths && paths.handoff) {
+    capabilitiesUsed.push("manualHandoff");
+  }
+  if (paths && paths.lastMessage) {
+    capabilitiesUsed.push("lastMessage");
+  }
 
-  return {
-    adapter: MANUAL_ADAPTER,
+  return normalizeAdapterResultBase({
+    provider: MANUAL_ADAPTER,
     role,
-    status: status || (normalizedReasons.length > 0 ? "FAIL" : "PASS"),
-    exitCode: typeof exitCode === "number" ? exitCode : undefined,
-    timedOut: Boolean(timedOut),
-    reason: firstReason,
-    reasons: normalizedReasons,
-    paths: paths || {},
+    status,
+    exitCode,
+    timedOut,
+    reason,
+    reasons,
+    paths,
     decision,
-  };
+    runRoot,
+    commandExecuted: false,
+    externalCommandExecuted: false,
+    capabilitiesUsed,
+  });
 }
 
 module.exports = {
