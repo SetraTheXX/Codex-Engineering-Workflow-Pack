@@ -275,15 +275,38 @@ For the non-executing `manual` adapter, `commandExecuted` and `externalCommandEx
 
 ## Adapter Availability
 
-`codex-exec` includes a side-effect-free availability check. `manual` reports itself available because it only writes local handoff files and does not execute external commands.
+Each registered adapter exposes structured availability metadata for doctor output and future operator surfaces. This beta internal shape is informational and does not change dispatch behavior:
+
+```json
+{
+  "provider": "codex-exec",
+  "available": true,
+  "status": "available",
+  "reason": "codex executable is available.",
+  "remediation": null,
+  "requirements": [
+    {
+      "type": "binary",
+      "name": "codex",
+      "required": true,
+      "available": true,
+      "command": "codex"
+    }
+  ]
+}
+```
+
+`available` is the boolean readiness value. `status` is `available` or `unavailable`. `reason` is a short human-readable explanation. `remediation` is null when no action is needed and otherwise describes the next setup fix. `requirements` lists concrete checks such as required binaries.
+
+`codex-exec` includes a side-effect-free availability check. `manual` reports itself available with no requirements because it only writes local handoff files and does not execute external commands.
 
 The check:
 - accepts `CEWP_CODEX_EXEC_COMMAND` as an explicit command override,
 - validates `CEWP_CODEX_EXEC_PREFIX_ARGS` shape when present,
 - otherwise checks whether the `codex` executable is available with a safe version check,
-- reports a short reason when the executable is missing.
+- reports a short reason and remediation when the executable is missing.
 
-`cewp doctor` reports adapter availability as informational output. Actual dispatch execution can fail before starting a provider process when the selected adapter is unavailable. Dry-run previews remain side-effect-free.
+`cewp doctor` reports adapter availability status, requirements, and remediation as informational output. Actual dispatch execution can fail before starting a provider process when the selected adapter is unavailable. Dry-run previews remain side-effect-free. This availability model does not add external provider support.
 
 ## Provider-Neutral Boundary
 

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added structured adapter availability metadata with doctor requirement/remediation summaries.
 - Added beta `adapter-result/v1` normalized adapter result fields while preserving existing dispatch behavior.
 - Added static adapter capability metadata for `codex-exec` and `manual`, with compact `cewp doctor` summaries.
 

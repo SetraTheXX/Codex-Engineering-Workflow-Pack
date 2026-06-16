@@ -26,7 +26,7 @@ const {
 const { createFakeCodexAdapter } = require("./lib/fake-adapter");
 const { buildCodexExecInvocation, checkCodexExecAvailability, normalizeAdapterResult } = require("../../src/run/adapters/codex-exec");
 const { normalizeAdapterResult: normalizeManualAdapterResult } = require("../../src/run/adapters/manual");
-const { getAdapterCapabilities, getSupportedAdapterNames } = require("../../src/run/adapters/registry");
+const { getAdapterAvailability, getAdapterCapabilities, getSupportedAdapterNames } = require("../../src/run/adapters/registry");
 const { loadAdapterConfig, normalizeAdapterConfig, resolveAdapterProviderForRole } = require("../../src/run/adapters/config");
 
 const cewpRoot = path.resolve(__dirname, "..", "..");
@@ -252,6 +252,8 @@ async function main() {
       assertExit(result, 0, "cewp doctor");
       assertIncludes(result.stdout, "Adapter availability:", "doctor adapter availability section");
       assertIncludes(result.stdout, "codex-exec:", "doctor codex-exec availability");
+      assertIncludes(result.stdout, "Requirement: binary codex:", "doctor codex-exec binary requirement");
+      assertIncludes(result.stdout, "manual: available - manual adapter does not require external binaries.", "doctor manual structured availability");
       assertIncludes(result.stdout, "Adapter capabilities:", "doctor adapter capabilities section");
       assertIncludes(result.stdout, "codex-exec: executing, dry-run, external command", "doctor codex-exec capabilities");
       assertIncludes(result.stdout, "manual: non-executing, dry-run, handoff, result-intake, no external command", "doctor manual capabilities");
@@ -280,7 +282,7 @@ async function main() {
       assertExit(validDoctor, 0, "doctor valid adapter config");
       assertIncludes(validDoctor.stdout, "Adapter config:", "doctor valid config section");
       assertIncludes(validDoctor.stdout, "Source: cewp.config.json", "doctor config file source");
-      assertIncludes(validDoctor.stdout, "manual: manual adapter writes handoff prompts", "doctor manual availability");
+      assertIncludes(validDoctor.stdout, "manual: available - manual adapter does not require external binaries.", "doctor manual availability");
       assertIncludes(validDoctor.stdout, "worker-a: manual", "doctor valid config worker-a manual");
 
       const unsupportedRepo = makeTempRepo("cewp-harness-doctor-unsupported-");
@@ -533,6 +535,46 @@ async function main() {
       assert(manualCapabilities.requiresAuth === false, "manual auth capability");
       assert(manualCapabilities.supportsLastMessage === true, "manual last-message capability");
 
+      const codexExecAvailability = getAdapterAvailability("codex-exec", {
+        env: {
+          CEWP_CODEX_EXEC_COMMAND: process.execPath,
+          CEWP_CODEX_EXEC_PREFIX_ARGS: JSON.stringify(["fake-codex.js"]),
+        },
+      });
+      assert(codexExecAvailability.provider === "codex-exec", "codex-exec availability provider");
+      assert(codexExecAvailability.available === true, "codex-exec availability available");
+      assert(codexExecAvailability.status === "available", "codex-exec availability status");
+      assert(codexExecAvailability.requirements.some((requirement) => (
+        requirement.type === "binary"
+        && requirement.name === "codex"
+        && requirement.required === true
+        && requirement.available === true
+      )), "codex-exec availability binary requirement");
+
+      const missingCodexExecAvailability = getAdapterAvailability("codex-exec", {
+        env: {
+          PATH: "",
+          Path: "",
+        },
+      });
+      assert(missingCodexExecAvailability.available === false, "codex-exec missing availability false");
+      assert(missingCodexExecAvailability.status === "unavailable", "codex-exec missing availability status");
+      assertIncludes(missingCodexExecAvailability.reason, "codex executable not found", "codex-exec missing availability reason");
+      assertIncludes(missingCodexExecAvailability.remediation, "Install Codex CLI", "codex-exec missing availability remediation");
+      assert(missingCodexExecAvailability.requirements.some((requirement) => (
+        requirement.type === "binary"
+        && requirement.name === "codex"
+        && requirement.required === true
+        && requirement.available === false
+      )), "codex-exec missing availability binary requirement");
+
+      const manualAvailability = getAdapterAvailability("manual");
+      assert(manualAvailability.provider === "manual", "manual availability provider");
+      assert(manualAvailability.available === true, "manual availability available");
+      assert(manualAvailability.status === "available", "manual availability status");
+      assertIncludes(manualAvailability.reason, "does not require external binaries", "manual availability reason");
+      assert(Array.isArray(manualAvailability.requirements) && manualAvailability.requirements.length === 0, "manual availability requirements");
+
       let unsupportedCapabilitiesError;
       try {
         getAdapterCapabilities("not-real");
@@ -542,6 +584,17 @@ async function main() {
       assert(
         unsupportedCapabilitiesError && unsupportedCapabilitiesError.message === "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.",
         "unsupported adapter capability lookup should fail through registry validation",
+      );
+
+      let unsupportedAvailabilityError;
+      try {
+        getAdapterAvailability("not-real");
+      } catch (error) {
+        unsupportedAvailabilityError = error;
+      }
+      assert(
+        unsupportedAvailabilityError && unsupportedAvailabilityError.message === "Unsupported dispatch adapter: not-real. Supported adapter: codex-exec, manual.",
+        "unsupported adapter availability lookup should fail through registry validation",
       );
 
       const execUnsupported = cewp(["run", "dispatch", "exec", "worker-a", "--adapter", "not-real", "--dry-run"], cewpRoot);

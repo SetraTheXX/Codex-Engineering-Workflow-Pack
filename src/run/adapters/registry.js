@@ -2,6 +2,7 @@
 
 const codexExec = require("./codex-exec");
 const manual = require("./manual");
+const { normalizeLegacyAvailability } = require("./availability");
 
 const CODEX_EXEC_ADAPTER = "codex-exec";
 const MANUAL_ADAPTER = "manual";
@@ -51,6 +52,18 @@ function getAdapterCapabilities(adapterName, options = {}) {
   return { ...adapter.capabilities };
 }
 
+function getAdapterAvailability(adapterName, options = {}) {
+  const adapter = getAdapter(adapterName, options);
+  if (adapter.getAdapterAvailability) {
+    return adapter.getAdapterAvailability(options);
+  }
+
+  const legacyAvailability = adapter.checkAdapterAvailability
+    ? adapter.checkAdapterAvailability(options)
+    : adapter.checkCodexExecAvailability(options);
+  return normalizeLegacyAvailability(legacyAvailability, { provider: adapterName });
+}
+
 module.exports = {
   CODEX_EXEC_ADAPTER,
   MANUAL_ADAPTER,
@@ -60,5 +73,6 @@ module.exports = {
   unsupportedAdapterMessage,
   validateAdapterName,
   getAdapter,
+  getAdapterAvailability,
   getAdapterCapabilities,
 };

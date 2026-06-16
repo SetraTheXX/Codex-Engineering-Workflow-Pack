@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { resolveTarget, getSkillStatus } = require("./paths");
-const { getAdapter, getAdapterCapabilities, getSupportedAdapterNames } = require("../run/adapters/registry");
+const { getAdapterAvailability, getAdapterCapabilities, getSupportedAdapterNames } = require("../run/adapters/registry");
 const { ADAPTER_CONFIG_FILE, ADAPTER_CONFIG_ROLES, loadAdapterConfig } = require("../run/adapters/config");
 
 function list(options) {
@@ -51,6 +51,13 @@ function formatAdapterCapabilities(capabilities) {
   return labels.join(", ");
 }
 
+function formatAdapterRequirement(requirement) {
+  const state = requirement.available ? "available" : "missing";
+  const required = requirement.required ? "required" : "optional";
+  const command = requirement.command ? ` (${requirement.command})` : "";
+  return `${requirement.type} ${requirement.name}: ${state}, ${required}${command}`;
+}
+
 function doctor(options) {
   const targetRoot = resolveTarget(options);
   const statuses = getSkillStatus(targetRoot);
@@ -78,11 +85,14 @@ function doctor(options) {
   console.log("");
   console.log("Adapter availability:");
   for (const adapterName of getSupportedAdapterNames()) {
-    const adapter = getAdapter(adapterName, { commandName: "doctor" });
-    const availability = adapter.checkAdapterAvailability
-      ? adapter.checkAdapterAvailability()
-      : adapter.checkCodexExecAvailability();
-    console.log(`[${availability.status === "PASS" ? "OK" : "WARN"}] ${adapterName}: ${availability.reason}`);
+    const availability = getAdapterAvailability(adapterName, { commandName: "doctor" });
+    console.log(`[${availability.available ? "OK" : "WARN"}] ${adapterName}: ${availability.status} - ${availability.reason || "no details"}`);
+    for (const requirement of availability.requirements) {
+      console.log(`  Requirement: ${formatAdapterRequirement(requirement)}`);
+    }
+    if (availability.remediation) {
+      console.log(`  Remediation: ${availability.remediation}`);
+    }
   }
 
   console.log("");

@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const childProcess = require("node:child_process");
+const { normalizeLegacyAvailability } = require("./availability");
 const { normalizeAdapterResult: normalizeAdapterResultBase } = require("./result");
 
 const capabilities = {
@@ -188,6 +189,47 @@ function checkCodexExecAvailability({ env = process.env, timeoutMs = 5000 } = {}
   };
 }
 
+function getCodexExecAvailabilityRemediation(availability) {
+  if (availability.status === "PASS") {
+    return null;
+  }
+
+  if (availability.reason && availability.reason.includes("CEWP_CODEX_EXEC_PREFIX_ARGS")) {
+    return "Set CEWP_CODEX_EXEC_PREFIX_ARGS to a JSON array of strings.";
+  }
+
+  if (availability.reason && availability.reason.includes("codex executable not found")) {
+    return "Install Codex CLI or set CEWP_CODEX_EXEC_COMMAND.";
+  }
+
+  return "Check the codex executable and CEWP_CODEX_EXEC_COMMAND/CEWP_CODEX_EXEC_PREFIX_ARGS environment.";
+}
+
+function getAdapterAvailability(options = {}) {
+  const availability = checkCodexExecAvailability(options);
+  const available = availability.status === "PASS";
+
+  return normalizeLegacyAvailability(
+    {
+      ...availability,
+      provider: "codex-exec",
+      remediation: getCodexExecAvailabilityRemediation(availability),
+    },
+    {
+      provider: "codex-exec",
+      requirements: [
+        {
+          type: "binary",
+          name: "codex",
+          required: true,
+          available,
+          command: availability.command,
+        },
+      ],
+    },
+  );
+}
+
 function buildCodexExecInvocation({
   command,
   prefixArgs,
@@ -296,6 +338,7 @@ module.exports = {
   getCodexExecPrefixArgs,
   checkAdapterAvailability: checkCodexExecAvailability,
   checkCodexExecAvailability,
+  getAdapterAvailability,
   buildCodexExecInvocation,
   runCodexExecAdapter,
   getAdapterExitCode,

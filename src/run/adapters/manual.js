@@ -8,6 +8,7 @@ const {
   copyWorkerOutputToRun,
   writeAdapterLog,
 } = require("./codex-exec");
+const { normalizeAdapterAvailability } = require("./availability");
 const { normalizeAdapterResult: normalizeAdapterResultBase } = require("./result");
 
 const MANUAL_ADAPTER = "manual";
@@ -50,6 +51,16 @@ function checkAdapterAvailability() {
     status: "PASS",
     reason: "manual adapter writes handoff prompts and does not execute external commands.",
   };
+}
+
+function getAdapterAvailability() {
+  return normalizeAdapterAvailability({
+    provider: MANUAL_ADAPTER,
+    available: true,
+    reason: "manual adapter does not require external binaries.",
+    remediation: null,
+    requirements: [],
+  });
 }
 
 function printCodexExecPreview({ runRoot, role, promptPath }) {
@@ -185,6 +196,7 @@ module.exports = {
   copyWorkerOutputToRun,
   writeAdapterLog,
   checkAdapterAvailability,
+  getAdapterAvailability,
   checkCodexExecAvailability: checkAdapterAvailability,
   printCodexExecPreview,
   runDispatchAdapter,
