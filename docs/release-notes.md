@@ -2,8 +2,16 @@
 
 ## Unreleased
 
+## 0.5.0-beta.0
+
+### Summary
+
+Operator UX foundation for browsing, inspecting, resuming, and safely continuing Coordinator Mode runs. This release keeps providers limited to `codex-exec` and the non-executing `manual` adapter; external provider implementations are not included.
+
+### Changed
+
 - Added `cewp run resume [run-id]` to print a read-only Markdown/JSON operator resume packet for continuing a run.
-- Added `--json` output for `cewp run list`, `cewp run status`, and `cewp run next`.
+- Added `--json` output for `cewp run list`, `cewp run status`, `cewp run next`, and `cewp run resume`.
 - Added `cewp run list` as a read-only operator run browser for recent run state and artifact summaries.
 - Added `cewp run next [run-id]` to print the single most relevant safe next command for a run.
 - Added an operator-facing `cewp run status [run-id]` summary with artifact inventory and safe next-step hints.
