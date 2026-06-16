@@ -187,6 +187,118 @@ function readEvents(filePath) {
   });
 }
 
+function inferRoleFromEventSource(source) {
+  const basename = path.basename(source, ".jsonl");
+  return ["manager", "worker-a", "worker-b", "reviewer"].includes(basename)
+    ? basename
+    : null;
+}
+
+function getEventField(value, fields) {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  return fields.find((field) => typeof value[field] === "string" && value[field].length > 0);
+}
+
+function getTimelineEventType(value) {
+  const field = getEventField(value, ["type", "event", "name", "status"]);
+  return field ? value[field] : "event";
+}
+
+function getTimelineEventSummary(value) {
+  const field = getEventField(value, ["summary", "message", "reason", "status", "event", "type", "name"]);
+  if (!field) {
+    return null;
+  }
+
+  return value[field].length > 240 ? `${value[field].slice(0, 237)}...` : value[field];
+}
+
+function getTimelineEventTimestamp(value) {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const timestamp = value.timestamp || value.time;
+  return typeof timestamp === "string" && timestamp.length > 0 ? timestamp : null;
+}
+
+function buildTimelineRecord(runRoot, entry) {
+  const source = toRunRelative(runRoot, entry.filePath);
+  const line = entry.lineOrder + 1;
+
+  if (!entry.value || typeof entry.value !== "object") {
+    const summary = `Malformed event JSON at ${source}:${line}`;
+    return {
+      source,
+      line,
+      role: inferRoleFromEventSource(source),
+      type: "malformed-event",
+      timestamp: null,
+      summary,
+      malformed: true,
+      raw: String(entry.value || "").slice(0, 500),
+    };
+  }
+
+  return {
+    source,
+    line,
+    role: typeof entry.value.role === "string" ? entry.value.role : inferRoleFromEventSource(source),
+    type: getTimelineEventType(entry.value),
+    timestamp: getTimelineEventTimestamp(entry.value),
+    summary: getTimelineEventSummary(entry.value),
+    malformed: false,
+    raw: entry.value,
+  };
+}
+
+function buildRunTimeline(runRoot, eventEntries) {
+  const events = eventEntries
+    .map(({ event }, readOrder) => ({
+      ...buildTimelineRecord(runRoot, event),
+      timeMs: event.timeMs,
+      fallbackMs: getFileMtimeMs(event.filePath),
+      readOrder,
+    }))
+    .sort((left, right) => {
+      if (left.timeMs !== undefined || right.timeMs !== undefined) {
+        return (left.timeMs || 0) - (right.timeMs || 0);
+      }
+
+      if (left.fallbackMs !== right.fallbackMs) {
+        return left.fallbackMs - right.fallbackMs;
+      }
+
+      if (left.source !== right.source) {
+        return left.source.localeCompare(right.source);
+      }
+
+      if (left.line !== right.line) {
+        return left.line - right.line;
+      }
+
+      return left.readOrder - right.readOrder;
+    })
+    .map(({ timeMs, fallbackMs, readOrder, ...event }) => event);
+  const warnings = events
+    .filter((event) => event.malformed)
+    .map((event) => ({
+      source: event.source,
+      line: event.line,
+      message: event.summary,
+    }));
+
+  return {
+    count: events.length,
+    malformedCount: warnings.length,
+    events,
+    warnings,
+  };
+}
+
 function getFileMtimeMs(filePath) {
   try {
     return fs.statSync(filePath).mtimeMs;
@@ -373,9 +485,10 @@ function inspectRun(options = {}) {
   const eventFiles = listFiles(path.join(runRoot, "events"), ".jsonl");
   const eventCount = countEventLines(eventFiles);
   const statusCounts = getTaskStatusCounts(tasks);
-  const lastEvents = eventFiles
+  const eventEntries = eventFiles
     .flatMap((filePath) => readEvents(filePath).map((event) => ({ filePath, event })));
-  const lastEvent = chooseLatestEvent(lastEvents);
+  const lastEvent = chooseLatestEvent(eventEntries);
+  const timeline = buildRunTimeline(runRoot, eventEntries);
   const artifactRoles = getArtifactRoles(boardJson);
   const recommendedActions = getRecommendedActions({
     runId,
@@ -399,6 +512,7 @@ function inspectRun(options = {}) {
     reviewPacketFiles,
     eventFiles,
     eventCount,
+    timeline,
     statusCounts,
     lastEvent,
     artifactRoles,
@@ -523,10 +637,10 @@ function serializeAction(action) {
   };
 }
 
-function serializeRunInspection(inspection, { command, latestRunId } = {}) {
+function serializeRunInspection(inspection, { command, latestRunId, includeTimeline = false } = {}) {
   const reviewerDecision = getReviewerDecision(inspection.reviewFiles);
 
-  return {
+  const serialized = {
     command,
     runId: inspection.runId,
     runPath: inspection.runRoot,
@@ -555,6 +669,12 @@ function serializeRunInspection(inspection, { command, latestRunId } = {}) {
     nextAction: serializeAction(inspection.recommendedActions[0]),
     nextActions: inspection.recommendedActions.map(serializeAction),
   };
+
+  if (includeTimeline) {
+    serialized.timeline = inspection.timeline;
+  }
+
+  return serialized;
 }
 
 function runStatus(options = {}) {
@@ -582,6 +702,7 @@ function runStatus(options = {}) {
     outputJson(serializeRunInspection(inspection, {
       command: "run status",
       latestRunId: getLatestRunId(),
+      includeTimeline: true,
     }));
     return;
   }
@@ -787,6 +908,7 @@ function runResume(options = {}) {
   const serialized = serializeRunInspection(inspection, {
     command: "run resume",
     latestRunId: getLatestRunId(),
+    includeTimeline: true,
   });
   const resume = getResumeSummary(serialized);
 

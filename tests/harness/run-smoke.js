@@ -947,11 +947,31 @@ async function main() {
       assert(manualRuntimeResult.artifacts.some((artifact) => artifact.type === "manual-handoff" && artifact.present === true), "manual runtime result handoff present");
       assert(manualRuntimeResult.artifacts.some((artifact) => artifact.type === "last-message" && artifact.present === true), "manual runtime result last-message present");
 
+      const runRoot = path.join(manualRepo, ".cewp", "runs", runId);
+      writeFile(
+        path.join(runRoot, "events", "timeline.jsonl"),
+        [
+          JSON.stringify({
+            timestamp: "2026-06-16T10:00:00.000Z",
+            role: "worker-a",
+            event: "manual_handoff_written",
+            message: "Manual handoff written for worker-a.",
+          }),
+          "{ malformed timeline event",
+          JSON.stringify({
+            time: "2026-06-16T10:01:00.000Z",
+            role: "reviewer",
+            type: "review_waiting",
+            summary: "Reviewer is waiting for worker output.",
+          }),
+          "",
+        ].join("\n"),
+      );
+
       const missingStatus = cewp(["run", "status", "20260529-999999"], manualRepo);
       assertExit(missingStatus, 1, "operator status missing run");
       assertIncludes(missingStatus.stderr, "CEWP run not found: 20260529-999999", "operator status missing run message");
 
-      const runRoot = path.join(manualRepo, ".cewp", "runs", runId);
       const missingNext = cewp(["run", "next", "20260529-999999"], manualRepo);
       assertExit(missingNext, 1, "operator next missing run");
       assertIncludes(missingNext.stderr, "CEWP run not found: 20260529-999999", "operator next missing run message");
@@ -987,6 +1007,26 @@ async function main() {
       assert(statusWithHandoffValue.artifacts.manualHandoffs.present === true, "operator status json manual present");
       assert(statusWithHandoffValue.artifacts.reports.present === false, "operator status json reports absent");
       assert(statusWithHandoffValue.artifacts.events.fileCount > 0, "operator status json event files");
+      assert(statusWithHandoffValue.timeline.count >= 3, "operator status json timeline count");
+      assert(statusWithHandoffValue.timeline.malformedCount === 1, "operator status json malformed timeline count");
+      assert(statusWithHandoffValue.timeline.events.some((event) => (
+        event.source === "events/timeline.jsonl"
+        && event.role === "worker-a"
+        && event.type === "manual_handoff_written"
+        && event.timestamp === "2026-06-16T10:00:00.000Z"
+        && event.summary === "Manual handoff written for worker-a."
+        && event.raw.message === "Manual handoff written for worker-a."
+      )), "operator status json timeline parsed event");
+      assert(statusWithHandoffValue.timeline.events.some((event) => (
+        event.source === "events/timeline.jsonl"
+        && event.malformed === true
+        && event.type === "malformed-event"
+        && event.summary.includes("Malformed event JSON")
+      )), "operator status json malformed timeline event");
+      assert(statusWithHandoffValue.timeline.warnings.some((warning) => (
+        warning.source === "events/timeline.jsonl"
+        && warning.message.includes("Malformed event JSON")
+      )), "operator status json timeline warning");
       assert(statusWithHandoffValue.reviewer.pass === false, "operator status json reviewer pass false");
       assert(statusWithHandoffValue.nextAction.label === "complete-manual", "operator status json next label");
       assertIncludes(statusWithHandoffValue.nextAction.command, `cewp run dispatch complete worker-a --run ${runId}`, "operator status json next command");
@@ -1037,6 +1077,9 @@ async function main() {
       assert(resumeWithHandoffValue.command === "run resume", "operator resume json command");
       assert(resumeWithHandoffValue.runId === runId, "operator resume json run id");
       assert(resumeWithHandoffValue.artifacts.manualHandoffs.present === true, "operator resume json manual present");
+      assert(resumeWithHandoffValue.timeline.count === statusWithHandoffValue.timeline.count, "operator resume json timeline count");
+      assert(resumeWithHandoffValue.timeline.malformedCount === 1, "operator resume json malformed timeline count");
+      assert(resumeWithHandoffValue.timeline.events.some((event) => event.type === "review_waiting" && event.role === "reviewer"), "operator resume json timeline event");
       assert(resumeWithHandoffValue.nextAction.label === "complete-manual", "operator resume json next label");
       assert(resumeWithHandoffValue.resume.manualCompletionCommands.length === 1, "operator resume json manual completion commands");
       assertIncludes(resumeWithHandoffValue.resume.manualCompletionCommands[0], `cewp run dispatch complete worker-a --run ${runId}`, "operator resume json manual completion command");
