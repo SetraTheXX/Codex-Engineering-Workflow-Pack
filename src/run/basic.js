@@ -14,6 +14,8 @@ const {
   makeReviewerPrompt,
 } = require("./templates/coordinator-prompts");
 
+const OPERATOR_JSON_SCHEMA_VERSION = "operator-json/v1";
+
 function formatRunId(date = new Date()) {
   const pad = (value) => String(value).padStart(2, "0");
   const year = date.getFullYear();
@@ -572,6 +574,28 @@ function outputJson(value) {
   console.log(JSON.stringify(value, null, 2));
 }
 
+function getOperatorJsonWarnings(data) {
+  if (data && data.timeline && Array.isArray(data.timeline.warnings)) {
+    return data.timeline.warnings;
+  }
+
+  return [];
+}
+
+function makeOperatorJsonEnvelope(command, data, now = new Date()) {
+  return {
+    schemaVersion: OPERATOR_JSON_SCHEMA_VERSION,
+    command,
+    generatedAt: now.toISOString(),
+    data,
+    warnings: getOperatorJsonWarnings(data),
+  };
+}
+
+function outputOperatorJson(command, data) {
+  outputJson(makeOperatorJsonEnvelope(command, data));
+}
+
 function toRelativeFiles(runRoot, files) {
   return files.map((filePath) => toRunRelative(runRoot, filePath));
 }
@@ -699,7 +723,7 @@ function runStatus(options = {}) {
   } = inspection;
 
   if (options.json) {
-    outputJson(serializeRunInspection(inspection, {
+    outputOperatorJson("run status", serializeRunInspection(inspection, {
       command: "run status",
       latestRunId: getLatestRunId(),
       includeTimeline: true,
@@ -785,7 +809,7 @@ function runList(options = {}) {
   if (options.json) {
     const latestRunId = runIds.length === 0 ? undefined : runIds[runIds.length - 1];
     const recentRunIds = runIds.slice(-limit).reverse();
-    outputJson({
+    outputOperatorJson("run list", {
       command: "run list",
       runsRoot,
       limit,
@@ -853,7 +877,7 @@ function runNext(options = {}) {
       command: "run next",
       latestRunId: getLatestRunId(),
     });
-    outputJson({
+    outputOperatorJson("run next", {
       command: "run next",
       runId: serialized.runId,
       runPath: serialized.runPath,
@@ -913,7 +937,7 @@ function runResume(options = {}) {
   const resume = getResumeSummary(serialized);
 
   if (options.json) {
-    outputJson({
+    outputOperatorJson("run resume", {
       ...serialized,
       resume,
     });

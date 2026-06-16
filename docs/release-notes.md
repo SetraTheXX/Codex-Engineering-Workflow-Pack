@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added beta `operator-json/v1` envelopes for operator JSON commands while preserving payloads under `data`.
 - Added read-only run timeline projection to operator status/resume JSON output.
 - Added structured adapter availability metadata with doctor requirement/remediation summaries.
 - Added beta `adapter-result/v1` normalized adapter result fields while preserving existing dispatch behavior.
