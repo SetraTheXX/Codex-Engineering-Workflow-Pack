@@ -15,6 +15,7 @@ const FAKE_ADAPTER_MODES = Object.freeze({
 
 const FAKE_OPENCODE_MODES = Object.freeze({
   PASS: "pass",
+  UNEXPECTED_JSON: "unexpected-json",
   INVALID_JSON: "invalid-json",
   NONZERO: "nonzero",
   TIMEOUT: "timeout",
@@ -183,6 +184,12 @@ fs.writeFileSync(
 if (mode === "invalid-json") {
   console.log("{ invalid opencode json");
   console.error(\`fake opencode stderr: invalid json \${role} \${task}\`);
+  process.exit(0);
+}
+
+if (mode === "unexpected-json") {
+  console.log(JSON.stringify({ type: "done", metrics: { ok: true, role, task } }));
+  console.error(\`fake opencode stderr: unexpected json \${role} \${task}\`);
   process.exit(0);
 }
 

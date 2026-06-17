@@ -372,12 +372,25 @@ function didAdapterTimeOut(execResult) {
   return Boolean(execResult && execResult.error && execResult.error.code === "ETIMEDOUT");
 }
 
-function formatExitReason(exitCode) {
+function formatReasonDetail(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 240);
+}
+
+function formatExitReason(exitCode, execResult = {}) {
   if (exitCode === OPENCODE_JSON_PARSE_EXIT_CODE) {
-    return "OpenCode adapter output JSON parse failed.";
+    const detail = formatReasonDetail(execResult.opencode && execResult.opencode.jsonParseError);
+    return detail
+      ? `OpenCode adapter output JSON parse failed: ${detail}.`
+      : "OpenCode adapter output JSON parse failed.";
   }
 
-  return `OpenCode adapter exited with code ${exitCode}.`;
+  const stderr = formatReasonDetail(execResult.stderr);
+  return stderr
+    ? `OpenCode adapter exited with code ${exitCode}. stderr: ${stderr}`
+    : `OpenCode adapter exited with code ${exitCode}.`;
 }
 
 function normalizeAdapterResult({

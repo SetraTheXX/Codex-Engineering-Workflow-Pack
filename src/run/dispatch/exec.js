@@ -51,9 +51,9 @@ function runDispatchAdapter(adapter, args) {
   return adapter.runCodexExecAdapter(args);
 }
 
-function formatAdapterExitReason(adapter, exitCode) {
+function formatAdapterExitReason(adapter, exitCode, execResult) {
   if (adapter.formatExitReason) {
-    return adapter.formatExitReason(exitCode);
+    return adapter.formatExitReason(exitCode, execResult);
   }
   return `codex exec exited with code ${exitCode}.`;
 }
@@ -419,7 +419,7 @@ function runDispatchReviewerExecActual(options, preflight) {
   }
 
   if (exitCode !== 0) {
-    failuresAfterExec.push(formatAdapterExitReason(adapter, exitCode));
+    failuresAfterExec.push(formatAdapterExitReason(adapter, exitCode, execResult));
   }
 
   if (!reportExists) {
@@ -651,7 +651,7 @@ function runDispatchExecActual(options = {}) {
   }
 
   if (exitCode !== 0) {
-    failuresAfterExec.push(formatAdapterExitReason(adapter, exitCode));
+    failuresAfterExec.push(formatAdapterExitReason(adapter, exitCode, execResult));
   }
 
   if (!preview.worktree.baseCommit) {

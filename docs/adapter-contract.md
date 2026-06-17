@@ -82,6 +82,13 @@ CEWP delivers the prepared dispatch prompt as an argv message through a spawned 
 
 This is experimental OpenCode support, not a production-ready provider line. It does not add Claude Code, Gemini, Hermes, local model, or other external provider execution.
 
+Safe dogfood guidance:
+- start with `opencode --version`, `cewp doctor`, and an OpenCode `--dry-run` dispatch preview,
+- use a throwaway or very small fixture run first, not real project source files,
+- keep `allowedFiles` narrow and review the generated worktree before any follow-up,
+- after execution, inspect `cewp run status`, `cewp run next`, `cewp run resume`, and `adapter-output/`, `reports/`, and `events/` artifacts,
+- do not treat OpenCode output as merged, pushed, published, tagged, or released; CEWP guardrails and reviewer gates still apply.
+
 ## Adapter Registry And Config Foundation
 
 CEWP has a minimal internal adapter registry. The registry currently supports:

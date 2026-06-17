@@ -1317,6 +1317,20 @@ async function main() {
       assert(openCodeResult.capabilitiesUsed.includes("externalCommand"), "opencode result external command capability");
       assert(openCodeResult.capabilitiesUsed.includes("lastMessage"), "opencode result last message capability");
 
+      const unexpectedJsonRepo = makeTempRepo("cewp-harness-opencode-unexpected-json-");
+      tempRepos.push(unexpectedJsonRepo);
+      const unexpectedJsonRun = setupFakeAdapterRun(unexpectedJsonRepo).runId;
+      const unexpectedJsonFake = createFakeOpenCodeAdapter(FAKE_OPENCODE_MODES.UNEXPECTED_JSON);
+      const unexpectedJson = cewpWithEnv(
+        ["run", "dispatch", "exec", "worker-a", "--run", unexpectedJsonRun, "--adapter", "opencode", "--yes", "--timeout", "5"],
+        unexpectedJsonRepo,
+        unexpectedJsonFake.env,
+      );
+      assertExit(unexpectedJson, 0, "opencode unexpected json shape succeeds with fallback");
+      const unexpectedJsonLastMessage = path.join(unexpectedJsonRepo, ".cewp", "runs", unexpectedJsonRun, "adapter-output", "worker-a-last-message.md");
+      assertFileExists(unexpectedJsonLastMessage, "opencode unexpected json last message");
+      assertIncludes(fs.readFileSync(unexpectedJsonLastMessage, "utf8"), "\"metrics\"", "opencode unexpected json raw fallback");
+
       const invalidJsonRepo = makeTempRepo("cewp-harness-opencode-invalid-json-");
       tempRepos.push(invalidJsonRepo);
       const invalidJsonRun = setupFakeAdapterRun(invalidJsonRepo).runId;
@@ -1327,7 +1341,8 @@ async function main() {
         invalidJsonFake.env,
       );
       assertExit(invalidJson, 1, "opencode invalid json fails");
-      assertIncludes(invalidJson.stdout, "OpenCode adapter output JSON parse failed.", "opencode invalid json reason");
+      assertIncludes(invalidJson.stdout, "OpenCode adapter output JSON parse failed:", "opencode invalid json reason");
+      assertIncludes(invalidJson.stdout, "JSON", "opencode invalid json parse detail");
       assertIncludes(invalidJson.stdout, "Status: FAIL", "opencode invalid json status");
 
       const nonzeroRepo = makeTempRepo("cewp-harness-opencode-nonzero-");
@@ -1341,7 +1356,11 @@ async function main() {
       );
       assertExit(nonzero, 1, "opencode nonzero fails");
       assertIncludes(nonzero.stdout, "OpenCode adapter exited with code 7.", "opencode nonzero reason");
+      assertIncludes(nonzero.stdout, "stderr: fake opencode stderr", "opencode nonzero stderr reason");
       assertIncludes(nonzero.stdout, "Status: FAIL", "opencode nonzero status");
+      const nonzeroStderrPath = path.join(nonzeroRepo, ".cewp", "runs", nonzeroRun, "adapter-output", "worker-a-stderr.log");
+      assertFileExists(nonzeroStderrPath, "opencode nonzero stderr log");
+      assertIncludes(fs.readFileSync(nonzeroStderrPath, "utf8"), "fake opencode stderr", "opencode nonzero stderr capture");
 
       const timeoutRepo = makeTempRepo("cewp-harness-opencode-timeout-");
       tempRepos.push(timeoutRepo);
