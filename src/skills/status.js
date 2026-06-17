@@ -117,6 +117,10 @@ function doctor(options) {
     for (const requirement of availability.requirements) {
       console.log(`  Requirement: ${formatAdapterRequirement(requirement)}`);
     }
+    const capabilities = getAdapterCapabilities(adapterName, { commandName: "doctor" });
+    if (capabilities.experimental && capabilities.executesExternalCommand && capabilities.requiresAuth) {
+      console.log("  Execution readiness: binary/version check only; provider auth/model/config readiness is not verified by doctor.");
+    }
     if (availability.remediation) {
       console.log(`  Remediation: ${availability.remediation}`);
     }

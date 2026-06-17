@@ -84,7 +84,10 @@ This is experimental OpenCode support, not a production-ready provider line. It 
 
 Safe dogfood guidance:
 - start with `opencode --version`, `cewp doctor`, and an OpenCode `--dry-run` dispatch preview,
+- treat `cewp doctor` OpenCode availability as a binary/version check only; it does not prove provider auth, model, or config readiness,
 - use a throwaway or very small fixture run first, not real project source files,
+- treat nonzero OpenCode exits with empty stdout/stderr as a SOFT FAIL provider-side signal until proven otherwise,
+- verify OpenCode directly inside the disposable fixture before expanding usage to larger work,
 - keep `allowedFiles` narrow and review the generated worktree before any follow-up,
 - after execution, inspect `cewp run status`, `cewp run next`, `cewp run resume`, and `adapter-output/`, `reports/`, and `events/` artifacts,
 - do not treat OpenCode output as merged, pushed, published, tagged, or released; CEWP guardrails and reviewer gates still apply.

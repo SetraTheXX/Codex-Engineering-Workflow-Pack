@@ -125,7 +125,7 @@ function checkOpenCodeAvailability({ env = process.env, timeoutMs = 5000 } = {})
     availableReason: ({ override }) => (
       override
         ? "CEWP_OPENCODE_COMMAND override is set; adapter command is managed by the caller."
-        : "opencode executable is available. Authentication and model/provider configuration are managed by OpenCode."
+        : "opencode executable is available. Provider auth/model/config readiness is not verified by this check."
     ),
   });
 
@@ -379,6 +379,15 @@ function formatReasonDetail(value) {
     .slice(0, 240);
 }
 
+function didProduceNoOutput(execResult = {}) {
+  return formatReasonDetail(execResult.stdout).length === 0
+    && formatReasonDetail(execResult.stderr).length === 0;
+}
+
+function getOpenCodeBinaryLabel(execResult = {}) {
+  return (execResult.opencode && execResult.opencode.command) || OPENCODE_COMMAND_CONTRACT.binary;
+}
+
 function formatExitReason(exitCode, execResult = {}) {
   if (exitCode === OPENCODE_JSON_PARSE_EXIT_CODE) {
     const detail = formatReasonDetail(execResult.opencode && execResult.opencode.jsonParseError);
@@ -388,6 +397,10 @@ function formatExitReason(exitCode, execResult = {}) {
   }
 
   const stderr = formatReasonDetail(execResult.stderr);
+  if (!stderr && didProduceNoOutput(execResult)) {
+    return `OpenCode adapter exited with code ${exitCode} and produced no stdout/stderr. Possible provider/auth/model/config issue; verify OpenCode directly in a disposable fixture. Binary: ${getOpenCodeBinaryLabel(execResult)}. Command shape: opencode run --dir <cwd> --format json <prompt>.`;
+  }
+
   return stderr
     ? `OpenCode adapter exited with code ${exitCode}. stderr: ${stderr}`
     : `OpenCode adapter exited with code ${exitCode}.`;

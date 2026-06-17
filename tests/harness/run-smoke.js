@@ -338,6 +338,7 @@ async function main() {
       assertIncludes(result.stdout, "manual: non-executing, dry-run, handoff, result-intake, no external command", "doctor manual capabilities");
       assertIncludes(result.stdout, "opencode: executing, experimental, dry-run, external command", "doctor opencode capabilities");
       assertIncludes(result.stdout, "opencode: executing, experimental, dry-run, external command, external binary, auth, last-message", "doctor opencode execution MVP capability");
+      assertIncludes(result.stdout, "Execution readiness: binary/version check only; provider auth/model/config readiness is not verified by doctor.", "doctor opencode readiness caveat");
       assertIncludes(result.stdout, "Adapter config:", "doctor adapter config section");
       assertIncludes(result.stdout, "Source: default", "doctor adapter config default source");
       assertIncludes(result.stdout, "manager: codex-exec", "doctor adapter config manager provider");
@@ -1361,6 +1362,42 @@ async function main() {
       const nonzeroStderrPath = path.join(nonzeroRepo, ".cewp", "runs", nonzeroRun, "adapter-output", "worker-a-stderr.log");
       assertFileExists(nonzeroStderrPath, "opencode nonzero stderr log");
       assertIncludes(fs.readFileSync(nonzeroStderrPath, "utf8"), "fake opencode stderr", "opencode nonzero stderr capture");
+
+      const silentRepo = makeTempRepo("cewp-harness-opencode-silent-");
+      tempRepos.push(silentRepo);
+      const silentRun = setupFakeAdapterRun(silentRepo).runId;
+      const silentFake = createFakeOpenCodeAdapter(FAKE_OPENCODE_MODES.SILENT_NONZERO);
+      const silent = cewpWithEnv(
+        ["run", "dispatch", "exec", "worker-a", "--run", silentRun, "--adapter", "opencode", "--yes", "--timeout", "5"],
+        silentRepo,
+        silentFake.env,
+      );
+      assertExit(silent, 1, "opencode silent nonzero fails");
+      assertIncludes(silent.stdout, "OpenCode adapter exited with code 1 and produced no stdout/stderr.", "opencode silent nonzero diagnostic");
+      assertIncludes(silent.stdout, "Possible provider/auth/model/config issue", "opencode silent nonzero possible cause");
+      assertIncludes(silent.stdout, "Command shape: opencode run --dir <cwd> --format json <prompt>", "opencode silent nonzero command shape");
+      const silentRunRoot = path.join(silentRepo, ".cewp", "runs", silentRun);
+      const silentStdoutPath = path.join(silentRunRoot, "adapter-output", "worker-a-stdout.log");
+      const silentStderrPath = path.join(silentRunRoot, "adapter-output", "worker-a-stderr.log");
+      assertFileExists(silentStdoutPath, "opencode silent stdout log");
+      assertFileExists(silentStderrPath, "opencode silent stderr log");
+      assert(fs.readFileSync(silentStdoutPath, "utf8").length === 0, "opencode silent stdout log empty");
+      assert(fs.readFileSync(silentStderrPath, "utf8").length === 0, "opencode silent stderr log empty");
+      const silentResult = normalizeOpenCodeAdapterResult({
+        role: "worker-a",
+        status: "FAIL",
+        exitCode: 1,
+        reasons: ["OpenCode adapter exited with code 1 and produced no stdout/stderr."],
+        paths: {
+          stdout: silentStdoutPath,
+          stderr: silentStderrPath,
+        },
+        runRoot: silentRunRoot,
+      });
+      assert(silentResult.provider === "opencode", "opencode silent result provider");
+      assert(silentResult.exitCode === 1, "opencode silent result exit code");
+      assert(silentResult.artifacts.some((artifact) => artifact.type === "stdout-log" && artifact.present === true), "opencode silent result stdout artifact");
+      assert(silentResult.artifacts.some((artifact) => artifact.type === "stderr-log" && artifact.present === true), "opencode silent result stderr artifact");
 
       const timeoutRepo = makeTempRepo("cewp-harness-opencode-timeout-");
       tempRepos.push(timeoutRepo);

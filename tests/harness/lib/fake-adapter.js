@@ -18,6 +18,7 @@ const FAKE_OPENCODE_MODES = Object.freeze({
   UNEXPECTED_JSON: "unexpected-json",
   INVALID_JSON: "invalid-json",
   NONZERO: "nonzero",
+  SILENT_NONZERO: "silent-nonzero",
   TIMEOUT: "timeout",
 });
 
@@ -165,6 +166,10 @@ if (!worktree || format !== "json") {
 if (mode === "timeout") {
   setTimeout(() => {}, 10000);
   return;
+}
+
+if (mode === "silent-nonzero") {
+  process.exit(1);
 }
 
 fs.mkdirSync(path.dirname(path.join(worktree, changedFile)), { recursive: true });
