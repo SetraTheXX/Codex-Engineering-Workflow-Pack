@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added a provider profiles and terminal orchestration UI architecture plan for future operator surfaces without implementing a desktop UI, terminal server, or additional providers.
 - Improved experimental OpenCode diagnostics for silent nonzero exits and clarified doctor/dogfood guidance around binary checks versus provider auth/model/config readiness.
 - Hardened experimental OpenCode execution failure reporting and fake-harness coverage for unexpected JSON shapes, raw last-message fallback, stderr capture, and safe dogfood guidance.
 - Added an experimental OpenCode execution MVP through guarded dispatch, with JSON output parsing, stdout/stderr capture, last-message synthesis, and fail-closed handling for malformed JSON, nonzero exits, missing binaries, and timeouts.
