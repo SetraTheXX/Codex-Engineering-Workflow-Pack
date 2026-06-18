@@ -1,10 +1,12 @@
 "use strict";
 
 const {
+  OPENCODE_ADAPTER,
   getAdapterAvailability,
   getAdapterCapabilities,
   getSupportedAdapterNames,
 } = require("./registry");
+const { resolveOpenCodeModel } = require("./model");
 
 const PROVIDER_PROFILE_SCHEMA_VERSION = "provider-profile/v1";
 
@@ -51,7 +53,7 @@ function getSupportedFeatures(capabilities = {}) {
   return features;
 }
 
-function buildProviderProfile({ provider, capabilities = {}, availability = {} } = {}) {
+function buildProviderProfile({ provider, capabilities = {}, availability = {}, model = null } = {}) {
   const binaryRequirement = getBinaryRequirement(availability);
 
   return {
@@ -61,7 +63,7 @@ function buildProviderProfile({ provider, capabilities = {}, availability = {} }
     mode: capabilities.kind === "non-executing" ? "manual" : "headless",
     experimental: Boolean(capabilities.experimental),
     command: availability.command || null,
-    model: null,
+    model: provider === OPENCODE_ADAPTER ? model : null,
     binary: binaryRequirement ? binaryRequirement.name : null,
     version: availability.version || null,
     binaryReadiness: getBinaryReadiness(capabilities, availability),
@@ -77,10 +79,15 @@ function buildProviderProfile({ provider, capabilities = {}, availability = {} }
 }
 
 function getProviderProfile(provider, options = {}) {
+  const model = provider === OPENCODE_ADAPTER
+    ? resolveOpenCodeModel({ model: options.model, env: options.env })
+    : null;
+
   return buildProviderProfile({
     provider,
     capabilities: getAdapterCapabilities(provider, options),
     availability: getAdapterAvailability(provider, options),
+    model,
   });
 }
 

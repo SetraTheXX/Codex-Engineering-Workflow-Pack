@@ -3,7 +3,8 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { readJsonFile } = require("../../lib/json");
-const { CODEX_EXEC_ADAPTER, validateAdapterName } = require("./registry");
+const { CODEX_EXEC_ADAPTER, OPENCODE_ADAPTER, validateAdapterName } = require("./registry");
+const { normalizeOpenCodeModel, resolveOpenCodeModel } = require("./model");
 
 const ADAPTER_CONFIG_ROLES = ["manager", "worker-a", "worker-b", "reviewer"];
 const ADAPTER_CONFIG_FILE = "cewp.config.json";
@@ -20,7 +21,16 @@ function defaultAdapterConfig() {
 function normalizeRoleConfig(role, roleConfig = {}) {
   const provider = roleConfig.provider || CODEX_EXEC_ADAPTER;
   validateAdapterName(provider, { commandName: "adapter config" });
-  return { provider };
+  const normalized = { provider };
+
+  if (roleConfig.model !== undefined) {
+    if (provider !== OPENCODE_ADAPTER) {
+      throw new Error(`Adapter config model override for ${role} requires provider ${OPENCODE_ADAPTER}.`);
+    }
+    normalized.model = normalizeOpenCodeModel(roleConfig.model, `Adapter config model override for ${role}`);
+  }
+
+  return normalized;
 }
 
 function normalizeAdapterConfig(config = {}) {
@@ -106,11 +116,36 @@ function assertKnownRole(role) {
   }
 }
 
-function resolveAdapterProviderForRole({
+function applyOpenCodeModelFallback(role, roleConfig, env) {
+  if (roleConfig.provider !== OPENCODE_ADAPTER) {
+    return roleConfig;
+  }
+
+  const model = resolveOpenCodeModel({
+    model: roleConfig.model,
+    env,
+    source: `Adapter config model override for ${role}`,
+  });
+
+  return model ? { ...roleConfig, model } : roleConfig;
+}
+
+function loadResolvedAdapterConfig(repoRoot, options = {}) {
+  const config = loadAdapterConfig(repoRoot);
+  return Object.fromEntries(
+    ADAPTER_CONFIG_ROLES.map((role) => [
+      role,
+      applyOpenCodeModelFallback(role, config[role], options.env || process.env),
+    ]),
+  );
+}
+
+function resolveAdapterConfigForRole({
   role,
   adapterName,
   config,
   repoRoot,
+  env = process.env,
   commandName = "dispatch exec",
 } = {}) {
   assertKnownRole(role);
@@ -134,7 +169,12 @@ function resolveAdapterProviderForRole({
     };
   }
 
-  return normalizeAdapterConfig({ ...config, roles })[role].provider;
+  const roleConfig = normalizeAdapterConfig({ ...config, roles })[role];
+  return applyOpenCodeModelFallback(role, roleConfig, env);
+}
+
+function resolveAdapterProviderForRole(options = {}) {
+  return resolveAdapterConfigForRole(options).provider;
 }
 
 module.exports = {
@@ -142,7 +182,9 @@ module.exports = {
   ADAPTER_CONFIG_ROLES,
   defaultAdapterConfig,
   loadAdapterConfig,
+  loadResolvedAdapterConfig,
   normalizeAdapterConfig,
   readAdapterConfigFile,
+  resolveAdapterConfigForRole,
   resolveAdapterProviderForRole,
 };

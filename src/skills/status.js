@@ -3,9 +3,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { resolveTarget, getSkillStatus } = require("./paths");
-const { getAdapterAvailability, getAdapterCapabilities, getSupportedAdapterNames } = require("../run/adapters/registry");
-const { ADAPTER_CONFIG_FILE, ADAPTER_CONFIG_ROLES, loadAdapterConfig } = require("../run/adapters/config");
+const { OPENCODE_ADAPTER, getAdapterAvailability, getAdapterCapabilities, getSupportedAdapterNames } = require("../run/adapters/registry");
+const { ADAPTER_CONFIG_FILE, ADAPTER_CONFIG_ROLES, loadResolvedAdapterConfig } = require("../run/adapters/config");
 const { buildProviderProfile } = require("../run/adapters/profile");
+const { resolveOpenCodeModel } = require("../run/adapters/model");
 
 function list(options) {
   const targetRoot = resolveTarget(options);
@@ -135,6 +136,19 @@ function doctor(options) {
     console.log(`  ${adapterName}: ${formatAdapterCapabilities(capabilities)}`);
   }
 
+  const adapterConfig = loadResolvedAdapterConfig(process.cwd());
+  const configuredOpenCodeModels = Array.from(new Set(
+    ADAPTER_CONFIG_ROLES
+      .map((role) => adapterConfig[role])
+      .filter((roleConfig) => roleConfig.provider === OPENCODE_ADAPTER && roleConfig.model)
+      .map((roleConfig) => roleConfig.model),
+  ));
+  const openCodeProfileModel = configuredOpenCodeModels.length === 1
+    ? configuredOpenCodeModels[0]
+    : configuredOpenCodeModels.length === 0
+      ? resolveOpenCodeModel({ env: process.env })
+      : null;
+
   console.log("");
   console.log("Provider profiles:");
   for (const { adapterName, capabilities, availability } of adapterSnapshots) {
@@ -142,6 +156,7 @@ function doctor(options) {
       provider: adapterName,
       capabilities,
       availability,
+      model: adapterName === OPENCODE_ADAPTER ? openCodeProfileModel : null,
     });
     console.log(`  ${profile.id}: ${profile.mode}, ${profile.experimental ? "experimental" : "stable"}`);
     console.log(`    Command: ${profile.command || "none"}`);
@@ -154,13 +169,13 @@ function doctor(options) {
     console.log("    Safety: CEWP guardrails, worker scope, reviewer PASS");
   }
 
-  const adapterConfig = loadAdapterConfig(process.cwd());
   const adapterConfigSource = fs.existsSync(path.join(process.cwd(), ADAPTER_CONFIG_FILE)) ? ADAPTER_CONFIG_FILE : "default";
   console.log("");
   console.log("Adapter config:");
   console.log(`  Source: ${adapterConfigSource}`);
   for (const role of ADAPTER_CONFIG_ROLES) {
-    console.log(`  ${role}: ${adapterConfig[role].provider}`);
+    const roleConfig = adapterConfig[role];
+    console.log(`  ${role}: ${roleConfig.provider}${roleConfig.model ? ` (model: ${roleConfig.model})` : ""}`);
   }
 
   console.log("");

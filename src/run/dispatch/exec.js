@@ -24,7 +24,7 @@ const {
   getDispatchPromptPathForTask,
 } = require("./shared");
 const { getAdapter } = require("../adapters/registry");
-const { resolveAdapterProviderForRole } = require("../adapters/config");
+const { resolveAdapterConfigForRole, resolveAdapterProviderForRole } = require("../adapters/config");
 const { assertPolicyAllows } = require("../policy");
 
 function findReviewerDecisionStrict(filePath) {
@@ -66,12 +66,13 @@ function getDispatchExecPreview(options) {
     throw new Error(`Unsupported dispatch exec role: ${options.role || "(missing)"}. Supported roles: worker-a, worker-b, reviewer.`);
   }
 
-  const adapterName = resolveAdapterProviderForRole({
+  const adapterConfig = resolveAdapterConfigForRole({
     role: options.role,
     adapterName: options.adapter,
     commandName: "dispatch exec",
     requireAdapter: true,
   });
+  const adapterName = adapterConfig.provider;
   const adapter = getAdapter(adapterName, { commandName: "dispatch exec" });
 
   const { runId, runRoot } = findRun(options);
@@ -212,6 +213,10 @@ function getDispatchExecPreview(options) {
     };
   }
 
+  if (preview) {
+    preview.model = adapterConfig.model || null;
+  }
+
   if (shouldPrint) {
     console.log(`CEWP Coordinator Mode ${adapterName} adapter dry-run`);
     console.log(`Run ID: ${runId}`);
@@ -281,6 +286,7 @@ function getDispatchExecPreview(options) {
         promptPath: preview.promptPath,
         outputPath: preview.outputLastMessagePath,
         sandbox: preview.sandbox,
+        model: preview.model,
       });
       console.log("");
     }
@@ -398,6 +404,7 @@ function runDispatchReviewerExecActual(options, preflight) {
     outputLastMessagePath: preview.outputLastMessagePath,
     timeoutSeconds: options.timeoutSeconds,
     sandbox: "workspace-write",
+    model: preview.model,
   });
 
   adapter.writeAdapterLog(stdoutPath, execResult.stdout);
@@ -609,6 +616,7 @@ function runDispatchExecActual(options = {}) {
     promptPath: preview.promptPath,
     outputLastMessagePath: preview.outputLastMessagePath,
     timeoutSeconds: options.timeoutSeconds,
+    model: preview.model,
   });
 
   adapter.writeAdapterLog(stdoutPath, execResult.stdout);

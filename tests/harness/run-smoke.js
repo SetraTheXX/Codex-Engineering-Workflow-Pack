@@ -45,7 +45,12 @@ const {
 } = require("../../src/run/adapters/opencode");
 const { probeAdapterCli } = require("../../src/run/adapters/cli-probe");
 const { getAdapterAvailability, getAdapterCapabilities, getSupportedAdapterNames } = require("../../src/run/adapters/registry");
-const { loadAdapterConfig, normalizeAdapterConfig, resolveAdapterProviderForRole } = require("../../src/run/adapters/config");
+const {
+  loadAdapterConfig,
+  normalizeAdapterConfig,
+  resolveAdapterConfigForRole,
+  resolveAdapterProviderForRole,
+} = require("../../src/run/adapters/config");
 const {
   PROVIDER_PROFILE_SCHEMA_VERSION,
   getProviderProfile,
@@ -380,6 +385,14 @@ async function main() {
       assertExit(versionDoctor, 0, "doctor reports adapter probe version");
       assertIncludes(versionDoctor.stdout, `Version: ${process.version}`, "doctor adapter version line");
       assertIncludes(versionDoctor.stdout, `Probe: ${process.execPath} --version`, "doctor adapter probe command");
+
+      const modelDoctor = cewpWithEnv(["doctor"], cewpRoot, {
+        ...process.env,
+        CEWP_OPENCODE_MODEL: "provider/doctor-model",
+      });
+      assertExit(modelDoctor, 0, "doctor reports opencode model override");
+      assertIncludes(modelDoctor.stdout, "Model: provider/doctor-model", "doctor opencode profile model");
+      assertIncludes(modelDoctor.stdout, "Auth/model readiness: unknown", "doctor model override does not imply readiness");
     });
 
     await step("doctor adapter config file summary", () => {
@@ -390,7 +403,7 @@ async function main() {
         adapters: {
           manager: { provider: "codex-exec" },
           "worker-a": { provider: "manual" },
-          "worker-b": { provider: "codex-exec" },
+          "worker-b": { provider: "opencode", model: "provider/config-doctor-model" },
           reviewer: { provider: "codex-exec" },
         },
       });
@@ -401,6 +414,9 @@ async function main() {
       assertIncludes(validDoctor.stdout, "Source: cewp.config.json", "doctor config file source");
       assertIncludes(validDoctor.stdout, "manual: available - manual adapter does not require external binaries.", "doctor manual availability");
       assertIncludes(validDoctor.stdout, "worker-a: manual", "doctor valid config worker-a manual");
+      assertIncludes(validDoctor.stdout, "Model: provider/config-doctor-model", "doctor config profile model");
+      assertIncludes(validDoctor.stdout, "worker-b: opencode (model: provider/config-doctor-model)", "doctor config role model");
+      assertIncludes(validDoctor.stdout, "Auth/model readiness: unknown", "doctor config model does not imply readiness");
 
       const unsupportedRepo = makeTempRepo("cewp-harness-doctor-unsupported-");
       tempRepos.push(unsupportedRepo);
@@ -800,7 +816,19 @@ async function main() {
       assert(openCodeInvocation.args.includes("C:\\repo\\worktree"), "opencode invocation worktree arg");
       assert(openCodeInvocation.args.includes("--format"), "opencode invocation format arg");
       assert(openCodeInvocation.args.includes("json"), "opencode invocation json format");
+      assert(!openCodeInvocation.args.includes("--model"), "opencode invocation default has no model override");
       assert(openCodeInvocation.args[openCodeInvocation.args.length - 1] === "Do a safe dry run.", "opencode invocation prompt last arg");
+
+      const openCodeModelInvocation = buildOpenCodeRunInvocation({
+        command: "opencode",
+        worktreePath: "C:\\repo\\worktree",
+        model: "provider/model-name",
+        prompt: "Do a safe dry run.",
+      });
+      const modelArgIndex = openCodeModelInvocation.args.indexOf("--model");
+      assert(modelArgIndex > -1, "opencode model invocation includes --model");
+      assert(openCodeModelInvocation.args[modelArgIndex + 1] === "provider/model-name", "opencode model invocation model value");
+      assert(openCodeModelInvocation.args[openCodeModelInvocation.args.length - 1] === "Do a safe dry run.", "opencode model invocation prompt remains last arg");
 
       let unsupportedCapabilitiesError;
       try {
@@ -867,6 +895,15 @@ async function main() {
       assert(openCodeProfile.authReadiness === "unknown", "opencode auth/model readiness must remain unknown");
       assert(openCodeProfile.supportedFeatures.includes("external-command"), "opencode external command feature");
       assert(openCodeProfile.safety.reviewerPassRequiredForFinalize === true, "provider profile reviewer PASS safety");
+
+      const configuredOpenCodeProfile = getProviderProfile("opencode", {
+        model: "provider/profile-model",
+        env: {
+          CEWP_OPENCODE_COMMAND: process.execPath,
+        },
+      });
+      assert(configuredOpenCodeProfile.model === "provider/profile-model", "opencode profile resolved model");
+      assert(configuredOpenCodeProfile.authReadiness === "unknown", "opencode configured model does not imply auth readiness");
 
       const missingOpenCodeProfile = getProviderProfile("opencode", {
         env: {
@@ -1126,14 +1163,68 @@ async function main() {
 
       const explicit = normalizeAdapterConfig({
         roles: {
-          "worker-a": { provider: "opencode" },
+          "worker-a": { provider: "opencode", model: "provider/config-model" },
           "worker-b": { provider: "manual" },
           reviewer: { provider: "codex-exec" },
         },
       });
       assert(explicit["worker-a"].provider === "opencode", "explicit worker-a opencode provider");
+      assert(explicit["worker-a"].model === "provider/config-model", "explicit worker-a opencode model");
       assert(explicit["worker-b"].provider === "manual", "explicit worker-b manual provider");
       assert(explicit.reviewer.provider === "codex-exec", "explicit reviewer provider");
+      const resolvedOpenCodeConfig = resolveAdapterConfigForRole({
+        role: "worker-a",
+        config: {
+          roles: {
+            "worker-a": { provider: "opencode", model: "provider/config-model" },
+          },
+        },
+        env: {
+          CEWP_OPENCODE_MODEL: "provider/env-model",
+        },
+      });
+      assert(resolvedOpenCodeConfig.provider === "opencode", "resolved opencode role provider");
+      assert(resolvedOpenCodeConfig.model === "provider/config-model", "role config model overrides environment model");
+      const resolvedOpenCodeEnv = resolveAdapterConfigForRole({
+        role: "worker-a",
+        adapterName: "opencode",
+        env: {
+          CEWP_OPENCODE_MODEL: "provider/env-model",
+        },
+      });
+      assert(resolvedOpenCodeEnv.model === "provider/env-model", "opencode environment model fallback");
+
+      let invalidModelError;
+      try {
+        resolveAdapterConfigForRole({
+          role: "worker-a",
+          adapterName: "opencode",
+          env: {
+            CEWP_OPENCODE_MODEL: "provider/model\nunsafe",
+          },
+        });
+      } catch (error) {
+        invalidModelError = error;
+      }
+      assert(
+        invalidModelError && invalidModelError.message === "CEWP_OPENCODE_MODEL must not contain newline or control characters.",
+        "invalid opencode environment model fails safely",
+      );
+
+      let emptyConfigModelError;
+      try {
+        normalizeAdapterConfig({
+          roles: {
+            "worker-a": { provider: "opencode", model: "   " },
+          },
+        });
+      } catch (error) {
+        emptyConfigModelError = error;
+      }
+      assert(
+        emptyConfigModelError && emptyConfigModelError.message === "Adapter config model override for worker-a must be a non-empty string.",
+        "empty opencode config model fails safely",
+      );
       assert(
         resolveAdapterProviderForRole({ role: "worker-a", adapterName: "manual", commandName: "dispatch exec", requireAdapter: true }) === "manual",
         "resolve worker-a adapter provider",
@@ -1300,18 +1391,31 @@ async function main() {
       assertIncludes(dryRun.stdout, "External command: not executed", "opencode dry-run external command");
       assertIncludes(dryRun.stdout, "opencode run --dir", "opencode dry-run planned run command");
       assertIncludes(dryRun.stdout, "--format json", "opencode dry-run json format");
+      assertIncludes(dryRun.stdout, "Model override: not configured", "opencode dry-run default model state");
+      assertNotIncludes(dryRun.stdout, "--model", "opencode dry-run default command has no model override");
       assertIncludes(dryRun.stdout, "Prompt delivery: argv message via spawn args", "opencode dry-run prompt delivery");
       assertIncludes(dryRun.stdout, "Stdout: captured and parsed as JSON event output", "opencode dry-run stdout contract");
       assertIncludes(dryRun.stdout, "No processes were started.", "opencode dry-run no process");
 
+      const envModelDryRun = cewpWithEnv(
+        ["run", "dispatch", "exec", "worker-a", "--run", runId, "--adapter", "opencode", "--dry-run"],
+        openCodeRepo,
+        { ...process.env, CEWP_OPENCODE_MODEL: "provider/env-model" },
+      );
+      assertExit(envModelDryRun, 0, "opencode environment model dry-run");
+      assertIncludes(envModelDryRun.stdout, "Model override: provider/env-model", "opencode environment model preview");
+      assertIncludes(envModelDryRun.stdout, "--model \"provider/env-model\"", "opencode environment model command preview");
+
       writeJson(path.join(openCodeRepo, "cewp.config.json"), {
         adapters: {
-          "worker-a": { provider: "opencode" },
+          "worker-a": { provider: "opencode", model: "provider/config-model" },
         },
       });
       const configDryRun = cewp(["run", "dispatch", "exec", "worker-a", "--run", runId, "--dry-run"], openCodeRepo);
       assertExit(configDryRun, 0, "opencode config worker-a dry-run");
       assertIncludes(configDryRun.stdout, "Adapter: opencode", "opencode config dry-run adapter");
+      assertIncludes(configDryRun.stdout, "Model override: provider/config-model", "opencode config model preview");
+      assertIncludes(configDryRun.stdout, "--model \"provider/config-model\"", "opencode config model command preview");
 
       const fake = createFakeOpenCodeAdapter();
       const actual = cewpWithEnv(

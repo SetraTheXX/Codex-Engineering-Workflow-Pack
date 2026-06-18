@@ -1,6 +1,6 @@
 # Provider Profiles And Terminal Orchestration UI
 
-Status: architecture plan with an initial provider profile read model. CEWP now generates read-only default profiles for registered adapters, but it does not implement user-defined full profiles, model overrides, a desktop UI, terminal server, WebSocket layer, or new provider adapter.
+Status: architecture plan with an initial provider profile read model and experimental OpenCode model override support. CEWP does not implement user-defined full profiles, a desktop model selector, terminal server, WebSocket layer, or new provider adapter.
 
 CEWP currently supports:
 - `codex-exec`: guarded one-shot execution through the Codex CLI.
@@ -43,7 +43,7 @@ Initial beta shape:
   "mode": "headless",
   "experimental": true,
   "command": "opencode",
-  "model": null,
+  "model": "provider/model-name",
   "binary": "opencode",
   "version": "1.15.8",
   "binaryReadiness": "installed",
@@ -72,7 +72,7 @@ Initial beta shape:
 : CLI command or resolved executable path. It must remain explicit when the adapter executes an external binary.
 
 `model`
-: Reserved for an explicit model override. It is currently `null`; model override behavior is not implemented yet.
+: Resolved experimental OpenCode model override, or `null` when no override is configured. The current source order is role config followed by `CEWP_OPENCODE_MODEL`.
 
 `authReadiness`
 : `unknown` when an adapter requires auth but CEWP has not verified provider/model configuration, otherwise `not-applicable`. Binary/version probes never imply auth readiness.
@@ -243,10 +243,9 @@ The next phase should first make profiles explicit and observable through CLI/JS
    - Current result: `provider-profile/v1` default profiles are generated from registry, capabilities, and availability data and shown by `cewp doctor`.
    - Remaining boundary: users cannot define full profiles yet and dispatch behavior is unchanged.
 
-2. Model override support for experimental providers
-   - Goal: let profiles carry provider-specific model args without depending on CLI defaults.
-   - Likely files: OpenCode command contract, adapter config helpers, tests.
-   - Verification: fake OpenCode command construction tests; no real OpenCode required.
+2. OpenCode model override support - initial implementation complete
+   - Current result: role config and `CEWP_OPENCODE_MODEL` can select an explicit model without changing the default command.
+   - Remaining boundary: a full UI model selector and generalized provider profile configuration are still future work.
 
 3. Explicit auth readiness probes
    - Goal: move beyond today's honest `unknown` state only when a provider offers a safe, read-only readiness check.

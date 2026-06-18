@@ -13,6 +13,7 @@ const {
 const { buildAdapterCliCommandCandidates, probeAdapterCli } = require("./cli-probe");
 const { normalizeLegacyAvailability } = require("./availability");
 const { normalizeAdapterResult: normalizeAdapterResultBase } = require("./result");
+const { normalizeOpenCodeModel } = require("./model");
 
 const OPENCODE_ADAPTER = "opencode";
 const OPENCODE_JSON_PARSE_EXIT_CODE = 64;
@@ -37,6 +38,7 @@ const OPENCODE_COMMAND_CONTRACT = {
   envOverride: "CEWP_OPENCODE_COMMAND",
   availabilityArgs: ["--version"],
   runArgs: ["run", "--dir", "<worktree>", "--format", "json", "<prompt>"],
+  modelArgs: ["--model", "<provider/model>"],
   promptDelivery: "argv message via spawn args; no shell interpolation",
   cwd: "worker worktree for workers; run root for reviewer",
   stdout: "captured and parsed as JSON event output",
@@ -83,7 +85,9 @@ function getOpenCodeCommandCandidates(env = process.env) {
   });
 }
 
-function buildOpenCodeRunInvocation({ command, prefixArgs = [], worktreePath, prompt, format = "json" } = {}) {
+function buildOpenCodeRunInvocation({ command, prefixArgs = [], worktreePath, prompt, format = "json", model } = {}) {
+  const normalizedModel = normalizeOpenCodeModel(model);
+
   return {
     command: command || OPENCODE_COMMAND_CONTRACT.binary,
     args: [
@@ -93,6 +97,7 @@ function buildOpenCodeRunInvocation({ command, prefixArgs = [], worktreePath, pr
       worktreePath,
       "--format",
       format,
+      ...(normalizedModel ? ["--model", normalizedModel] : []),
       prompt,
     ],
     cwd: worktreePath,
@@ -176,17 +181,19 @@ function getAdapterAvailability(options = {}) {
   );
 }
 
-function printCodexExecPreview({ cwd, promptPath, outputPath }) {
+function printCodexExecPreview({ cwd, promptPath, outputPath, model }) {
   const command = getOpenCodeCommand();
   const invocation = buildOpenCodeRunInvocation({
     command,
     worktreePath: cwd,
     prompt: "$prompt",
+    model,
   });
 
   console.log("OpenCode adapter preview:");
   console.log("  Status: experimental execution preview");
   console.log("  External command: not executed");
+  console.log(`  Model override: ${model || "not configured"}`);
   console.log("  PowerShell preview:");
   console.log(`    $prompt = Get-Content -Raw ${quote(promptPath)}`);
   console.log(`    ${invocation.command} ${invocation.args.map(formatPowerShellArg).join(" ")}`);
@@ -312,7 +319,7 @@ function writeLastMessageArtifact(filePath, value) {
   return true;
 }
 
-function runOpenCodeAdapter({ worktreePath, promptPath, outputLastMessagePath, timeoutSeconds }) {
+function runOpenCodeAdapter({ worktreePath, promptPath, outputLastMessagePath, timeoutSeconds, model }) {
   validateTimeoutSeconds(timeoutSeconds);
   const prompt = fs.readFileSync(promptPath, "utf8");
   const invocation = buildOpenCodeRunInvocation({
@@ -320,6 +327,7 @@ function runOpenCodeAdapter({ worktreePath, promptPath, outputLastMessagePath, t
     prefixArgs: getOpenCodePrefixArgs(),
     worktreePath,
     prompt,
+    model,
   });
 
   const result = childProcess.spawnSync(invocation.command, invocation.args, {

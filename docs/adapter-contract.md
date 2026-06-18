@@ -69,6 +69,7 @@ Current behavior:
 - `--dry-run` previews the selected provider and intended command shape without starting OpenCode,
 - availability reports whether the `opencode` binary appears to be present,
 - `cewp.config.json` may resolve a role to `"opencode"`,
+- an optional role model or `CEWP_OPENCODE_MODEL` may select an explicit OpenCode model,
 - non-dry-run dispatch runs OpenCode through the existing guarded dispatch flow,
 - malformed JSON output, nonzero exits, missing binaries, and timeouts fail closed with normalized adapter results.
 
@@ -77,6 +78,19 @@ The current command contract is based on the local OpenCode CLI help surface:
 ```txt
 opencode run --dir <worktree-or-run-root> --format json <prompt>
 ```
+
+With an explicit model override:
+
+```txt
+opencode run --dir <worktree-or-run-root> --format json --model <provider/model> <prompt>
+```
+
+Model resolution order:
+1. `cewp.config.json` role config under `adapters.<role>.model` when that role uses `opencode`.
+2. `CEWP_OPENCODE_MODEL`.
+3. No override; OpenCode uses its configured default provider/model behavior.
+
+Model values must be non-empty strings without newline or control characters. CEWP passes the model and prompt as separate spawned arguments with `shell: false`; it does not build a shell command string.
 
 CEWP delivers the prepared dispatch prompt as an argv message through a spawned process with `shell: false`, not through shell interpolation. Execution sets the process cwd to the role work directory, passes the same path through `--dir`, uses CEWP's dispatch `--timeout`, captures stdout for JSON event parsing, and captures stderr for logs/errors. Because OpenCode does not currently provide CEWP's `adapter-output/<role>-last-message.md` marker directly, CEWP derives the marker from parsed JSON output or available raw output.
 
@@ -88,6 +102,7 @@ Safe dogfood guidance:
 - use a throwaway or very small fixture run first, not real project source files,
 - treat nonzero OpenCode exits with empty stdout/stderr as a SOFT FAIL provider-side signal until proven otherwise,
 - verify OpenCode directly inside the disposable fixture before expanding usage to larger work,
+- when using a model override, verify that exact `provider/model` directly in the disposable fixture because availability does not prove credentials, subscription access, or model readiness,
 - keep `allowedFiles` narrow and review the generated worktree before any follow-up,
 - after execution, inspect `cewp run status`, `cewp run next`, `cewp run resume`, and `adapter-output/`, `reports/`, and `events/` artifacts,
 - do not treat OpenCode output as merged, pushed, published, tagged, or released; CEWP guardrails and reviewer gates still apply.
@@ -119,7 +134,7 @@ CEWP may also read an optional root-level `cewp.config.json` file. Only the top-
 {
   "adapters": {
     "manager": { "provider": "codex-exec" },
-    "worker-a": { "provider": "codex-exec" },
+    "worker-a": { "provider": "opencode", "model": "provider/model-name" },
     "worker-b": { "provider": "codex-exec" },
     "reviewer": { "provider": "codex-exec" }
   }
@@ -183,7 +198,7 @@ The initial shape includes:
 
 Binary readiness is `installed`, `missing`, `unknown`, or `not-applicable`. Auth readiness remains `unknown` for adapters that require auth unless CEWP has an explicit safe readiness signal; a successful binary/version probe does not make auth or model configuration ready. Non-executing `manual` profiles use `not-applicable` for both values.
 
-`cewp doctor` displays the generated profiles. Full user-defined profiles, model overrides, operator JSON profile projection, and interactive terminal sessions remain future work.
+`cewp doctor` displays the generated profiles and resolved OpenCode model when configured. The model value does not change `authReadiness` from `unknown`. Full user-defined profiles, a desktop model selector, operator JSON profile projection, and interactive terminal sessions remain future work.
 
 ## Adapter Lifecycle
 
