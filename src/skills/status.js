@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { resolveTarget, getSkillStatus } = require("./paths");
-const { OPENCODE_ADAPTER, getAdapterAvailability, getAdapterCapabilities, getSupportedAdapterNames } = require("../run/adapters/registry");
+const { MANUAL_ADAPTER, OPENCODE_ADAPTER, getAdapterAvailability, getAdapterCapabilities, getSupportedAdapterNames } = require("../run/adapters/registry");
 const { ADAPTER_CONFIG_FILE, ADAPTER_CONFIG_ROLES, loadResolvedAdapterConfig } = require("../run/adapters/config");
 const { buildProviderProfile } = require("../run/adapters/profile");
 const { resolveOpenCodeModel } = require("../run/adapters/model");
@@ -108,7 +108,13 @@ function doctor(options) {
     const availability = getAdapterAvailability(adapterName, { commandName: "doctor" });
     const capabilities = getAdapterCapabilities(adapterName, { commandName: "doctor" });
     adapterSnapshots.push({ adapterName, availability, capabilities });
-    console.log(`[${availability.available ? "OK" : "WARN"}] ${adapterName}: ${availability.status} - ${availability.reason || "no details"}`);
+    const readinessLabel = adapterName === OPENCODE_ADAPTER
+      ? `${adapterName} binary`
+      : adapterName === MANUAL_ADAPTER
+        ? `${adapterName} readiness`
+        : adapterName;
+    const readinessStatus = adapterName === MANUAL_ADAPTER ? "not-applicable" : availability.status;
+    console.log(`[${availability.available ? "OK" : "WARN"}] ${readinessLabel}: ${readinessStatus} - ${availability.reason || "no details"}`);
     if (availability.command) {
       console.log(`  Binary: ${availability.command}`);
     }
@@ -123,7 +129,7 @@ function doctor(options) {
       console.log(`  Requirement: ${formatAdapterRequirement(requirement)}`);
     }
     if (capabilities.experimental && capabilities.executesExternalCommand && capabilities.requiresAuth) {
-      console.log("  Execution readiness: binary/version check only; provider auth/model/config readiness is not verified by doctor.");
+      console.log("  Auth/model readiness: unknown - provider auth/model/config readiness is not verified by doctor.");
     }
     if (availability.remediation) {
       console.log(`  Remediation: ${availability.remediation}`);

@@ -340,15 +340,15 @@ async function main() {
       assertIncludes(result.stdout, "Adapter availability:", "doctor adapter availability section");
       assertIncludes(result.stdout, "codex-exec:", "doctor codex-exec availability");
       assertIncludes(result.stdout, "Requirement: binary codex:", "doctor codex-exec binary requirement");
-      assertIncludes(result.stdout, "manual: available - manual adapter does not require external binaries.", "doctor manual structured availability");
-      assertIncludes(result.stdout, "opencode:", "doctor opencode availability");
+      assertIncludes(result.stdout, "manual readiness: not-applicable - manual adapter does not require external binaries.", "doctor manual readiness is not applicable");
+      assertIncludes(result.stdout, "opencode binary: available", "doctor qualifies opencode binary availability");
       assertIncludes(result.stdout, "Requirement: binary opencode:", "doctor opencode binary requirement");
       assertIncludes(result.stdout, "Adapter capabilities:", "doctor adapter capabilities section");
       assertIncludes(result.stdout, "codex-exec: executing, dry-run, external command", "doctor codex-exec capabilities");
       assertIncludes(result.stdout, "manual: non-executing, dry-run, handoff, result-intake, no external command", "doctor manual capabilities");
       assertIncludes(result.stdout, "opencode: executing, experimental, dry-run, external command", "doctor opencode capabilities");
       assertIncludes(result.stdout, "opencode: executing, experimental, dry-run, external command, external binary, auth, last-message", "doctor opencode execution MVP capability");
-      assertIncludes(result.stdout, "Execution readiness: binary/version check only; provider auth/model/config readiness is not verified by doctor.", "doctor opencode readiness caveat");
+      assertIncludes(result.stdout, "Auth/model readiness: unknown - provider auth/model/config readiness is not verified by doctor.", "doctor opencode auth/model readiness remains separate");
       assertIncludes(result.stdout, "Provider profiles:", "doctor provider profiles section");
       assertIncludes(result.stdout, "codex-exec: headless, stable", "doctor codex-exec provider profile");
       assertIncludes(result.stdout, "manual: manual, stable", "doctor manual provider profile");
@@ -371,7 +371,7 @@ async function main() {
         Path: "",
       });
       assertExit(missingOpenCodeDoctor, 0, "doctor missing opencode remains non-fatal");
-      assertIncludes(missingOpenCodeDoctor.stdout, "[WARN] opencode: unavailable", "doctor missing opencode warning");
+      assertIncludes(missingOpenCodeDoctor.stdout, "[WARN] opencode binary: unavailable", "doctor missing opencode binary warning");
       assertIncludes(missingOpenCodeDoctor.stdout, "Requirement: binary opencode: missing, required", "doctor missing opencode requirement");
       assertIncludes(missingOpenCodeDoctor.stdout, "Remediation: Install OpenCode CLI", "doctor missing opencode remediation");
       assertIncludes(missingOpenCodeDoctor.stdout, "Status: PASS", "doctor missing opencode still passes");
@@ -412,7 +412,7 @@ async function main() {
       assertExit(validDoctor, 0, "doctor valid adapter config");
       assertIncludes(validDoctor.stdout, "Adapter config:", "doctor valid config section");
       assertIncludes(validDoctor.stdout, "Source: cewp.config.json", "doctor config file source");
-      assertIncludes(validDoctor.stdout, "manual: available - manual adapter does not require external binaries.", "doctor manual availability");
+      assertIncludes(validDoctor.stdout, "manual readiness: not-applicable - manual adapter does not require external binaries.", "doctor manual readiness");
       assertIncludes(validDoctor.stdout, "worker-a: manual", "doctor valid config worker-a manual");
       assertIncludes(validDoctor.stdout, "Model: provider/config-doctor-model", "doctor config profile model");
       assertIncludes(validDoctor.stdout, "worker-b: opencode (model: provider/config-doctor-model)", "doctor config role model");
