@@ -2572,7 +2572,7 @@ async function main() {
       const pack = run("npm", ["pack", "--dry-run"], { cwd: cewpRoot, timeout: 120000 });
       const packOutput = `${pack.stdout}\n${pack.stderr}`;
       assertExit(pack, 0, "npm pack --dry-run");
-      assert(packageJson.version === "0.6.0-beta.0", `unexpected package version: ${packageJson.version}`);
+      assert(packageJson.version === "0.7.0-beta.0", `unexpected package version: ${packageJson.version}`);
       assert(packOutput.includes("docs/adapter-contract.md"), "adapter contract doc should be packed");
       assert(!packOutput.includes(".cewp/"), ".cewp/ should not be packed");
       assert(!packOutput.includes(".cewp-worktrees/"), ".cewp-worktrees/ should not be packed");

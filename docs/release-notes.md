@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.7.0-beta.0
+
+### Summary
+
+Experimental external adapter foundations for Phase 7. This release adds optional OpenCode execution and provider profile read models while keeping provider auth/model readiness unknown until explicitly verified. OpenCode remains experimental; additional providers, desktop UI, terminal servers, and interactive terminal sessions are not implemented.
+
+### Changed
+
 - Added experimental OpenCode model overrides through role config or `CEWP_OPENCODE_MODEL`, including safe argv command construction, dry-run previews, and provider profile/doctor visibility.
 - Added beta `provider-profile/v1` read models with separate binary and auth/model readiness, generated for registered adapters and summarized by `cewp doctor`.
 - Added a provider profiles and terminal orchestration UI architecture plan for future operator surfaces without implementing a desktop UI, terminal server, or additional providers.
