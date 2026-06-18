@@ -152,6 +152,39 @@ Each registered adapter exposes static capability metadata so CEWP can describe 
 
 `codex-exec` is an executing adapter that runs an external command and requires the Codex CLI or an explicit command override. `manual` is a non-executing adapter that supports handoff and result intake without running external commands or requiring an external binary. `opencode` is marked `experimental` with `executionImplemented: true` for the MVP execution path. `cewp doctor` prints a compact capability summary for every registered adapter.
 
+## Provider Profile Read Model
+
+CEWP generates a beta `provider-profile/v1` read model for every registered adapter. Profiles are derived from existing capability and availability data; they do not change dispatch selection or execution.
+
+The initial shape includes:
+
+```json
+{
+  "schemaVersion": "provider-profile/v1",
+  "id": "opencode",
+  "provider": "opencode",
+  "mode": "headless",
+  "experimental": true,
+  "command": "opencode",
+  "model": null,
+  "binary": "opencode",
+  "version": null,
+  "binaryReadiness": "installed",
+  "authReadiness": "unknown",
+  "supportedFeatures": ["dry-run", "external-command", "last-message"],
+  "safety": {
+    "cewpGuardrailsRequired": true,
+    "allowedFilesRequiredForWorkers": true,
+    "reviewerPassRequiredForFinalize": true,
+    "automaticMergePushPublishRelease": false
+  }
+}
+```
+
+Binary readiness is `installed`, `missing`, `unknown`, or `not-applicable`. Auth readiness remains `unknown` for adapters that require auth unless CEWP has an explicit safe readiness signal; a successful binary/version probe does not make auth or model configuration ready. Non-executing `manual` profiles use `not-applicable` for both values.
+
+`cewp doctor` displays the generated profiles. Full user-defined profiles, model overrides, operator JSON profile projection, and interactive terminal sessions remain future work.
+
 ## Adapter Lifecycle
 
 The provider-independent lifecycle should stay stable:

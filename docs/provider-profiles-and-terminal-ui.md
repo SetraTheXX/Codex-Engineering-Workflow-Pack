@@ -1,6 +1,6 @@
 # Provider Profiles And Terminal Orchestration UI
 
-Status: planning document. This is a product architecture plan for future CEWP provider profiles and operator UI support. It does not implement a desktop UI, terminal server, WebSocket layer, or new provider adapter.
+Status: architecture plan with an initial provider profile read model. CEWP now generates read-only default profiles for registered adapters, but it does not implement user-defined full profiles, model overrides, a desktop UI, terminal server, WebSocket layer, or new provider adapter.
 
 CEWP currently supports:
 - `codex-exec`: guarded one-shot execution through the Codex CLI.
@@ -31,53 +31,39 @@ The UI should not turn CEWP into an automatic merge, push, publish, tag, or rele
 
 ## Provider Profile
 
-A provider profile is a named, local configuration that describes how CEWP should use a provider for a role or session. It is more specific than a provider id and less powerful than arbitrary command execution.
+A provider profile describes how CEWP can present a provider to operators and future UIs. The initial implementation is a generated read model derived from the adapter registry, capabilities, and availability data. Users do not define full profiles yet.
 
-Suggested beta shape:
+Initial beta shape:
 
 ```json
 {
-  "id": "opencode-explicit-model",
+  "schemaVersion": "provider-profile/v1",
+  "id": "opencode",
   "provider": "opencode",
-  "label": "OpenCode explicit-model profile",
-  "command": "opencode",
-  "args": ["run"],
-  "model": "provider/model-name",
   "mode": "headless",
-  "auth": {
-    "readiness": "unknown",
-    "lastCheckedAt": null,
-    "message": "Binary checks do not verify provider credentials."
-  },
-  "binary": {
-    "versionArgs": ["--version"],
-    "version": null
-  },
-  "workingDirectory": {
-    "strategy": "role-worktree",
-    "passesDirectoryArg": true
-  },
-  "output": {
-    "contract": "adapter-result/v1",
-    "stdout": "captured",
-    "stderr": "captured",
-    "structured": "json-or-jsonl",
-    "lastMessage": "provider-or-synthesized"
-  },
+  "experimental": true,
+  "command": "opencode",
+  "model": null,
+  "binary": "opencode",
+  "version": "1.15.8",
+  "binaryReadiness": "installed",
+  "authReadiness": "unknown",
+  "supportedFeatures": ["dry-run", "external-command", "last-message"],
   "safety": {
     "cewpGuardrailsRequired": true,
     "allowedFilesRequiredForWorkers": true,
-    "reviewerPassRequiredForFinalize": true
+    "reviewerPassRequiredForFinalize": true,
+    "automaticMergePushPublishRelease": false
   }
 }
 ```
 
-This shape is a design target, not a committed public config schema.
+`cewp doctor` prints a compact summary of these generated profiles. This is a beta internal read model, not a committed user config schema.
 
 ### Profile Fields
 
 `id`
-: Local stable profile name, suitable for UI selection and future config references.
+: Stable generated id. Initial default profiles use the provider id.
 
 `provider`
 : Registry provider id such as `codex-exec`, `manual`, or experimental `opencode`.
@@ -86,22 +72,22 @@ This shape is a design target, not a committed public config schema.
 : CLI command or resolved executable path. It must remain explicit when the adapter executes an external binary.
 
 `model`
-: Optional provider-specific model override. CEWP should not assume an external CLI's default model is configured or usable.
+: Reserved for an explicit model override. It is currently `null`; model override behavior is not implemented yet.
 
-`auth.readiness`
-: A status such as `not-required`, `unknown`, `missing`, `ready`, or `failed`. Binary/version probes should not be treated as auth readiness.
+`authReadiness`
+: `unknown` when an adapter requires auth but CEWP has not verified provider/model configuration, otherwise `not-applicable`. Binary/version probes never imply auth readiness.
 
 `binary`
-: Version probe information from the existing adapter availability model.
+: Required binary name, or `null` for non-executing providers.
+
+`binaryReadiness`
+: `installed`, `missing`, `unknown`, or `not-applicable`, derived from structured adapter availability.
 
 `mode`
 : One of `headless`, `interactive-terminal`, or `manual`.
 
-`workingDirectory`
-: How the provider receives the role work directory. Existing worker execution should continue to use isolated worktrees.
-
-`output`
-: How stdout, stderr, structured events, last-message content, and result normalization are expected to work.
+`supportedFeatures`
+: Read-only feature labels derived from adapter capability metadata.
 
 `safety`
 : The CEWP-owned boundaries that the profile cannot disable.
@@ -117,7 +103,7 @@ Suggested read model:
   "sessionId": "session-01H...",
   "runId": "20260617-034723",
   "role": "worker-a",
-  "providerProfileId": "opencode-local-gemini",
+  "providerProfileId": "opencode",
   "mode": "interactive-terminal",
   "state": "starting",
   "process": {
@@ -253,20 +239,19 @@ The next phase should first make profiles explicit and observable through CLI/JS
 
 ## Recommended Implementation Steps
 
-1. Provider profile schema draft
-   - Goal: add a small internal schema/read model for provider profiles.
-   - Likely files: adapter config docs, registry/config helpers, harness tests.
-   - Verification: config normalization tests and doctor output tests.
+1. Provider profile schema/read model - initial implementation complete
+   - Current result: `provider-profile/v1` default profiles are generated from registry, capabilities, and availability data and shown by `cewp doctor`.
+   - Remaining boundary: users cannot define full profiles yet and dispatch behavior is unchanged.
 
 2. Model override support for experimental providers
    - Goal: let profiles carry provider-specific model args without depending on CLI defaults.
    - Likely files: OpenCode command contract, adapter config helpers, tests.
    - Verification: fake OpenCode command construction tests; no real OpenCode required.
 
-3. Auth readiness separation
-   - Goal: distinguish binary availability from provider auth/model/config readiness in profile output.
+3. Explicit auth readiness probes
+   - Goal: move beyond today's honest `unknown` state only when a provider offers a safe, read-only readiness check.
    - Likely files: adapter availability helpers, doctor output, docs.
-   - Verification: doctor tests for binary-ready/auth-unknown states.
+   - Verification: provider-specific fake probes; binary availability must remain independent.
 
 4. Operator JSON profile projection
    - Goal: expose selected provider/profile metadata in `operator-json/v1` without starting sessions.

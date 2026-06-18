@@ -46,6 +46,11 @@ const {
 const { probeAdapterCli } = require("../../src/run/adapters/cli-probe");
 const { getAdapterAvailability, getAdapterCapabilities, getSupportedAdapterNames } = require("../../src/run/adapters/registry");
 const { loadAdapterConfig, normalizeAdapterConfig, resolveAdapterProviderForRole } = require("../../src/run/adapters/config");
+const {
+  PROVIDER_PROFILE_SCHEMA_VERSION,
+  getProviderProfile,
+  getProviderProfiles,
+} = require("../../src/run/adapters/profile");
 
 const cewpRoot = path.resolve(__dirname, "..", "..");
 const cewpCli = path.join(cewpRoot, "bin", "cewp.js");
@@ -339,6 +344,11 @@ async function main() {
       assertIncludes(result.stdout, "opencode: executing, experimental, dry-run, external command", "doctor opencode capabilities");
       assertIncludes(result.stdout, "opencode: executing, experimental, dry-run, external command, external binary, auth, last-message", "doctor opencode execution MVP capability");
       assertIncludes(result.stdout, "Execution readiness: binary/version check only; provider auth/model/config readiness is not verified by doctor.", "doctor opencode readiness caveat");
+      assertIncludes(result.stdout, "Provider profiles:", "doctor provider profiles section");
+      assertIncludes(result.stdout, "codex-exec: headless, stable", "doctor codex-exec provider profile");
+      assertIncludes(result.stdout, "manual: manual, stable", "doctor manual provider profile");
+      assertIncludes(result.stdout, "opencode: headless, experimental", "doctor opencode provider profile");
+      assertIncludes(result.stdout, "Auth/model readiness: unknown", "doctor opencode auth readiness remains unknown");
       assertIncludes(result.stdout, "Adapter config:", "doctor adapter config section");
       assertIncludes(result.stdout, "Source: default", "doctor adapter config default source");
       assertIncludes(result.stdout, "manager: codex-exec", "doctor adapter config manager provider");
@@ -821,6 +831,52 @@ async function main() {
       const pipelineUnsupported = cewp(["run", "dispatch", "pipeline", "--adapter", "not-real", "--dry-run"], cewpRoot);
       assertExit(pipelineUnsupported, 1, "unsupported dispatch pipeline adapter");
       assertIncludes(pipelineUnsupported.stderr, unsupportedAdapterMessage, "unsupported pipeline adapter message");
+    });
+
+    await step("provider profile read model", () => {
+      const profiles = getProviderProfiles({
+        env: {
+          ...process.env,
+          CEWP_CODEX_EXEC_COMMAND: process.execPath,
+          CEWP_OPENCODE_COMMAND: process.execPath,
+        },
+      });
+      assert(profiles.length === 3, "provider profiles should mirror the three public adapters");
+      assert(profiles.every((profile) => profile.schemaVersion === PROVIDER_PROFILE_SCHEMA_VERSION), "provider profile schema version");
+
+      const codexExecProfile = profiles.find((profile) => profile.provider === "codex-exec");
+      assert(codexExecProfile.id === "codex-exec", "codex-exec profile id");
+      assert(codexExecProfile.mode === "headless", "codex-exec profile mode");
+      assert(codexExecProfile.experimental === false, "codex-exec profile stable state");
+      assert(codexExecProfile.binaryReadiness === "installed", "codex-exec binary readiness");
+      assert(codexExecProfile.authReadiness === "not-applicable", "codex-exec auth readiness");
+      assert(codexExecProfile.supportedFeatures.includes("external-command"), "codex-exec external command feature");
+
+      const manualProfile = profiles.find((profile) => profile.provider === "manual");
+      assert(manualProfile.mode === "manual", "manual profile mode");
+      assert(manualProfile.command === null, "manual profile command");
+      assert(manualProfile.binary === null, "manual profile binary");
+      assert(manualProfile.binaryReadiness === "not-applicable", "manual binary readiness");
+      assert(manualProfile.authReadiness === "not-applicable", "manual auth readiness");
+      assert(manualProfile.supportedFeatures.includes("manual-handoff"), "manual handoff feature");
+
+      const openCodeProfile = profiles.find((profile) => profile.provider === "opencode");
+      assert(openCodeProfile.mode === "headless", "opencode profile mode");
+      assert(openCodeProfile.experimental === true, "opencode profile experimental state");
+      assert(openCodeProfile.binaryReadiness === "installed", "opencode binary readiness");
+      assert(openCodeProfile.authReadiness === "unknown", "opencode auth/model readiness must remain unknown");
+      assert(openCodeProfile.supportedFeatures.includes("external-command"), "opencode external command feature");
+      assert(openCodeProfile.safety.reviewerPassRequiredForFinalize === true, "provider profile reviewer PASS safety");
+
+      const missingOpenCodeProfile = getProviderProfile("opencode", {
+        env: {
+          PATH: "",
+          Path: "",
+        },
+      });
+      assert(missingOpenCodeProfile.binaryReadiness === "missing", "missing opencode binary readiness");
+      assert(missingOpenCodeProfile.authReadiness === "unknown", "missing binary must not overclaim opencode auth readiness");
+      assert(!profiles.some((profile) => ["claude-code", "gemini", "hermes"].includes(profile.provider)), "provider profiles should not add unsupported providers");
     });
 
     await step("adapter result shape", () => {

@@ -5,6 +5,7 @@ const path = require("node:path");
 const { resolveTarget, getSkillStatus } = require("./paths");
 const { getAdapterAvailability, getAdapterCapabilities, getSupportedAdapterNames } = require("../run/adapters/registry");
 const { ADAPTER_CONFIG_FILE, ADAPTER_CONFIG_ROLES, loadAdapterConfig } = require("../run/adapters/config");
+const { buildProviderProfile } = require("../run/adapters/profile");
 
 function list(options) {
   const targetRoot = resolveTarget(options);
@@ -101,8 +102,11 @@ function doctor(options) {
 
   console.log("");
   console.log("Adapter availability:");
+  const adapterSnapshots = [];
   for (const adapterName of getSupportedAdapterNames()) {
     const availability = getAdapterAvailability(adapterName, { commandName: "doctor" });
+    const capabilities = getAdapterCapabilities(adapterName, { commandName: "doctor" });
+    adapterSnapshots.push({ adapterName, availability, capabilities });
     console.log(`[${availability.available ? "OK" : "WARN"}] ${adapterName}: ${availability.status} - ${availability.reason || "no details"}`);
     if (availability.command) {
       console.log(`  Binary: ${availability.command}`);
@@ -117,7 +121,6 @@ function doctor(options) {
     for (const requirement of availability.requirements) {
       console.log(`  Requirement: ${formatAdapterRequirement(requirement)}`);
     }
-    const capabilities = getAdapterCapabilities(adapterName, { commandName: "doctor" });
     if (capabilities.experimental && capabilities.executesExternalCommand && capabilities.requiresAuth) {
       console.log("  Execution readiness: binary/version check only; provider auth/model/config readiness is not verified by doctor.");
     }
@@ -128,8 +131,27 @@ function doctor(options) {
 
   console.log("");
   console.log("Adapter capabilities:");
-  for (const adapterName of getSupportedAdapterNames()) {
-    console.log(`  ${adapterName}: ${formatAdapterCapabilities(getAdapterCapabilities(adapterName, { commandName: "doctor" }))}`);
+  for (const { adapterName, capabilities } of adapterSnapshots) {
+    console.log(`  ${adapterName}: ${formatAdapterCapabilities(capabilities)}`);
+  }
+
+  console.log("");
+  console.log("Provider profiles:");
+  for (const { adapterName, capabilities, availability } of adapterSnapshots) {
+    const profile = buildProviderProfile({
+      provider: adapterName,
+      capabilities,
+      availability,
+    });
+    console.log(`  ${profile.id}: ${profile.mode}, ${profile.experimental ? "experimental" : "stable"}`);
+    console.log(`    Command: ${profile.command || "none"}`);
+    console.log(`    Model: ${profile.model || "not set"}`);
+    console.log(`    Binary: ${profile.binary || "not applicable"}`);
+    console.log(`    Version: ${profile.version || "unknown"}`);
+    console.log(`    Binary readiness: ${profile.binaryReadiness}`);
+    console.log(`    Auth/model readiness: ${profile.authReadiness}`);
+    console.log(`    Features: ${profile.supportedFeatures.join(", ") || "none"}`);
+    console.log("    Safety: CEWP guardrails, worker scope, reviewer PASS");
   }
 
   const adapterConfig = loadAdapterConfig(process.cwd());

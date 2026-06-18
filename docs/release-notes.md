@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Added beta `provider-profile/v1` read models with separate binary and auth/model readiness, generated for registered adapters and summarized by `cewp doctor`.
 - Added a provider profiles and terminal orchestration UI architecture plan for future operator surfaces without implementing a desktop UI, terminal server, or additional providers.
 - Improved experimental OpenCode diagnostics for silent nonzero exits and clarified doctor/dogfood guidance around binary checks versus provider auth/model/config readiness.
 - Hardened experimental OpenCode execution failure reporting and fake-harness coverage for unexpected JSON shapes, raw last-message fallback, stderr capture, and safe dogfood guidance.
