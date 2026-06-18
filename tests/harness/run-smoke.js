@@ -341,7 +341,11 @@ async function main() {
       assertIncludes(result.stdout, "codex-exec:", "doctor codex-exec availability");
       assertIncludes(result.stdout, "Requirement: binary codex:", "doctor codex-exec binary requirement");
       assertIncludes(result.stdout, "manual readiness: not-applicable - manual adapter does not require external binaries.", "doctor manual readiness is not applicable");
-      assertIncludes(result.stdout, "opencode binary: available", "doctor qualifies opencode binary availability");
+      assert(
+        result.stdout.includes("[OK] opencode binary: available")
+          || result.stdout.includes("[WARN] opencode binary: unavailable"),
+        "doctor reports optional opencode binary availability",
+      );
       assertIncludes(result.stdout, "Requirement: binary opencode:", "doctor opencode binary requirement");
       assertIncludes(result.stdout, "Adapter capabilities:", "doctor adapter capabilities section");
       assertIncludes(result.stdout, "codex-exec: executing, dry-run, external command", "doctor codex-exec capabilities");
