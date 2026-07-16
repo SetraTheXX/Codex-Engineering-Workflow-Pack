@@ -20,6 +20,7 @@ Focused contracts can be run independently:
 npm run test:init-install
 npm run test:adapter-profile
 npm run test:operator-json
+npm run test:hook-output
 ```
 
 `npm test` runs these focused contracts before the broader smoke lifecycle.

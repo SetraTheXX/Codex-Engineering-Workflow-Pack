@@ -36,13 +36,15 @@
   },
   "scripts": {
     "test": "npm run test:contracts && npm run smoke",
-    "test:contracts": "npm run test:init-install && npm run test:adapter-profile && npm run test:operator-json",
+    "test:contracts": "npm run test:init-install && npm run test:adapter-profile && npm run test:operator-json && npm run test:hook-output",
     "test:init-install": "node tests/contracts/init-install.js",
     "test:adapter-profile": "node tests/contracts/adapter-profile.js",
     "test:operator-json": "node tests/contracts/operator-json.js",
+    "test:hook-output": "node tests/contracts/hook-output.js",
+    "probe:codex-app-server": "node tests/capabilities/codex-app-server.js",
     "smoke": "node tests/harness/run-smoke.js",
     "check:cli": "node ./bin/cewp.js --help",
-    "check:syntax": "node --check ./bin/cewp.js && node --check ./src/skills/install.js && node --check ./tests/contracts/init-install.js && node --check ./tests/contracts/adapter-profile.js && node --check ./tests/contracts/operator-json.js",
+    "check:syntax": "node --check ./bin/cewp.js && node --check ./src/skills/install.js && node --check ./tests/contracts/init-install.js && node --check ./tests/contracts/adapter-profile.js && node --check ./tests/contracts/operator-json.js && node --check ./tests/contracts/hook-output.js && node --check ./tests/capabilities/codex-app-server.js && node --check ./tests/capabilities/fixtures/deny-shell-hook.js",
     "check": "npm run check:syntax && npm test",
     "pack:dry-run": "npm pack --dry-run"
   },
