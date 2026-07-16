@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 0.8.0-beta.0
+
+### Summary
+
+Reliability and Codex compatibility foundation for supervised goals. This release repairs Unicode-path installation, adds focused contracts and cross-platform CI, records supported host boundaries, and ships an opt-in read-only Codex plugin skeleton. It does not yet implement the Phase 9 supervised golden path or direct control of native ChatGPT/Codex goals.
+
+### Changed
+
+- Replaced recursive skill copying with a Windows-safe traversal and added a Unicode source-path crash regression contract.
+- Added Windows/Linux CI and focused contracts for skills, adapters, provider profiles, operator JSON, artifacts, events, ownership, Core gates, hooks, and deterministic fixtures.
+- Published a versioned Codex capability matrix that separates host/plugin access from a separately owned experimental App Server process and selects managed `codex-exec` for the next golden path.
+- Defined Codex-first product, execution-ownership, and cost/assurance decisions, including one owner/backend, protected reserves, absolute ceilings, truthful usage labels, and resumable pause states.
+- Added official-format skill validation for optional `scripts/`, `references/`, `assets/`, and `agents/openai.yaml` components.
+- Added an opt-in local `cewp` plugin skeleton with one read-only run-inspection skill, package metadata, marketplace entry, and isolated install/disable/upgrade/uninstall coverage.
+- Raised the next-beta Node.js support floor to maintained Node 22, 24, and 26 lines. The zero-dependency runtime still has no lockfile or package dependency audit graph.
+- Kept OpenCode experimental and maintenance-only; no additional provider, standalone desktop UI, terminal server, Apps SDK component, MCP bridge, or native-goal control was added.
+
 ## 0.7.0-beta.0
 
 ### Summary
