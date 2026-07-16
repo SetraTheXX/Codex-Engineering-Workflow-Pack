@@ -35,7 +35,8 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "node tests/harness/run-smoke.js",
+    "test": "npm run test:init-install && npm run smoke",
+    "test:init-install": "node tests/contracts/init-install.js",
     "smoke": "node tests/harness/run-smoke.js",
     "check:cli": "node ./bin/cewp.js --help",
     "check": "node --check ./bin/cewp.js && node tests/harness/run-smoke.js",
