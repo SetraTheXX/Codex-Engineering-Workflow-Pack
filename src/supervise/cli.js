@@ -5,6 +5,7 @@ const {
   createProposedRun,
   inspectSupervisedRun,
 } = require("./state");
+const { executeSupervisedCheckpoint } = require("./execution");
 
 function outputJson(command, data) {
   console.log(JSON.stringify({
@@ -83,6 +84,25 @@ function runSupervise(options = {}) {
       outputJson("supervise.status", result);
     } else {
       printStatus("CEWP supervised run status", result);
+    }
+    return;
+  }
+
+  if (options.subcommand === "execute") {
+    const result = executeSupervisedCheckpoint({
+      ...options,
+      repoRoot: process.cwd(),
+    });
+    if (options.json) {
+      outputJson("supervise.execute", result);
+    } else {
+      printStatus(
+        result.ok ? "CEWP supervised dispatch completed" : "CEWP supervised dispatch blocked",
+        result,
+      );
+    }
+    if (!result.ok) {
+      process.exitCode = 1;
     }
     return;
   }

@@ -117,7 +117,7 @@ function parseArgs(argv) {
 
     if (
       args.command === "supervise"
-      && ["approve", "status"].includes(args.subcommand)
+      && ["approve", "status", "execute"].includes(args.subcommand)
       && index === 2
       && !arg.startsWith("--")
     ) {
@@ -294,7 +294,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "run" && arg === "--timeout") {
+    if (["run", "supervise"].includes(args.command) && arg === "--timeout") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--") || !/^\d+$/.test(value)) {
         throw new Error("--timeout requires a positive number of seconds.");

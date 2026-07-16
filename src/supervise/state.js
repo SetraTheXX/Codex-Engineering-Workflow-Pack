@@ -147,6 +147,20 @@ function getNextAction(run) {
       summary: "execute checkpoint-1",
     };
   }
+  if (run.status === "verifying" && run.tasks[0].status === "awaiting-verification") {
+    return {
+      action: "verify",
+      command: `cewp supervise verify ${run.runId}`,
+      summary: "run targeted verification for checkpoint-1",
+    };
+  }
+  if (run.status === "blocked") {
+    return {
+      action: "inspect-blocker",
+      command: `cewp supervise status ${run.runId}`,
+      summary: "inspect blocker and choose retry, revise, rollback, or abandon",
+    };
+  }
   return {
     action: "inspect",
     command: `cewp supervise status ${run.runId}`,
@@ -311,6 +325,7 @@ function approveSupervisedRun(options = {}) {
 
 module.exports = {
   SUPERVISED_RUN_SCHEMA_VERSION,
+  appendEvent,
   createProposedRun,
   approveSupervisedRun,
   findSupervisedRun,
