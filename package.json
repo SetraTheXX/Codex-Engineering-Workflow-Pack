@@ -35,11 +35,15 @@
     "node": ">=18"
   },
   "scripts": {
-    "test": "npm run test:init-install && npm run smoke",
+    "test": "npm run test:contracts && npm run smoke",
+    "test:contracts": "npm run test:init-install && npm run test:adapter-profile && npm run test:operator-json",
     "test:init-install": "node tests/contracts/init-install.js",
+    "test:adapter-profile": "node tests/contracts/adapter-profile.js",
+    "test:operator-json": "node tests/contracts/operator-json.js",
     "smoke": "node tests/harness/run-smoke.js",
     "check:cli": "node ./bin/cewp.js --help",
-    "check": "node --check ./bin/cewp.js && node tests/harness/run-smoke.js",
+    "check:syntax": "node --check ./bin/cewp.js && node --check ./src/skills/install.js && node --check ./tests/contracts/init-install.js && node --check ./tests/contracts/adapter-profile.js && node --check ./tests/contracts/operator-json.js",
+    "check": "npm run check:syntax && npm test",
     "pack:dry-run": "npm pack --dry-run"
   },
   "keywords": [

@@ -14,6 +14,16 @@ Or use the package script:
 npm test
 ```
 
+Focused contracts can be run independently:
+
+```bash
+npm run test:init-install
+npm run test:adapter-profile
+npm run test:operator-json
+```
+
+`npm test` runs these focused contracts before the broader smoke lifecycle.
+
 The harness creates temporary git repositories, initializes CEWP runs, creates worker worktrees, commits fixture changes inside those worktrees, checks committed-diff scope reporting, verifies `run prune`, and removes its temporary repos at the end.
 
 It also uses a test-only fake Codex executable path to exercise the `codex-exec` lifecycle without starting the real Codex CLI: worker execution, `.cewp-worker-output/` handoff, report copying, adapter logs, last-message output, scope post-checks, review-packet collection, reviewer execution, reviewer decision parsing, and finalize gating.
