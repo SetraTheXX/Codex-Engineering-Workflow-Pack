@@ -10,6 +10,9 @@ Usage:
   cewp policy show
   cewp policy set <safe|trusted|full-authority>
   cewp policy reset
+  cewp supervise plan --goal <text> --scope <path> --verify <command> --stop <condition> [--assurance <profile>] [--test-authoring <policy>] [--json]
+  cewp supervise approve [run-id] --yes [--json]
+  cewp supervise status [run-id] [--json]
   cewp run init --workers <count> --reviewer
   cewp run list [--limit <count>] [--json]
   cewp run status [run-id] [--json]
