@@ -1,0 +1,20 @@
+{
+  "name": "cewp-local",
+  "interface": {
+    "displayName": "CEWP Local"
+  },
+  "plugins": [
+    {
+      "name": "cewp",
+      "source": {
+        "source": "local",
+        "path": "./plugins/cewp"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

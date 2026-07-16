@@ -1,0 +1,17 @@
+{
+  "release": "0.7.0-beta.0",
+  "schemas": {
+    "operator": "operator-json/v1",
+    "adapterResult": "adapter-result/v1",
+    "providerProfile": "provider-profile/v1"
+  },
+  "adapters": [
+    "codex-exec",
+    "manual",
+    "opencode"
+  ],
+  "topology": {
+    "workers": 2,
+    "reviewerRequiredForFinalize": true
+  }
+}

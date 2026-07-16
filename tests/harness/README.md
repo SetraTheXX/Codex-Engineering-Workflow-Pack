@@ -24,9 +24,14 @@ npm run test:hook-output
 npm run test:skill-format
 npm run test:ownership-gates
 npm run test:fixtures
+npm run test:plugin-package
 ```
 
 `npm test` runs these focused contracts before the broader smoke lifecycle.
+
+When the Codex CLI is installed, `npm run test:plugin-lifecycle` exercises install,
+config disable/enable, cachebuster upgrade, and uninstall in an isolated unauthenticated
+`CODEX_HOME`. It never starts a model turn or edits the user's global Codex config.
 
 The harness creates temporary git repositories, initializes CEWP runs, creates worker worktrees, commits fixture changes inside those worktrees, checks committed-diff scope reporting, verifies `run prune`, and removes its temporary repos at the end.
 
