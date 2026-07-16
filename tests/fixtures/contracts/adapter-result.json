@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "adapter-result/v1",
+  "provider": "codex-exec",
+  "adapter": "codex-exec",
+  "role": "worker-a",
+  "status": "PASS",
+  "ok": true,
+  "exitCode": 0,
+  "timedOut": false,
+  "reasons": [],
+  "commandExecuted": true,
+  "externalCommandExecuted": true,
+  "artifacts": [],
+  "capabilitiesUsed": ["externalCommand", "lastMessage"]
+}
