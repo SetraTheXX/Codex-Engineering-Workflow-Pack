@@ -104,7 +104,7 @@ function runLifecycle(command) {
         "cewp",
         initialVersion,
         "skills",
-        "inspect-cewp-run",
+        "plan-supervised-run",
         "SKILL.md",
       )),
       "installed cache contains the plugin skill",
