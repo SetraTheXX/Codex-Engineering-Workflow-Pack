@@ -6,6 +6,7 @@ const { getWorktreeChangeSummary, findScopeWarnings } = require("../lib/scope-ch
 const { readJsonFile } = require("../lib/json");
 const { assertPolicyAllows } = require("../run/policy");
 const { makeFailureSignature, runApprovedCommand, writeBoundedLog } = require("./commands");
+const { pauseForBudget } = require("./budget");
 const { appendEvent, findSupervisedRun, getNextAction, writeCanonicalRun } = require("./state");
 
 function classifyFailure(result, signature, baseline) {
@@ -88,6 +89,17 @@ function updateOwnershipStatus(runRoot, status) {
   return ownership;
 }
 
+function pauseForVerificationBudget(found, allocation, reason) {
+  const now = new Date();
+  pauseForBudget(found, allocation, {
+    allowed: false,
+    reason,
+    pauseStatus: "paused-budget-unverified",
+    warning: "local-verification-budget-exhausted",
+  }, now);
+  throw new Error(`Controlled verification paused: paused-budget-unverified (${reason}).`);
+}
+
 function verifySupervisedCheckpoint(options = {}) {
   const found = findSupervisedRun(options);
   const task = found.run.tasks[0];
@@ -106,7 +118,14 @@ function verifySupervisedCheckpoint(options = {}) {
   const commands = task.verification.targeted;
   const consumedRuns = found.run.budget.consumed.targetedVerificationRuns;
   if (consumedRuns + commands.length > found.run.budget.maxTargetedVerificationRuns.value) {
-    throw new Error("Targeted verification budget is exhausted; expand the approved budget before running more checks.");
+    pauseForVerificationBudget(found, "targeted-verification", "targeted-verification-budget-exhausted");
+  }
+  const consumedFullRuns = found.run.budget.consumed.fullVerificationRuns;
+  if (
+    task.verification.full.length > 0
+    && consumedFullRuns + task.verification.full.length > found.run.budget.maxFullVerificationRuns.value
+  ) {
+    pauseForVerificationBudget(found, "full-verification", "full-verification-budget-exhausted");
   }
   const baselineRuns = task.verification.runs.filter((entry) => entry.stage === "baseline");
   const targetedResult = runVerificationSet({
@@ -123,10 +142,6 @@ function verifySupervisedCheckpoint(options = {}) {
   const targetedPassed = targetedResult.runs.every((entry) => entry.status === "pass");
   let fullResult = { runs: [], capturedBytes: 0 };
   if (targetedPassed && task.verification.full.length > 0) {
-    const consumedFullRuns = found.run.budget.consumed.fullVerificationRuns;
-    if (consumedFullRuns + task.verification.full.length > found.run.budget.maxFullVerificationRuns.value) {
-      throw new Error("Full verification budget is exhausted; expand the approved budget before running the broad suite.");
-    }
     fullResult = runVerificationSet({
       stage: "full",
       commands: task.verification.full,

@@ -9,6 +9,7 @@ const { normalizeSlashPath, validateRunId } = require("../lib/paths");
 const {
   makeBudgetEnvelope,
   makeUsagePreview,
+  assertVerificationScheduleFits,
   validateProfile,
   validateTestAuthoring,
 } = require("./profiles");
@@ -249,11 +250,54 @@ function readBaseCommit(repoRoot) {
   return result.stdout.trim();
 }
 
+function formatProgressAttempt(attempt) {
+  const changed = Array.isArray(attempt.changedFiles) && attempt.changedFiles.length > 0
+    ? attempt.changedFiles.join(", ")
+    : "none";
+  return `- ${attempt.id}: ${attempt.kind || "implementation"} / ${attempt.status}; changed files: ${changed}`;
+}
+
+function formatProgressEvidence(evidence) {
+  if (evidence.type === "verification") {
+    return `- verification: ${(evidence.verificationIds || []).join(", ") || "none"} (scope: ${evidence.scopeStatus || "unknown"})`;
+  }
+  if (evidence.type === "independent-review") {
+    return `- independent-review: ${evidence.decision || "unknown"} (${evidence.path || "no path"})`;
+  }
+  return `- ${evidence.type || "unknown"}`;
+}
+
+function formatProgressEstimate(estimate) {
+  if (estimate.label === "estimated" && estimate.range) {
+    return `${estimate.range.min}-${estimate.range.max} (${estimate.confidence}; ${estimate.sampleCount} comparable runs)`;
+  }
+  return `${estimate.label} (${estimate.sampleCount || 0} comparable runs)`;
+}
+
 function renderProgress(run) {
   const task = run.tasks[0];
   const nextAction = getNextAction(run);
   const latestVerification = task.verification && task.verification.latest;
   const blocker = task.blocker;
+  const attempts = task.attempts.length > 0
+    ? task.attempts.map(formatProgressAttempt).join("\n")
+    : "- none";
+  const evidence = task.evidence.length > 0
+    ? task.evidence.map(formatProgressEvidence).join("\n")
+    : "- none";
+  const blockerDetail = blocker
+    ? `${blocker.code}; reasons: ${(blocker.reasons || []).join(" | ") || "none"}; actions: ${(blocker.actions || []).join(", ") || "none"}`
+    : "none";
+  const pauseDetail = run.pause && run.status.startsWith("paused-")
+    ? `${run.pause.reason}; actions: ${(run.pause.actions || []).join(", ") || "none"}`
+    : "none";
+  const nextCommand = nextAction.command || "none";
+  const latestDetail = latestVerification
+    ? `${latestVerification.stage} ${latestVerification.status}; ${latestVerification.command}; ${latestVerification.classification}`
+    : "none";
+  const warnings = run.warnings.length > 0
+    ? run.warnings.map((warning) => `- ${warning}`).join("\n")
+    : "- none";
   return `# CEWP Supervised Progress
 
 - Run: ${run.runId}
@@ -265,9 +309,32 @@ function renderProgress(run) {
 - Test authoring: ${run.assurance.testAuthoring}
 - Current checkpoint: ${task.id} (${task.status})
 - Attempts: ${task.attempts.length}
-- Latest verification: ${latestVerification ? `${latestVerification.stage} ${latestVerification.status}` : "none"}
-- Blockers: ${blocker ? blocker.code : "none"}
+- Latest verification: ${latestDetail}
+- Blockers: ${blockerDetail}
+- Pause: ${pauseDetail}
 - Next safe action: ${nextAction.summary}
+- Next safe command: ${nextCommand}
+
+## Budget And Usage
+
+- Model operations: ${run.usage.managedOperations.label} ${run.usage.managedOperations.value} / ${run.budget.modelOperations.label} ${run.budget.modelOperations.value}
+- Managed tokens: ${run.usage.managedTokens.label}
+- Estimated managed usage: ${formatProgressEstimate(run.usage.estimate)}
+- Host-internal usage: ${run.usage.hostInternal.label}
+- Targeted verification runs: observed ${run.budget.consumed.targetedVerificationRuns} / ${run.budget.maxTargetedVerificationRuns.label} ${run.budget.maxTargetedVerificationRuns.value}
+- Full verification runs: observed ${run.budget.consumed.fullVerificationRuns} / ${run.budget.maxFullVerificationRuns.label} ${run.budget.maxFullVerificationRuns.value}
+
+## Attempts
+
+${attempts}
+
+## Evidence
+
+${evidence}
+
+## Warnings
+
+${warnings}
 
 This file is generated from canonical state. Editing it does not change the run.
 `;
@@ -391,12 +458,7 @@ function createProposedRun(options = {}) {
   verification.forEach(validateVerificationCommand);
   fullVerification.forEach(validateVerificationCommand);
   const previewBudget = makeBudgetEnvelope(assuranceProfile);
-  if (verification.length * 2 > previewBudget.maxTargetedVerificationRuns.value) {
-    throw new Error("Approved targeted verification budget must cover both baseline and post-change checks.");
-  }
-  if (fullVerification.length > previewBudget.maxFullVerificationRuns.value) {
-    throw new Error("Approved full verification commands exceed the assurance profile budget.");
-  }
+  assertVerificationScheduleFits(previewBudget, verification.length, fullVerification.length);
 
   const createdAt = new Date().toISOString();
   const runId = nextRunId(repoRoot);

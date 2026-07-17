@@ -29,6 +29,7 @@ function createVerifiedRun(repoRoot, fake, options = {}) {
   ];
   if (options.assurance) args.push("--assurance", options.assurance);
   if (options.testAuthoring) args.push("--test-authoring", options.testAuthoring);
+  if (options.fullVerification) args.push("--full-verify", "git status --short");
   args.push("--json");
   const planned = parseJson(runNode(cewpCli, args, repoRoot), "plan review fixture");
   const runId = planned.data.run.runId;
@@ -49,7 +50,10 @@ function runReviewerDecisionContract() {
   try {
     assert(runNode(cewpCli, ["policy", "set", "full-authority"], repoRoot).status === 0, "fixture grants worker and reviewer authority");
 
-    const changesRunId = createVerifiedRun(repoRoot, requestChanges, { goal: "Exercise reviewer requested changes" });
+    const changesRunId = createVerifiedRun(repoRoot, requestChanges, {
+      goal: "Exercise reviewer requested changes",
+      fullVerification: true,
+    });
     const changes = parseRejectedJson(runNode(cewpCli, [
       "supervise", "review", changesRunId, "--yes", "--json",
     ], repoRoot, { env: requestChanges.env }), "reviewer requests changes");
@@ -65,6 +69,24 @@ function runReviewerDecisionContract() {
     ], repoRoot, { env: pass.env }), "repair reviewer requested changes");
     assert(repaired.data.run.status === "verifying", "reviewer repair reuses the owned worktree and returns to verification");
     assert(repaired.data.run.tasks[0].attempts.at(-1).kind === "repair", "reviewer recovery consumes one bounded repair attempt");
+    const exhaustedFull = runNode(cewpCli, [
+      "supervise", "verify", changesRunId, "--json",
+    ], repoRoot);
+    assert(exhaustedFull.status === 1 && exhaustedFull.stderr.includes("paused-budget-unverified"), "exhausted full verification budget pauses before running checks");
+    const paused = parseJson(runNode(cewpCli, [
+      "supervise", "status", changesRunId, "--json",
+    ], repoRoot), "inspect exhausted full verification budget");
+    assert(paused.data.run.status === "paused-budget-unverified", "local verification exhaustion is canonical pause state");
+    assert(paused.data.run.pause.reason === "full-verification-budget-exhausted", "pause identifies the exhausted local budget");
+    const expanded = parseJson(runNode(cewpCli, [
+      "supervise", "add-budget", changesRunId,
+      "--operations", "1", "--allocation", "full-verification", "--yes", "--json",
+    ], repoRoot), "expand full verification budget");
+    assert(expanded.data.run.budget.modelOperations.value === 10, "local verification expansion does not inflate model-operation ceiling");
+    assert(expanded.data.run.budget.maxFullVerificationRuns.value === 2, "explicit expansion adds one local full verification run");
+    parseJson(runNode(cewpCli, [
+      "supervise", "resume", changesRunId, "--yes", "--json",
+    ], repoRoot), "resume after full verification expansion");
     const reverified = parseJson(runNode(cewpCli, [
       "supervise", "verify", changesRunId, "--json",
     ], repoRoot), "verify reviewer repair");

@@ -9,6 +9,7 @@ const { assertPolicyAllows } = require("../run/policy");
 const { validateOwnershipRecord } = require("../run/ownership");
 const { validateVerificationCommand } = require("./commands");
 const { isCheckpointSafe } = require("./budget");
+const { assertVerificationScheduleFits } = require("./profiles");
 const {
   appendEvent,
   findSupervisedRun,
@@ -22,7 +23,15 @@ const PAUSE_REASONS = Object.freeze({
   "budget-unverified": "paused-budget-unverified",
   "host-limit": "paused-host-limit",
 });
-const ALLOCATIONS = Object.freeze(["implementation", "repair", "reviewer", "finalization"]);
+const MODEL_ALLOCATIONS = Object.freeze(["implementation", "repair", "reviewer", "finalization"]);
+const LOCAL_VERIFICATION_ALLOCATIONS = Object.freeze({
+  "targeted-verification": "maxTargetedVerificationRuns",
+  "full-verification": "maxFullVerificationRuns",
+});
+const ALLOCATIONS = Object.freeze([
+  ...MODEL_ALLOCATIONS,
+  ...Object.keys(LOCAL_VERIFICATION_ALLOCATIONS),
+]);
 
 function result(found, run, extra = {}) {
   return {
@@ -74,12 +83,7 @@ function reviseSupervisedRun(options = {}) {
     : task.verification.full;
   targeted.forEach(validateVerificationCommand);
   full.forEach(validateVerificationCommand);
-  if (targeted.length * 2 > found.run.budget.maxTargetedVerificationRuns.value) {
-    throw new Error("Revised targeted verification exceeds the approved baseline/post-check budget.");
-  }
-  if (full.length > found.run.budget.maxFullVerificationRuns.value) {
-    throw new Error("Revised full verification exceeds the approved budget.");
-  }
+  assertVerificationScheduleFits(found.run.budget, targeted.length, full.length);
 
   const timestamp = new Date().toISOString();
   const goal = fields.goal ? String(fields.goal).trim() : found.run.goal;
@@ -202,30 +206,39 @@ function addSupervisedBudget(options = {}) {
   }
   const timestamp = new Date().toISOString();
   const budget = JSON.parse(JSON.stringify(found.run.budget));
-  const previousCeiling = budget.modelOperations.value;
-  budget.modelOperations.value += options.operations;
-  budget.allocations[options.allocation].value += options.operations;
-  budget.revisions.push({
-    revisedAt: timestamp,
-    actor: "operator",
-    operationsAdded: options.operations,
-    allocation: options.allocation,
-    previousCeiling,
-    ceiling: budget.modelOperations.value,
-  });
-  const allocationTotal = Object.values(budget.allocations)
-    .reduce((total, entry) => total + entry.value, 0);
-  if (allocationTotal !== budget.modelOperations.value) {
-    throw new Error("Budget revision would break allocation/ceiling consistency.");
+  const localBudgetField = LOCAL_VERIFICATION_ALLOCATIONS[options.allocation];
+  let detail;
+  if (localBudgetField) {
+    const previousLimit = budget[localBudgetField].value;
+    budget[localBudgetField].value += options.operations;
+    detail = {
+      budgetKind: "local-verification",
+      checksAdded: options.operations,
+      allocation: options.allocation,
+      previousLimit,
+      limit: budget[localBudgetField].value,
+    };
+  } else {
+    const previousCeiling = budget.modelOperations.value;
+    budget.modelOperations.value += options.operations;
+    budget.allocations[options.allocation].value += options.operations;
+    const allocationTotal = Object.values(budget.allocations)
+      .reduce((total, entry) => total + entry.value, 0);
+    if (allocationTotal !== budget.modelOperations.value) {
+      throw new Error("Budget revision would break allocation/ceiling consistency.");
+    }
+    detail = {
+      budgetKind: "model-operations",
+      operationsAdded: options.operations,
+      allocation: options.allocation,
+      previousCeiling,
+      ceiling: budget.modelOperations.value,
+    };
   }
+  budget.revisions.push({ revisedAt: timestamp, actor: "operator", ...detail });
   const run = { ...found.run, updatedAt: timestamp, budget };
   writeCanonicalRun(found.runRoot, run);
-  event(found, "budget-expanded", timestamp, {
-    operationsAdded: options.operations,
-    allocation: options.allocation,
-    previousCeiling,
-    ceiling: budget.modelOperations.value,
-  });
+  event(found, "budget-expanded", timestamp, detail);
   return result(found, run);
 }
 

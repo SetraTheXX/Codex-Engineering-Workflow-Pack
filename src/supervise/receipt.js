@@ -51,6 +51,10 @@ function buildReceipt(run, options = {}) {
 }
 
 function renderReceiptMarkdown(receipt) {
+  const estimate = receipt.usage.estimate;
+  const estimateValue = estimate.label === "estimated" && estimate.range
+    ? `${estimate.range.min}-${estimate.range.max} (${estimate.confidence})`
+    : estimate.label;
   return `# CEWP Supervised Receipt
 
 - Run: ${receipt.runId}
@@ -61,8 +65,13 @@ function renderReceiptMarkdown(receipt) {
 - Checkpoint: ${receipt.task.status}
 - Reviewer: ${receipt.reviewer.decision || "none"}
 - Finalizable: ${receipt.finalizable ? "yes" : "no"}
-- Managed model operations: ${receipt.managedModelOperations.value}
+- Observed managed model operations: ${receipt.managedModelOperations.value}
+- Budgeted model-operation ceiling: ${receipt.budget.modelOperations.value}
+- Managed token usage: ${receipt.usage.managedTokens.label}
+- Estimated managed usage: ${estimateValue}
+- Estimate basis: ${estimate.sampleCount} comparable local runs; estimator ${estimate.estimatorVersion}
 - Host-internal usage: ${receipt.usage.hostInternal.label}
+- Currency value: ${receipt.usage.currency.label}
 - Local verification runs: ${receipt.localVerificationActivity.runs}
 
 Observed, estimated, budgeted, and unknown values are not interchangeable.

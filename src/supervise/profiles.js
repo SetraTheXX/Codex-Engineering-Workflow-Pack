@@ -8,7 +8,7 @@ const PROFILE_DEFAULTS = Object.freeze({
     modelOperations: 6,
     maxRepairsPerCheckpoint: 1,
     maxElapsedMinutes: 30,
-    maxTargetedVerificationRuns: 2,
+    maxTargetedVerificationRuns: 3,
     maxFullVerificationRuns: 1,
     allocations: {
       implementation: 3,
@@ -142,9 +142,22 @@ function makeUsagePreview() {
   };
 }
 
+function assertVerificationScheduleFits(budget, targetedCount, fullCount) {
+  const targetedRuns = targetedCount * (2 + budget.maxRepairsPerCheckpoint.value);
+  if (targetedRuns > budget.maxTargetedVerificationRuns.value) {
+    throw new Error(
+      `Targeted verification repair envelope requires ${targetedRuns} runs, but the assurance budget allows ${budget.maxTargetedVerificationRuns.value}.`,
+    );
+  }
+  if (fullCount > budget.maxFullVerificationRuns.value) {
+    throw new Error("Approved full verification commands exceed the assurance profile budget.");
+  }
+}
+
 module.exports = {
   ASSURANCE_PROFILES,
   TEST_AUTHORING_POLICIES,
+  assertVerificationScheduleFits,
   makeBudgetEnvelope,
   makeUsagePreview,
   validateProfile,

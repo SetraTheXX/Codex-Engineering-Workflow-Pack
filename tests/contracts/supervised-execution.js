@@ -144,6 +144,13 @@ function runSupervisedExecutionContract() {
     assert(verified.data.run.budget.consumed.fullVerificationRuns === 1, "full verification has a separate counter");
     assert(verified.data.run.budget.consumed.modelOperations === 1, "local checks do not inflate model-operation usage");
     assert(verified.data.nextAction.command.includes("supervise review"), "verified checkpoint requires independent review");
+    const verifiedProgress = fs.readFileSync(path.join(repoRoot, ".cewp", "supervised-runs", runId, "progress.md"), "utf8");
+    assert(verifiedProgress.includes("## Attempts"), "generated progress renders attempt details");
+    assert(verifiedProgress.includes("implementation / completed"), "generated progress identifies the implementation attempt");
+    assert(verifiedProgress.includes("## Evidence"), "generated progress renders completed evidence");
+    assert(verifiedProgress.includes("verification: targeted-1, full-1"), "generated progress names verified evidence ids");
+    assert(verifiedProgress.includes("Model operations: observed 1 / budgeted 10"), "generated progress separates observed consumption from budgeted ceiling");
+    assert(verifiedProgress.includes("Host-internal usage: unknown"), "generated progress keeps unavailable host usage unknown");
 
     const continued = parseJson(runNode(cewpCli, [
       "supervise", "continue", runId, "--json",
@@ -174,6 +181,16 @@ function runSupervisedExecutionContract() {
     assert(receipt.data.receipt.schemaVersion === "supervised-receipt/v1-beta", "receipt preview is versioned");
     assert(receipt.data.receipt.finalizable === true, "receipt proves finalization gates are open");
     assert(receipt.data.receipt.usage.hostInternal.label === "unknown", "receipt does not turn unavailable host usage into zero");
+    assert(receipt.data.receipt.managedModelOperations.label === "observed", "receipt labels managed operations as observed");
+    assert(receipt.data.receipt.budget.modelOperations.label === "budgeted", "receipt labels the ceiling as budgeted");
+    assert(receipt.data.receipt.usage.estimate.label === "unknown", "receipt does not fabricate an uncalibrated estimate");
+    assert(receipt.data.receipt.usage.estimate.sampleCount === 0, "receipt retains estimate sample basis");
+    assert(receipt.data.receipt.usage.currency.label === "unknown", "subscription usage does not receive fabricated currency");
+    const receiptMarkdown = fs.readFileSync(path.join(repoRoot, ".cewp", "supervised-runs", runId, "receipt-preview.md"), "utf8");
+    assert(receiptMarkdown.includes("Observed managed model operations: 2"), "human receipt shows observed managed operations");
+    assert(receiptMarkdown.includes("Budgeted model-operation ceiling: 10"), "human receipt shows budgeted ceiling separately");
+    assert(receiptMarkdown.includes("Estimated managed usage: unknown"), "human receipt labels unavailable estimate");
+    assert(receiptMarkdown.includes("Estimate basis: 0 comparable local runs"), "human receipt shows estimate sample basis");
     assert(receipt.data.run.status === "ready-to-finalize", "explicit receipt preview precedes finalize");
 
     const finalized = parseJson(runNode(cewpCli, [
