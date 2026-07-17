@@ -98,6 +98,19 @@ function runSupervisedIntakeContract() {
     assert(status.data.run.status === "approved", "Markdown edits do not mutate canonical state");
     assert(status.data.nextAction.command.includes("supervise execute"), "status shows the next safe action");
     assert(!fs.readFileSync(path.join(runRoot, "progress.md"), "utf8").includes("forged completion"), "status regenerates progress from canonical state");
+
+    const runCountBeforeUnsafePlan = fs.readdirSync(path.dirname(runRoot)).length;
+    const unsafePlan = runNode(cewpCli, [
+      "supervise", "plan",
+      "--goal", "Unsafe plan must be rejected",
+      "--scope", "README.md",
+      "--verify", "git reset --hard",
+      "--stop", "Never reached",
+      "--json",
+    ], repoRoot);
+    assert(unsafePlan.status === 1, "destructive verification command is rejected");
+    assert(unsafePlan.stderr.includes("Unsafe Git verification command"), "unsafe command refusal is actionable");
+    assert(fs.readdirSync(path.dirname(runRoot)).length === runCountBeforeUnsafePlan, "unsafe plan creates no canonical run");
   } finally {
     cleanupRepo(repoRoot);
   }

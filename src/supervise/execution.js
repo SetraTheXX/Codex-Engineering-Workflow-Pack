@@ -28,6 +28,7 @@ const {
   getNextAction,
   writeCanonicalRun,
 } = require("./state");
+const { captureBaseline } = require("./verification");
 
 function writeJsonAtomic(filePath, value) {
   const temporaryPath = `${filePath}.tmp-${process.pid}`;
@@ -37,8 +38,9 @@ function writeJsonAtomic(filePath, value) {
 
 function writeBoundedLog(filePath, value, maxBytes) {
   const input = Buffer.from(value || "", "utf8");
-  const truncated = input.length > maxBytes;
-  const output = truncated ? input.subarray(0, maxBytes) : input;
+  const limit = Math.max(0, maxBytes);
+  const truncated = input.length > limit;
+  const output = truncated ? input.subarray(0, limit) : input;
   fs.writeFileSync(filePath, output);
   return {
     capturedBytes: output.length,
@@ -221,10 +223,17 @@ function executeSupervisedCheckpoint(options = {}) {
     throw new Error(`Checkpoint cannot execute from run=${found.run.status}, task=${task.status}.`);
   }
   assertPolicyAllows(found.repoRoot, "runWorkers");
+  assertPolicyAllows(found.repoRoot, "runCommands");
   ensureOperationBudget(found.run, "implementation");
 
   const startedAt = new Date().toISOString();
   const owned = createOwnedWorktree(found, startedAt);
+  const baseline = captureBaseline({
+    run: found.run,
+    runRoot: found.runRoot,
+    worktreePath: owned.worktreePath,
+    timeoutSeconds: options.timeoutSeconds,
+  });
   const outputRoot = path.join(found.runRoot, "adapter-output");
   fs.mkdirSync(outputRoot, { recursive: true });
   const promptPath = path.join(outputRoot, "checkpoint-1-prompt.md");
@@ -254,11 +263,18 @@ function executeSupervisedCheckpoint(options = {}) {
     tasks: [{
       ...task,
       status: "executing",
+      verification: {
+        ...task.verification,
+        runs: [...task.verification.runs, ...baseline.runs],
+        latest: baseline.runs.at(-1) || null,
+      },
       attempts: [...task.attempts, attempt],
     }],
   };
   startedRun.budget.consumed.modelOperations += 1;
   startedRun.budget.consumed.allocations.implementation += 1;
+  startedRun.budget.consumed.targetedVerificationRuns += baseline.runs.length;
+  startedRun.budget.consumed.capturedOutputBytes += baseline.capturedBytes;
   startedRun.usage.managedOperations.value += 1;
   writeCanonicalRun(found.runRoot, startedRun);
   appendEvent(found.runRoot, {
@@ -272,6 +288,18 @@ function executeSupervisedCheckpoint(options = {}) {
     owner: "managed",
     backend: "codex-exec",
   });
+  appendEvent(found.runRoot, {
+    schemaVersion: "supervised-event/v1-beta",
+    timestamp: startedAt,
+    type: "verification-baseline-captured",
+    runId: found.runId,
+    checkpointId: task.id,
+    results: baseline.runs.map((entry) => ({
+      id: entry.id,
+      status: entry.status,
+      failureSignature: entry.failureSignature,
+    })),
+  });
 
   const execResult = runCodexExecAdapter({
     worktreePath: owned.worktreePath,
@@ -281,9 +309,16 @@ function executeSupervisedCheckpoint(options = {}) {
     sandbox: "workspace-write",
     structuredJson: true,
   });
-  const maxOutputBytes = startedRun.budget.maxCapturedOutputBytes.value;
-  const stdoutLog = writeBoundedLog(stdoutPath, execResult.stdout, maxOutputBytes);
-  const stderrLog = writeBoundedLog(stderrPath, execResult.stderr, maxOutputBytes);
+  const remainingOutput = Math.max(
+    0,
+    startedRun.budget.maxCapturedOutputBytes.value - startedRun.budget.consumed.capturedOutputBytes,
+  );
+  const stdoutLog = writeBoundedLog(stdoutPath, execResult.stdout, remainingOutput);
+  const stderrLog = writeBoundedLog(
+    stderrPath,
+    execResult.stderr,
+    Math.max(0, remainingOutput - stdoutLog.capturedBytes),
+  );
   const exitCode = getAdapterExitCode(execResult);
   const timedOut = didAdapterTimeOut(execResult);
   const usage = parseManagedUsage(execResult.stdout);
@@ -341,6 +376,7 @@ function executeSupervisedCheckpoint(options = {}) {
       },
     }],
   };
+  completedRun.budget.consumed.capturedOutputBytes += stdoutLog.capturedBytes + stderrLog.capturedBytes;
   writeCanonicalRun(found.runRoot, completedRun);
   appendEvent(found.runRoot, {
     schemaVersion: "supervised-event/v1-beta",
@@ -364,8 +400,216 @@ function executeSupervisedCheckpoint(options = {}) {
   };
 }
 
+function mergeManagedUsage(current, observed) {
+  if (!observed || observed.label !== "observed") return current;
+  if (!current || current.label !== "observed") return observed;
+  return {
+    ...current,
+    observedAt: observed.observedAt,
+    observations: current.observations + observed.observations,
+    inputTokens: current.inputTokens + observed.inputTokens,
+    cachedInputTokens: current.cachedInputTokens + observed.cachedInputTokens,
+    outputTokens: current.outputTokens + observed.outputTokens,
+    reasoningOutputTokens: current.reasoningOutputTokens + observed.reasoningOutputTokens,
+  };
+}
+
+function makeRepairPrompt(run) {
+  const task = run.tasks[0];
+  const latest = task.verification.latest;
+  return `# CEWP Supervised Repair
+
+Role: worker-a
+Task: ${task.id}
+Goal: ${run.goal}
+Repair attempt: ${task.attempts.filter((attempt) => attempt.kind === "repair").length + 1}
+
+The approved verification failed.
+- Classification: ${latest.classification}
+- Failure signature: ${latest.failureSignature}
+- Command: ${latest.command}
+
+Allowed files:
+${task.allowedFiles.map((file) => `- ${file}`).join("\n")}
+
+Do one bounded repair inside the existing managed worktree. Do not weaken or delete tests,
+expand scope, change the approved budget, merge, push, publish, or finalize.
+`;
+}
+
+function retrySupervisedCheckpoint(options = {}) {
+  if (!options.yes) {
+    throw new Error("Supervised retry requires --yes after inspecting the failed verification.");
+  }
+  const found = findSupervisedRun(options);
+  const task = found.run.tasks[0];
+  if (found.run.status !== "needs-repair" || task.status !== "repair-ready") {
+    throw new Error(`Checkpoint cannot retry from run=${found.run.status}, task=${task.status}.`);
+  }
+  assertPolicyAllows(found.repoRoot, "runWorkers");
+  ensureOperationBudget(found.run, "repair");
+  const repairCount = task.attempts.filter((attempt) => attempt.kind === "repair").length;
+  if (repairCount >= found.run.budget.maxRepairsPerCheckpoint.value) {
+    throw new Error("Checkpoint repair limit is exhausted; explicit budget revision is required.");
+  }
+
+  const ownershipPath = path.join(found.runRoot, "ownership.json");
+  const ownership = JSON.parse(fs.readFileSync(ownershipPath, "utf8"));
+  validateOwnershipRecord(ownership);
+  if (ownership.status !== "active" || ownership.owner !== "managed" || ownership.backend !== "codex-exec") {
+    throw new Error("Managed codex-exec ownership is not active for repair.");
+  }
+  if (!fs.existsSync(ownership.worktree.path)) {
+    throw new Error(`Managed repair worktree is missing: ${ownership.worktree.path}`);
+  }
+
+  const attemptNumber = task.attempts.length + 1;
+  const attemptId = `attempt-${attemptNumber}`;
+  const startedAt = new Date().toISOString();
+  const outputRoot = path.join(found.runRoot, "adapter-output");
+  const promptPath = path.join(outputRoot, `checkpoint-1-${attemptId}-prompt.md`);
+  const stdoutPath = path.join(outputRoot, `checkpoint-1-${attemptId}-stdout.jsonl`);
+  const stderrPath = path.join(outputRoot, `checkpoint-1-${attemptId}-stderr.log`);
+  const lastMessagePath = path.join(outputRoot, `checkpoint-1-${attemptId}-last-message.md`);
+  fs.writeFileSync(promptPath, makeRepairPrompt(found.run));
+  const attempt = {
+    id: attemptId,
+    kind: "repair",
+    status: "running",
+    startedAt,
+    completedAt: null,
+    exitCode: null,
+    timedOut: false,
+    changedFiles: [],
+    scope: { status: "pending", warnings: [] },
+    usage: { label: "unknown", value: null },
+  };
+  const startedRun = {
+    ...found.run,
+    status: "executing",
+    updatedAt: startedAt,
+    budget: JSON.parse(JSON.stringify(found.run.budget)),
+    usage: JSON.parse(JSON.stringify(found.run.usage)),
+    tasks: [{
+      ...task,
+      status: "executing",
+      attempts: [...task.attempts, attempt],
+      blocker: null,
+    }],
+  };
+  startedRun.budget.consumed.modelOperations += 1;
+  startedRun.budget.consumed.allocations.repair += 1;
+  startedRun.usage.managedOperations.value += 1;
+  writeCanonicalRun(found.runRoot, startedRun);
+  appendEvent(found.runRoot, {
+    schemaVersion: "supervised-event/v1-beta",
+    timestamp: startedAt,
+    type: "repair-started",
+    runId: found.runId,
+    checkpointId: task.id,
+    attemptId,
+    allocation: "repair",
+  });
+
+  const execResult = runCodexExecAdapter({
+    worktreePath: ownership.worktree.path,
+    promptPath,
+    outputLastMessagePath: lastMessagePath,
+    timeoutSeconds: options.timeoutSeconds,
+    sandbox: "workspace-write",
+    structuredJson: true,
+  });
+  const remainingOutput = Math.max(
+    0,
+    startedRun.budget.maxCapturedOutputBytes.value - startedRun.budget.consumed.capturedOutputBytes,
+  );
+  const stdoutLog = writeBoundedLog(stdoutPath, execResult.stdout, remainingOutput);
+  const stderrLog = writeBoundedLog(
+    stderrPath,
+    execResult.stderr,
+    Math.max(0, remainingOutput - stdoutLog.capturedBytes),
+  );
+  const exitCode = getAdapterExitCode(execResult);
+  const timedOut = didAdapterTimeOut(execResult);
+  const usage = parseManagedUsage(execResult.stdout);
+  const changes = getWorktreeChangeSummary(ownership.worktree.path, found.run.repo.baseCommit);
+  const scopeWarnings = findScopeWarnings(task.id, changes.changedFiles, task);
+  if (changes.committedDiffError) scopeWarnings.push(changes.committedDiffError.message);
+  const lastMessagePresent = fs.existsSync(lastMessagePath);
+  const succeeded = exitCode === 0 && !timedOut && scopeWarnings.length === 0 && lastMessagePresent;
+  const completedAt = new Date().toISOString();
+  const completedAttempt = {
+    ...attempt,
+    status: succeeded ? "completed" : "failed",
+    completedAt,
+    exitCode,
+    timedOut,
+    changedFiles: changes.changedFiles,
+    scope: {
+      status: scopeWarnings.length === 0 ? "pass" : "fail",
+      warnings: scopeWarnings,
+    },
+    usage,
+    logs: {
+      stdout: path.relative(found.runRoot, stdoutPath).replace(/\\/g, "/"),
+      stderr: path.relative(found.runRoot, stderrPath).replace(/\\/g, "/"),
+      lastMessage: lastMessagePresent
+        ? path.relative(found.runRoot, lastMessagePath).replace(/\\/g, "/")
+        : null,
+      stdoutCapture: stdoutLog,
+      stderrCapture: stderrLog,
+    },
+  };
+  const run = {
+    ...startedRun,
+    status: succeeded ? "verifying" : "blocked",
+    updatedAt: completedAt,
+    usage: {
+      ...startedRun.usage,
+      managedTokens: mergeManagedUsage(startedRun.usage.managedTokens, usage),
+    },
+    tasks: [{
+      ...startedRun.tasks[0],
+      status: succeeded ? "awaiting-verification" : "blocked",
+      attempts: [...startedRun.tasks[0].attempts.slice(0, -1), completedAttempt],
+      blocker: succeeded ? null : {
+        code: "repair-dispatch-failure",
+        reasons: [
+          ...(exitCode === 0 ? [] : [`codex-exec exited with code ${exitCode}`]),
+          ...(timedOut ? [`codex-exec timed out after ${options.timeoutSeconds}s`] : []),
+          ...scopeWarnings,
+          ...(lastMessagePresent ? [] : ["codex-exec last message is missing"]),
+        ],
+        actions: ["revise", "rollback", "abandon"],
+      },
+    }],
+  };
+  run.budget.consumed.capturedOutputBytes += stdoutLog.capturedBytes + stderrLog.capturedBytes;
+  writeCanonicalRun(found.runRoot, run);
+  appendEvent(found.runRoot, {
+    schemaVersion: "supervised-event/v1-beta",
+    timestamp: completedAt,
+    type: succeeded ? "repair-completed" : "repair-blocked",
+    runId: found.runId,
+    checkpointId: task.id,
+    attemptId,
+    exitCode,
+    timedOut,
+    scopeStatus: completedAttempt.scope.status,
+    usageLabel: usage.label,
+  });
+  return {
+    ok: succeeded,
+    run,
+    runRoot: found.runRoot,
+    ownership,
+    nextAction: getNextAction(run),
+  };
+}
+
 module.exports = {
   executeSupervisedCheckpoint,
+  retrySupervisedCheckpoint,
   parseManagedUsage,
   writeBoundedLog,
 };

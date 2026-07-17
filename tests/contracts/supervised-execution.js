@@ -89,6 +89,8 @@ function runSupervisedExecutionContract() {
     assert(run.usage.managedTokens.outputTokens === 20, "output token category is retained");
     assert(run.usage.managedTokens.reasoningOutputTokens === 5, "reasoning category is retained");
     assert(run.usage.hostInternal.label === "unknown", "managed usage does not imply host-internal usage");
+    assert(task.verification.runs.length === 1, "pre-change baseline is captured before dispatch");
+    assert(task.verification.runs[0].stage === "baseline", "baseline evidence is labeled");
 
     const ownershipPath = path.join(repoRoot, ".cewp", "supervised-runs", runId, "ownership.json");
     const ownership = JSON.parse(fs.readFileSync(ownershipPath, "utf8"));
@@ -105,6 +107,22 @@ function runSupervisedExecutionContract() {
     ], repoRoot, { env: fake.env });
     assert(repeated.status === 1, "the same ready checkpoint cannot be dispatched twice");
     assert(repeated.stderr.includes("awaiting-verification"), "repeat refusal reports canonical checkpoint state");
+
+    const verified = parseJson(runNode(cewpCli, [
+      "supervise",
+      "verify",
+      runId,
+      "--json",
+    ], repoRoot), "supervise verify");
+    assert(verified.command === "supervise.verify", "verification output identifies the command");
+    assert(verified.data.run.status === "checkpoint-complete", "passing local checks close the checkpoint");
+    assert(verified.data.run.tasks[0].status === "verified", "checkpoint advances only after verification");
+    assert(verified.data.run.tasks[0].verification.runs.length === 2, "post-change targeted evidence follows baseline");
+    assert(verified.data.run.tasks[0].verification.runs[1].stage === "targeted", "post-change result is targeted");
+    assert(verified.data.run.tasks[0].verification.runs[1].status === "pass", "targeted verification passes");
+    assert(verified.data.run.budget.consumed.targetedVerificationRuns === 2, "local verification count is separate from model operations");
+    assert(verified.data.run.budget.consumed.modelOperations === 1, "local checks do not inflate model-operation usage");
+    assert(verified.data.nextAction.command.includes("supervise review"), "verified checkpoint requires independent review");
   } finally {
     fs.rmSync(fake.fakeRoot, { recursive: true, force: true });
     cleanupRepo(repoRoot);

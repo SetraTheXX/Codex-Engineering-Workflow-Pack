@@ -5,6 +5,11 @@ const path = require("node:path");
 
 const POLICY_MODES = ["safe", "trusted", "full-authority"];
 const POLICY_ACTIONS = {
+  runCommands: {
+    authorityKey: "runCommands",
+    label: "run approved verification commands",
+    hint: "Run `cewp policy set trusted` or `cewp policy set full-authority` to allow approved local verification commands.",
+  },
   runWorkers: {
     authorityKey: "runWorkers",
     label: "dispatch worker execution",

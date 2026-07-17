@@ -5,7 +5,8 @@ const {
   createProposedRun,
   inspectSupervisedRun,
 } = require("./state");
-const { executeSupervisedCheckpoint } = require("./execution");
+const { executeSupervisedCheckpoint, retrySupervisedCheckpoint } = require("./execution");
+const { verifySupervisedCheckpoint } = require("./verification");
 
 function outputJson(command, data) {
   console.log(JSON.stringify({
@@ -104,6 +105,40 @@ function runSupervise(options = {}) {
     if (!result.ok) {
       process.exitCode = 1;
     }
+    return;
+  }
+
+  if (options.subcommand === "verify") {
+    const result = verifySupervisedCheckpoint({
+      ...options,
+      repoRoot: process.cwd(),
+    });
+    if (options.json) {
+      outputJson("supervise.verify", result);
+    } else {
+      printStatus(
+        result.ok ? "CEWP supervised checkpoint verified" : "CEWP supervised verification failed",
+        result,
+      );
+    }
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
+
+  if (options.subcommand === "retry") {
+    const result = retrySupervisedCheckpoint({
+      ...options,
+      repoRoot: process.cwd(),
+    });
+    if (options.json) {
+      outputJson("supervise.retry", result);
+    } else {
+      printStatus(
+        result.ok ? "CEWP supervised repair dispatched" : "CEWP supervised repair blocked",
+        result,
+      );
+    }
+    if (!result.ok) process.exitCode = 1;
     return;
   }
 

@@ -11,6 +11,7 @@ const {
   validateProfile,
   validateTestAuthoring,
 } = require("./profiles");
+const { validateVerificationCommand } = require("./commands");
 
 const SUPERVISED_RUN_SCHEMA_VERSION = "supervised-run/v1";
 
@@ -113,6 +114,8 @@ function readBaseCommit(repoRoot) {
 function renderProgress(run) {
   const task = run.tasks[0];
   const nextAction = getNextAction(run);
+  const latestVerification = task.verification && task.verification.latest;
+  const blocker = task.blocker;
   return `# CEWP Supervised Progress
 
 - Run: ${run.runId}
@@ -124,8 +127,8 @@ function renderProgress(run) {
 - Test authoring: ${run.assurance.testAuthoring}
 - Current checkpoint: ${task.id} (${task.status})
 - Attempts: ${task.attempts.length}
-- Latest verification: none
-- Blockers: none
+- Latest verification: ${latestVerification ? `${latestVerification.stage} ${latestVerification.status}` : "none"}
+- Blockers: ${blocker ? blocker.code : "none"}
 - Next safe action: ${nextAction.summary}
 
 This file is generated from canonical state. Editing it does not change the run.
@@ -152,6 +155,20 @@ function getNextAction(run) {
       action: "verify",
       command: `cewp supervise verify ${run.runId}`,
       summary: "run targeted verification for checkpoint-1",
+    };
+  }
+  if (run.status === "checkpoint-complete" && run.tasks[0].status === "verified") {
+    return {
+      action: "review",
+      command: `cewp supervise review ${run.runId} --yes`,
+      summary: "run the independent reviewer",
+    };
+  }
+  if (run.status === "needs-repair" && run.tasks[0].status === "repair-ready") {
+    return {
+      action: "retry",
+      command: `cewp supervise retry ${run.runId} --yes`,
+      summary: "dispatch one bounded repair attempt",
     };
   }
   if (run.status === "blocked") {
@@ -193,6 +210,11 @@ function createProposedRun(options = {}) {
   const testAuthoring = options.testAuthoring || "auto";
   validateProfile(assuranceProfile);
   validateTestAuthoring(testAuthoring);
+  verification.forEach(validateVerificationCommand);
+  const previewBudget = makeBudgetEnvelope(assuranceProfile);
+  if (verification.length * 2 > previewBudget.maxTargetedVerificationRuns.value) {
+    throw new Error("Approved targeted verification budget must cover both baseline and post-change checks.");
+  }
 
   const createdAt = new Date().toISOString();
   const runId = nextRunId(repoRoot);
@@ -224,7 +246,7 @@ function createProposedRun(options = {}) {
       testAuthoring,
       productionVerificationClaimAllowed: assuranceProfile !== "prototype",
     },
-    budget: makeBudgetEnvelope(assuranceProfile),
+    budget: previewBudget,
     usage: makeUsagePreview(),
     tasks: [
       {
@@ -238,6 +260,10 @@ function createProposedRun(options = {}) {
           baseline: [],
           targeted: verification,
           full: [],
+          runs: [],
+          failures: [],
+          latest: null,
+          scope: { status: "pending", warnings: [] },
         },
         attempts: [],
         evidence: [],

@@ -14,6 +14,8 @@ Usage:
   cewp supervise approve [run-id] --yes [--json]
   cewp supervise status [run-id] [--json]
   cewp supervise execute [run-id] --yes [--timeout <seconds>] [--json]
+  cewp supervise verify [run-id] [--timeout <seconds>] [--json]
+  cewp supervise retry [run-id] --yes [--timeout <seconds>] [--json]
   cewp run init --workers <count> --reviewer
   cewp run list [--limit <count>] [--json]
   cewp run status [run-id] [--json]
