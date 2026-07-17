@@ -31,6 +31,8 @@ function createApprovedRun(repoRoot) {
     "README.md",
     "--verify",
     "git diff --check",
+    "--full-verify",
+    "git status --short",
     "--stop",
     "README change passes the targeted check",
     "--json",
@@ -117,10 +119,13 @@ function runSupervisedExecutionContract() {
     assert(verified.command === "supervise.verify", "verification output identifies the command");
     assert(verified.data.run.status === "checkpoint-complete", "passing local checks close the checkpoint");
     assert(verified.data.run.tasks[0].status === "verified", "checkpoint advances only after verification");
-    assert(verified.data.run.tasks[0].verification.runs.length === 2, "post-change targeted evidence follows baseline");
+    assert(verified.data.run.tasks[0].verification.runs.length === 3, "targeted and full evidence follow baseline");
     assert(verified.data.run.tasks[0].verification.runs[1].stage === "targeted", "post-change result is targeted");
     assert(verified.data.run.tasks[0].verification.runs[1].status === "pass", "targeted verification passes");
+    assert(verified.data.run.tasks[0].verification.runs[2].stage === "full", "broad verification runs only after targeted PASS");
+    assert(verified.data.run.tasks[0].verification.runs[2].status === "pass", "broad verification passes");
     assert(verified.data.run.budget.consumed.targetedVerificationRuns === 2, "local verification count is separate from model operations");
+    assert(verified.data.run.budget.consumed.fullVerificationRuns === 1, "full verification has a separate counter");
     assert(verified.data.run.budget.consumed.modelOperations === 1, "local checks do not inflate model-operation usage");
     assert(verified.data.nextAction.command.includes("supervise review"), "verified checkpoint requires independent review");
 

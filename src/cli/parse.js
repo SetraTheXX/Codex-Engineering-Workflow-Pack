@@ -53,9 +53,12 @@ function parseArgs(argv) {
     goal: undefined,
     scopes: [],
     verificationCommands: [],
+    fullVerificationCommands: [],
     stoppingConditions: [],
-    assurance: "standard",
-    testAuthoring: "auto",
+    assurance: undefined,
+    testAuthoring: undefined,
+    proposalFile: undefined,
+    sourceKind: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -135,6 +138,26 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (args.command === "supervise" && arg === "--proposal") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--proposal requires a repository-relative JSON file.");
+      }
+      args.proposalFile = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--source-kind") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--source-kind requires issue, prd, plan, progress, or direct-goal.");
+      }
+      args.sourceKind = value;
+      index += 1;
+      continue;
+    }
+
     if (args.command === "supervise" && arg === "--scope") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
@@ -151,6 +174,16 @@ function parseArgs(argv) {
         throw new Error("--verify requires a command.");
       }
       args.verificationCommands.push(value);
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--full-verify") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--full-verify requires a command.");
+      }
+      args.fullVerificationCommands.push(value);
       index += 1;
       continue;
     }
@@ -284,7 +317,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "run" && arg === "--from") {
+    if (["run", "supervise"].includes(args.command) && arg === "--from") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
         throw new Error("--from requires a file path.");

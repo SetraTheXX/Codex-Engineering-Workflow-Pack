@@ -109,7 +109,7 @@ function verifySupervisedCheckpoint(options = {}) {
     throw new Error("Targeted verification budget is exhausted; expand the approved budget before running more checks.");
   }
   const baselineRuns = task.verification.runs.filter((entry) => entry.stage === "baseline");
-  const result = runVerificationSet({
+  const targetedResult = runVerificationSet({
     stage: "targeted",
     commands,
     worktreePath: ownership.worktree.path,
@@ -120,6 +120,32 @@ function verifySupervisedCheckpoint(options = {}) {
     baselineRuns,
     startIndex: task.verification.runs.filter((entry) => entry.stage === "targeted").length,
   });
+  const targetedPassed = targetedResult.runs.every((entry) => entry.status === "pass");
+  let fullResult = { runs: [], capturedBytes: 0 };
+  if (targetedPassed && task.verification.full.length > 0) {
+    const consumedFullRuns = found.run.budget.consumed.fullVerificationRuns;
+    if (consumedFullRuns + task.verification.full.length > found.run.budget.maxFullVerificationRuns.value) {
+      throw new Error("Full verification budget is exhausted; expand the approved budget before running the broad suite.");
+    }
+    fullResult = runVerificationSet({
+      stage: "full",
+      commands: task.verification.full,
+      worktreePath: ownership.worktree.path,
+      runRoot: found.runRoot,
+      timeoutSeconds: options.timeoutSeconds,
+      maxOutputBytes: Math.max(
+        0,
+        found.run.budget.maxCapturedOutputBytes.value
+          - found.run.budget.consumed.capturedOutputBytes
+          - targetedResult.capturedBytes,
+      ),
+      startIndex: task.verification.runs.filter((entry) => entry.stage === "full").length,
+    });
+  }
+  const result = {
+    runs: [...targetedResult.runs, ...fullResult.runs],
+    capturedBytes: targetedResult.capturedBytes + fullResult.capturedBytes,
+  };
   const changes = getWorktreeChangeSummary(ownership.worktree.path, found.run.repo.baseCommit);
   const scopeWarnings = findScopeWarnings(task.id, changes.changedFiles, task);
   if (changes.committedDiffError) scopeWarnings.push(changes.committedDiffError.message);
@@ -172,6 +198,7 @@ function verifySupervisedCheckpoint(options = {}) {
     }],
   };
   run.budget.consumed.targetedVerificationRuns += commands.length;
+  run.budget.consumed.fullVerificationRuns += fullResult.runs.length;
   run.budget.consumed.capturedOutputBytes += result.capturedBytes;
   writeCanonicalRun(found.runRoot, run);
   if (passed) updateOwnershipStatus(found.runRoot, "verified");

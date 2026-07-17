@@ -10,7 +10,8 @@ Usage:
   cewp policy show
   cewp policy set <safe|trusted|full-authority>
   cewp policy reset
-  cewp supervise plan --goal <text> --scope <path> --verify <command> --stop <condition> [--assurance <profile>] [--test-authoring <policy>] [--json]
+  cewp supervise plan --goal <text> --scope <path> --verify <command> [--full-verify <command>] --stop <condition> [--assurance <profile>] [--test-authoring <policy>] [--json]
+  cewp supervise plan --proposal <file> [--from <issue|PRD|PLAN.md|progress.md>] [--source-kind <kind>] [--json]
   cewp supervise approve [run-id] --yes [--json]
   cewp supervise status [run-id] [--json]
   cewp supervise execute [run-id] --yes [--timeout <seconds>] [--json]
