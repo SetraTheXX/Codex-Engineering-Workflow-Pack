@@ -123,6 +123,41 @@ function runSupervisedExecutionContract() {
     assert(verified.data.run.budget.consumed.targetedVerificationRuns === 2, "local verification count is separate from model operations");
     assert(verified.data.run.budget.consumed.modelOperations === 1, "local checks do not inflate model-operation usage");
     assert(verified.data.nextAction.command.includes("supervise review"), "verified checkpoint requires independent review");
+
+    const prematureFinalize = runNode(cewpCli, [
+      "supervise", "finalize", runId, "--yes", "--json",
+    ], repoRoot);
+    assert(prematureFinalize.status === 1, "finalize cannot bypass independent review");
+    assert(prematureFinalize.stderr.includes("reviewer PASS"), "finalize refusal names the reviewer gate");
+
+    const reviewed = parseJson(runNode(cewpCli, [
+      "supervise", "review", runId, "--yes", "--json",
+    ], repoRoot, { env: fake.env }), "supervise review");
+    assert(reviewed.command === "supervise.review", "review output identifies the command");
+    assert(reviewed.data.run.status === "review-passed", "explicit reviewer PASS opens receipt preview");
+    assert(reviewed.data.run.reviewer.decision === "PASS", "reviewer decision is canonical state");
+    assert(reviewed.data.run.budget.consumed.allocations.reviewer === 1, "review consumes only protected reviewer allocation");
+    assert(reviewed.data.run.budget.consumed.allocations.finalization === 0, "review cannot borrow finalization allocation");
+    assert(reviewed.data.run.usage.managedOperations.value === 2, "reviewer is a separate observed model operation");
+
+    const receipt = parseJson(runNode(cewpCli, [
+      "supervise", "receipt", runId, "--json",
+    ], repoRoot), "supervise receipt");
+    assert(receipt.command === "supervise.receipt", "receipt output identifies the command");
+    assert(receipt.data.receipt.schemaVersion === "supervised-receipt/v1-beta", "receipt preview is versioned");
+    assert(receipt.data.receipt.finalizable === true, "receipt proves finalization gates are open");
+    assert(receipt.data.receipt.usage.hostInternal.label === "unknown", "receipt does not turn unavailable host usage into zero");
+    assert(receipt.data.run.status === "ready-to-finalize", "explicit receipt preview precedes finalize");
+
+    const finalized = parseJson(runNode(cewpCli, [
+      "supervise", "finalize", runId, "--yes", "--json",
+    ], repoRoot), "supervise finalize");
+    assert(finalized.command === "supervise.finalize", "finalize output identifies the command");
+    assert(finalized.data.run.status === "completed", "explicit finalize closes canonical state");
+    assert(finalized.data.run.tasks[0].status === "completed", "verified checkpoint becomes complete only at finalize");
+    const releasedOwnership = JSON.parse(fs.readFileSync(ownershipPath, "utf8"));
+    assert(releasedOwnership.status === "released", "finalize releases execution ownership");
+    assert(finalized.data.run.budget.consumed.allocations.implementation === 1, "closing stages do not consume worker allocation");
   } finally {
     fs.rmSync(fake.fakeRoot, { recursive: true, force: true });
     cleanupRepo(repoRoot);

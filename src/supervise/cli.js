@@ -7,6 +7,8 @@ const {
 } = require("./state");
 const { executeSupervisedCheckpoint, retrySupervisedCheckpoint } = require("./execution");
 const { verifySupervisedCheckpoint } = require("./verification");
+const { reviewSupervisedCheckpoint } = require("./review");
+const { finalizeSupervisedRun, previewSupervisedReceipt } = require("./receipt");
 
 function outputJson(command, data) {
   console.log(JSON.stringify({
@@ -139,6 +141,49 @@ function runSupervise(options = {}) {
       );
     }
     if (!result.ok) process.exitCode = 1;
+    return;
+  }
+
+  if (options.subcommand === "review") {
+    const result = reviewSupervisedCheckpoint({
+      ...options,
+      repoRoot: process.cwd(),
+    });
+    if (options.json) {
+      outputJson("supervise.review", result);
+    } else {
+      printStatus(
+        result.ok ? "CEWP independent reviewer passed" : "CEWP independent reviewer blocked",
+        result,
+      );
+    }
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
+
+  if (options.subcommand === "receipt") {
+    const result = previewSupervisedReceipt({
+      ...options,
+      repoRoot: process.cwd(),
+    });
+    if (options.json) {
+      outputJson("supervise.receipt", result);
+    } else {
+      printStatus("CEWP supervised receipt previewed", result);
+    }
+    return;
+  }
+
+  if (options.subcommand === "finalize") {
+    const result = finalizeSupervisedRun({
+      ...options,
+      repoRoot: process.cwd(),
+    });
+    if (options.json) {
+      outputJson("supervise.finalize", result);
+    } else {
+      printStatus("CEWP supervised run finalized", result);
+    }
     return;
   }
 

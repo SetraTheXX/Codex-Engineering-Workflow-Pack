@@ -171,6 +171,27 @@ function getNextAction(run) {
       summary: "dispatch one bounded repair attempt",
     };
   }
+  if (run.status === "review-passed") {
+    return {
+      action: "receipt",
+      command: `cewp supervise receipt ${run.runId}`,
+      summary: "preview the supervised receipt",
+    };
+  }
+  if (run.status === "ready-to-finalize") {
+    return {
+      action: "finalize",
+      command: `cewp supervise finalize ${run.runId} --yes`,
+      summary: "explicitly finalize the reviewed run",
+    };
+  }
+  if (run.status === "completed") {
+    return {
+      action: "none",
+      command: null,
+      summary: "run completed",
+    };
+  }
   if (run.status === "blocked") {
     return {
       action: "inspect-blocker",
@@ -273,8 +294,11 @@ function createProposedRun(options = {}) {
     approval: null,
     reviewer: {
       required: true,
+      independent: true,
+      status: "pending",
       decision: null,
     },
+    receipt: null,
     warnings: [
       "Managed token usage is unavailable until a structured Codex turn completes.",
       "Host-internal usage and ChatGPT plan impact remain unknown.",

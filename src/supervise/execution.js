@@ -608,7 +608,9 @@ function retrySupervisedCheckpoint(options = {}) {
 }
 
 module.exports = {
+  ensureOperationBudget,
   executeSupervisedCheckpoint,
+  mergeManagedUsage,
   retrySupervisedCheckpoint,
   parseManagedUsage,
   writeBoundedLog,
