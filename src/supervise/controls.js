@@ -2,6 +2,11 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { getGitOutput } = require("../lib/git");
+const { readJsonFile } = require("../lib/json");
+const { normalizeComparePath } = require("../lib/paths");
+const { assertPolicyAllows } = require("../run/policy");
+const { validateOwnershipRecord } = require("../run/ownership");
 const { validateVerificationCommand } = require("./commands");
 const { isCheckpointSafe } = require("./budget");
 const {
@@ -233,10 +238,86 @@ function updateOwnershipTerminal(runRoot, status, timestamp) {
   fs.renameSync(temporaryPath, ownershipPath);
 }
 
+function runRollbackGit(args, worktreePath, label) {
+  const result = getGitOutput(args, worktreePath);
+  if (result.status !== 0) {
+    throw new Error(`Managed rollback failed during ${label}: ${(result.stderr || result.stdout || "").trim()}`);
+  }
+  return result;
+}
+
+function rollbackSupervisedRun(options = {}) {
+  if (!options.yes) throw new Error("rollback requires --yes.");
+  const found = findSupervisedRun(options);
+  if (["completed", "cancelled", "abandoned", "rolled-back"].includes(found.run.status)) {
+    throw new Error(`Cannot roll back terminal run status ${found.run.status}.`);
+  }
+  assertPolicyAllows(found.repoRoot, "runCommands");
+  const ownershipPath = path.join(found.runRoot, "ownership.json");
+  const ownership = validateOwnershipRecord(readJsonFile(ownershipPath, "execution ownership"));
+  const taskId = found.run.tasks[0].id;
+  if (
+    ownership.runId !== found.runId
+    || ownership.taskId !== taskId
+    || ownership.checkpointId !== taskId
+  ) {
+    throw new Error("Rollback ownership identity does not match the canonical run and checkpoint.");
+  }
+  if (ownership.owner !== "managed" || ownership.backend !== "codex-exec") {
+    throw new Error("Rollback requires managed/codex-exec ownership.");
+  }
+  if (!["active", "verified"].includes(ownership.status)) {
+    throw new Error(`Rollback requires active or verified ownership; current status is ${ownership.status}.`);
+  }
+  const expectedPath = path.resolve(
+    found.repoRoot,
+    "..",
+    ".cewp-worktrees",
+    path.basename(found.repoRoot),
+    found.runId,
+    taskId,
+  );
+  if (!fs.existsSync(ownership.worktree.path) || !fs.statSync(ownership.worktree.path).isDirectory()) {
+    throw new Error(`Managed rollback worktree is missing: ${ownership.worktree.path}`);
+  }
+  const actualRealPath = fs.realpathSync.native(ownership.worktree.path);
+  const expectedRealPath = fs.realpathSync.native(expectedPath);
+  if (normalizeComparePath(actualRealPath) !== normalizeComparePath(expectedRealPath)) {
+    throw new Error("Rollback ownership path does not match the expected CEWP managed worktree.");
+  }
+
+  const before = runRollbackGit(["status", "--short"], actualRealPath, "change inspection").stdout
+    .split(/\r?\n/)
+    .filter(Boolean);
+  runRollbackGit(["reset", "--hard", found.run.repo.baseCommit], actualRealPath, "tracked reset");
+  runRollbackGit(["clean", "-fd"], actualRealPath, "untracked cleanup");
+  const after = runRollbackGit(["status", "--porcelain"], actualRealPath, "cleanliness verification");
+  if (after.stdout.trim()) {
+    throw new Error("Managed rollback did not return the isolated worktree to a clean state.");
+  }
+
+  const timestamp = new Date().toISOString();
+  updateOwnershipTerminal(found.runRoot, "rolled-back", timestamp);
+  const run = {
+    ...found.run,
+    status: "rolled-back",
+    updatedAt: timestamp,
+    tasks: found.run.tasks.map((task) => ({ ...task, status: "rolled-back" })),
+  };
+  writeCanonicalRun(found.runRoot, run);
+  event(found, "run-rolled-back", timestamp, {
+    baseCommit: found.run.repo.baseCommit,
+    priorChangeEntries: before.length,
+  });
+  return result(found, run);
+}
+
 function terminalControl(options, status) {
   if (!options.yes) throw new Error(`${status} requires --yes.`);
   const found = findSupervisedRun(options);
-  if (found.run.status === "completed") throw new Error("Completed run cannot be changed.");
+  if (["completed", "cancelled", "abandoned", "rolled-back"].includes(found.run.status)) {
+    throw new Error(`Terminal run status ${found.run.status} cannot be changed.`);
+  }
   const timestamp = new Date().toISOString();
   const run = {
     ...found.run,
@@ -246,7 +327,7 @@ function terminalControl(options, status) {
       task.status === "completed" ? task : { ...task, status }
     )),
   };
-  updateOwnershipTerminal(found.runRoot, "abandoned", timestamp);
+  updateOwnershipTerminal(found.runRoot, status, timestamp);
   writeCanonicalRun(found.runRoot, run);
   event(found, `run-${status}`, timestamp, { reason: options.reason || null });
   return result(found, run);
@@ -254,14 +335,28 @@ function terminalControl(options, status) {
 
 function blockSupervisedRun(options = {}) {
   if (!options.reason) throw new Error("block requires --reason.");
-  const value = terminalControl({ ...options, yes: true }, "blocked");
-  value.run.tasks[0].blocker = {
-    code: "operator-blocked",
-    reasons: [options.reason],
-    actions: ["revise", "rollback", "abandon"],
+  const found = findSupervisedRun(options);
+  if (["completed", "cancelled", "abandoned", "rolled-back"].includes(found.run.status)) {
+    throw new Error(`Terminal run status ${found.run.status} cannot be blocked.`);
+  }
+  const timestamp = new Date().toISOString();
+  const run = {
+    ...found.run,
+    status: "blocked",
+    updatedAt: timestamp,
+    tasks: found.run.tasks.map((task) => ({
+      ...task,
+      status: "blocked",
+      blocker: {
+        code: "operator-blocked",
+        reasons: [options.reason],
+        actions: ["revise", "rollback", "abandon"],
+      },
+    })),
   };
-  writeCanonicalRun(value.runRoot, value.run);
-  return value;
+  writeCanonicalRun(found.runRoot, run);
+  event(found, "run-blocked", timestamp, { reason: options.reason });
+  return result(found, run);
 }
 
 function continueSupervisedRun(options = {}) {
@@ -293,6 +388,7 @@ function runSupervisedControl(options = {}) {
   if (options.subcommand === "pause") return pauseSupervisedRun(options);
   if (options.subcommand === "resume") return resumeSupervisedRun(options);
   if (options.subcommand === "add-budget") return addSupervisedBudget(options);
+  if (options.subcommand === "rollback") return rollbackSupervisedRun(options);
   if (options.subcommand === "cancel") return terminalControl(options, "cancelled");
   if (options.subcommand === "abandon") return terminalControl(options, "abandoned");
   if (options.subcommand === "block") return blockSupervisedRun(options);
@@ -304,6 +400,7 @@ function runSupervisedControl(options = {}) {
 module.exports = {
   addSupervisedBudget,
   pauseSupervisedRun,
+  rollbackSupervisedRun,
   resumeSupervisedRun,
   reviseSupervisedRun,
   runSupervisedControl,

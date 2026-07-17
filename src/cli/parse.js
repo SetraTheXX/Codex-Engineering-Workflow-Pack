@@ -126,7 +126,7 @@ function parseArgs(argv) {
       args.command === "supervise"
       && [
         "approve", "status", "execute", "verify", "retry", "review", "receipt", "finalize",
-        "revise", "pause", "resume", "add-budget", "cancel", "abandon", "block", "continue", "reassign",
+        "revise", "pause", "resume", "add-budget", "rollback", "cancel", "abandon", "block", "continue", "reassign",
       ].includes(args.subcommand)
       && index === 2
       && !arg.startsWith("--")

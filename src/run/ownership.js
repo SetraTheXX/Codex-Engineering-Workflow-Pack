@@ -6,7 +6,7 @@ const { normalizeComparePath } = require("../lib/paths");
 const OWNERSHIP_SCHEMA_VERSION = "execution-ownership/v1";
 const EXECUTION_OWNERS = Object.freeze(["managed", "native", "audit-only"]);
 const MANAGED_BACKENDS = Object.freeze(["codex-exec", "app-server"]);
-const RELEASED_STATUSES = new Set(["released", "abandoned"]);
+const RELEASED_STATUSES = new Set(["released", "abandoned", "cancelled", "rolled-back"]);
 
 function requiredString(value, label) {
   if (typeof value !== "string" || value.trim().length === 0) {

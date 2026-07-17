@@ -52,6 +52,20 @@ function parseReviewerDecision(content) {
   return match ? match[1] : null;
 }
 
+function reactivateOwnershipForRepair(runRoot, ownership, timestamp) {
+  const ownershipPath = path.join(runRoot, "ownership.json");
+  const next = {
+    ...ownership,
+    status: "active",
+    updatedAt: timestamp,
+    reactivatedReason: "reviewer-request-changes",
+  };
+  const temporaryPath = `${ownershipPath}.tmp-${process.pid}`;
+  fs.writeFileSync(temporaryPath, `${JSON.stringify(next, null, 2)}\n`);
+  fs.renameSync(temporaryPath, ownershipPath);
+  return next;
+}
+
 function reviewSupervisedCheckpoint(options = {}) {
   if (!options.yes) throw new Error("Independent review requires --yes.");
   const found = findSupervisedRun(options);
@@ -144,7 +158,8 @@ function reviewSupervisedCheckpoint(options = {}) {
   const passed = exitCode === 0 && !timedOut && decision === "PASS";
   const requestChanges = exitCode === 0 && !timedOut && decision === "REQUEST_CHANGES";
   const completedAt = new Date().toISOString();
-  const status = passed ? "review-passed" : requestChanges ? "review-changes" : "blocked";
+  const status = passed ? "review-passed" : requestChanges ? "needs-repair" : "blocked";
+  if (requestChanges) reactivateOwnershipForRepair(found.runRoot, ownership, completedAt);
   const run = {
     ...startedRun,
     status,
@@ -168,7 +183,7 @@ function reviewSupervisedCheckpoint(options = {}) {
     },
     tasks: [{
       ...task,
-      status: passed ? "verified" : requestChanges ? "review-changes" : "blocked",
+      status: passed ? "verified" : requestChanges ? "repair-ready" : "blocked",
       evidence: decision
         ? [...task.evidence, {
           type: "independent-review",

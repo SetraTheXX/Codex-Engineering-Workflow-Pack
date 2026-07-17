@@ -338,7 +338,7 @@ function getNextAction(run) {
       alternatives: run.pause.actions,
     };
   }
-  if (["cancelled", "abandoned"].includes(run.status)) {
+  if (["cancelled", "abandoned", "rolled-back"].includes(run.status)) {
     return {
       action: "none",
       command: null,

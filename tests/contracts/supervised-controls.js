@@ -1,7 +1,9 @@
 "use strict";
 
+const fs = require("node:fs");
 const path = require("node:path");
 const { assert } = require("../harness/lib/assertions");
+const { createFakeCodexAdapter } = require("../harness/lib/fake-adapter");
 const { evaluateOperationBudget } = require("../../src/supervise/budget");
 const { makeBudgetEnvelope } = require("../../src/supervise/profiles");
 const { cleanupRepo, makeTempRepo, runNode } = require("../harness/lib/temp-repo");
@@ -155,9 +157,78 @@ function runOperatorControlContract() {
   }
 }
 
+function createActiveRun(repoRoot, fake, goal) {
+  const runId = createPlan(repoRoot, goal);
+  parseJson(runNode(cewpCli, ["supervise", "approve", runId, "--yes", "--json"], repoRoot), "approve active run");
+  const executed = parseJson(runNode(cewpCli, [
+    "supervise", "execute", runId, "--yes", "--json",
+  ], repoRoot, { env: fake.env }), "execute active run");
+  return {
+    runId,
+    ownershipPath: path.join(repoRoot, ".cewp", "supervised-runs", runId, "ownership.json"),
+    worktreePath: executed.data.ownership.worktree.path,
+  };
+}
+
+function runManagedTerminationContract() {
+  const repoRoot = makeTempRepo("cewp-supervised-terminal-controls-");
+  const fake = createFakeCodexAdapter();
+  try {
+    assert(runNode(cewpCli, ["policy", "set", "full-authority"], repoRoot).status === 0, "fixture grants managed execution authority");
+
+    const blockedRun = createActiveRun(repoRoot, fake, "Block and roll back this checkpoint");
+    assert(fs.readFileSync(path.join(blockedRun.worktreePath, "README.md"), "utf8").includes("Fake Codex"), "fixture creates isolated partial work");
+    const blocked = parseJson(runNode(cewpCli, [
+      "supervise", "block", blockedRun.runId, "--reason", "operator review required", "--json",
+    ], repoRoot), "block active run");
+    assert(blocked.data.run.status === "blocked", "operator block closes PASS without abandoning ownership");
+    assert(JSON.parse(fs.readFileSync(blockedRun.ownershipPath, "utf8")).status === "active", "blocked work remains owned for an explicit recovery action");
+
+    const originalOwnership = JSON.parse(fs.readFileSync(blockedRun.ownershipPath, "utf8"));
+    fs.writeFileSync(blockedRun.ownershipPath, `${JSON.stringify({ ...originalOwnership, runId: "different-run" }, null, 2)}\n`);
+    const mismatchedOwnership = runNode(cewpCli, [
+      "supervise", "rollback", blockedRun.runId, "--yes", "--json",
+    ], repoRoot);
+    assert(mismatchedOwnership.status === 1 && mismatchedOwnership.stderr.includes("does not match"), "rollback rejects mismatched canonical ownership identity");
+    assert(fs.readFileSync(path.join(blockedRun.worktreePath, "README.md"), "utf8").includes("Fake Codex"), "ownership rejection occurs before worktree mutation");
+    fs.writeFileSync(blockedRun.ownershipPath, `${JSON.stringify(originalOwnership, null, 2)}\n`);
+
+    const rollbackWithoutApproval = runNode(cewpCli, [
+      "supervise", "rollback", blockedRun.runId, "--json",
+    ], repoRoot);
+    assert(rollbackWithoutApproval.status === 1 && rollbackWithoutApproval.stderr.includes("--yes"), "rollback requires explicit operator approval");
+    const rolledBack = parseJson(runNode(cewpCli, [
+      "supervise", "rollback", blockedRun.runId, "--yes", "--json",
+    ], repoRoot), "rollback active run");
+    assert(rolledBack.data.run.status === "rolled-back", "rollback is recorded as a non-success terminal state");
+    assert(rolledBack.data.run.tasks[0].status === "rolled-back", "rolled-back checkpoint cannot advance to PASS");
+    assert(fs.readFileSync(path.join(blockedRun.worktreePath, "README.md"), "utf8").includes("Initial README"), "rollback restores tracked worktree content to the approved base");
+    assert(JSON.parse(fs.readFileSync(blockedRun.ownershipPath, "utf8")).status === "rolled-back", "rollback releases ownership with an explicit outcome");
+
+    const cancelledRun = createActiveRun(repoRoot, fake, "Cancel this active checkpoint");
+    const cancelled = parseJson(runNode(cewpCli, [
+      "supervise", "cancel", cancelledRun.runId, "--yes", "--json",
+    ], repoRoot), "cancel active run");
+    assert(cancelled.data.run.status === "cancelled", "active cancel is not represented as success");
+    assert(JSON.parse(fs.readFileSync(cancelledRun.ownershipPath, "utf8")).status === "cancelled", "cancelled ownership is distinct from abandonment");
+    assert(fs.existsSync(cancelledRun.worktreePath), "cancel preserves isolated partial work for inspection");
+
+    const abandonedRun = createActiveRun(repoRoot, fake, "Abandon this active checkpoint");
+    const abandoned = parseJson(runNode(cewpCli, [
+      "supervise", "abandon", abandonedRun.runId, "--yes", "--json",
+    ], repoRoot), "abandon active run");
+    assert(abandoned.data.run.status === "abandoned", "abandon is a distinct terminal state");
+    assert(JSON.parse(fs.readFileSync(abandonedRun.ownershipPath, "utf8")).status === "abandoned", "abandon releases the owned checkpoint explicitly");
+  } finally {
+    fs.rmSync(fake.fakeRoot, { recursive: true, force: true });
+    cleanupRepo(repoRoot);
+  }
+}
+
 try {
   runBudgetDecisionContract();
   runOperatorControlContract();
+  runManagedTerminationContract();
   console.log("[PASS] supervised budgets and operator controls remain bounded and recoverable");
 } catch (error) {
   console.error("[FAIL] supervised budget/control contract");

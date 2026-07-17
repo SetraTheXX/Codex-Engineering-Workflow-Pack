@@ -24,6 +24,7 @@ Usage:
   cewp supervise pause [run-id] --reason <budget-safe|budget-unverified|host-limit> --yes [--json]
   cewp supervise resume [run-id] --yes [--json]
   cewp supervise add-budget [run-id] --operations <count> --allocation <name> --yes [--json]
+  cewp supervise rollback [run-id] --yes [--json]
   cewp supervise continue [run-id] [--json]
   cewp supervise reassign [run-id] [--json]
   cewp supervise block [run-id] --reason <text> [--json]

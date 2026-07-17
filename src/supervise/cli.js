@@ -12,7 +12,7 @@ const { finalizeSupervisedRun, previewSupervisedReceipt } = require("./receipt")
 const { runSupervisedControl } = require("./controls");
 
 const CONTROL_COMMANDS = new Set([
-  "revise", "pause", "resume", "add-budget", "cancel", "abandon", "block", "continue", "reassign",
+  "revise", "pause", "resume", "add-budget", "rollback", "cancel", "abandon", "block", "continue", "reassign",
 ]);
 
 function outputJson(command, data) {
