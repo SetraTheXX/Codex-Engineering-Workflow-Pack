@@ -7,6 +7,7 @@ const { getWorktreeChangeSummary, findScopeWarnings } = require("../lib/scope-ch
 const { assertPolicyAllows } = require("../run/policy");
 const { validateOwnershipRecord } = require("../run/ownership");
 const { appendEvent, findSupervisedRun, getNextAction, writeCanonicalRun } = require("./state");
+const { getTestAuthoringVerdict } = require("./test-authoring");
 
 function buildReceipt(run, options = {}) {
   const task = run.tasks[0];
@@ -21,6 +22,12 @@ function buildReceipt(run, options = {}) {
     mode: run.mode,
     execution: run.execution,
     assurance: run.assurance,
+    testAuthoringApproval: run.approval
+      ? {
+        policy: run.assurance.testAuthoring,
+        explicitlyApproved: Boolean(run.approval.testAuthoringApproved),
+      }
+      : null,
     status: run.status,
     task: {
       id: task.id,
@@ -62,6 +69,7 @@ function renderReceiptMarkdown(receipt) {
 - Status: ${receipt.status}
 - Execution: ${receipt.execution.owner} / ${receipt.execution.backend}
 - Assurance: ${receipt.assurance.profile}
+- Test authoring: ${receipt.testAuthoringApproval.policy}; explicit approval: ${receipt.testAuthoringApproval.explicitlyApproved ? "yes" : "no"}
 - Checkpoint: ${receipt.task.status}
 - Reviewer: ${receipt.reviewer.decision || "none"}
 - Finalizable: ${receipt.finalizable ? "yes" : "no"}
@@ -90,11 +98,31 @@ function writeReceiptFiles(runRoot, receipt, basename) {
   };
 }
 
+function assertCurrentWorktreeGates(found) {
+  const task = found.run.tasks[0];
+  const ownership = validateOwnershipRecord(
+    readJsonFile(path.join(found.runRoot, "ownership.json"), "execution ownership"),
+  );
+  if (!fs.existsSync(ownership.worktree.path)) {
+    throw new Error(`Managed worktree is missing: ${ownership.worktree.path}`);
+  }
+  const changes = getWorktreeChangeSummary(ownership.worktree.path, found.run.repo.baseCommit);
+  const scopeWarnings = findScopeWarnings(task.id, changes.changedFiles, task);
+  if (changes.committedDiffError) scopeWarnings.push(changes.committedDiffError.message);
+  const testAuthoring = getTestAuthoringVerdict(found.run, changes.changedFiles);
+  const warnings = [...scopeWarnings, ...testAuthoring.violations];
+  if (warnings.length > 0) {
+    throw new Error(`Supervised receipt gates failed:\n${warnings.join("\n")}`);
+  }
+  return { ownership, changes, testAuthoring };
+}
+
 function previewSupervisedReceipt(options = {}) {
   const found = findSupervisedRun(options);
   if (found.run.status !== "review-passed" || found.run.reviewer.decision !== "PASS") {
     throw new Error("Receipt preview requires an independent reviewer PASS.");
   }
+  assertCurrentWorktreeGates(found);
   const previewedAt = new Date().toISOString();
   const receipt = buildReceipt(found.run, { generatedAt: previewedAt });
   if (!receipt.finalizable) throw new Error("Receipt gates are closed; checkpoint is not finalizable.");
@@ -141,19 +169,11 @@ function finalizeSupervisedRun(options = {}) {
   if (task.status !== "verified" || !task.evidence.some((entry) => entry.type === "verification")) {
     throw new Error("Supervised finalize requires verified checkpoint evidence.");
   }
-  const ownership = validateOwnershipRecord(
-    readJsonFile(path.join(found.runRoot, "ownership.json"), "execution ownership"),
-  );
+  const current = assertCurrentWorktreeGates(found);
+  const ownership = current.ownership;
   if (ownership.status !== "verified") {
     throw new Error("Supervised finalize requires verified execution ownership.");
   }
-  const changes = getWorktreeChangeSummary(ownership.worktree.path, found.run.repo.baseCommit);
-  const scopeWarnings = findScopeWarnings(task.id, changes.changedFiles, task);
-  if (changes.committedDiffError) scopeWarnings.push(changes.committedDiffError.message);
-  if (scopeWarnings.length > 0) {
-    throw new Error(`Supervised finalize scope gate failed:\n${scopeWarnings.join("\n")}`);
-  }
-
   const completedAt = new Date().toISOString();
   const run = {
     ...found.run,

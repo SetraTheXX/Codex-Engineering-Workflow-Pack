@@ -30,6 +30,10 @@ const {
   writeCanonicalRun,
 } = require("./state");
 const { captureBaseline } = require("./verification");
+const {
+  getTestAuthoringVerdict,
+  renderTestAuthoringInstruction,
+} = require("./test-authoring");
 
 function writeJsonAtomic(filePath, value) {
   const temporaryPath = `${filePath}.tmp-${process.pid}`;
@@ -195,6 +199,8 @@ ${task.forbiddenFiles.map((file) => `- ${file}`).join("\n")}
 Stopping conditions:
 ${task.stoppingConditions.map((condition) => `- ${condition}`).join("\n")}
 
+${renderTestAuthoringInstruction(run)}
+
 Do only this bounded checkpoint. Do not weaken tests, expand scope, merge, push, publish, or finalize.
 CEWP Core will run verification and scope gates after you stop.
 `;
@@ -239,6 +245,7 @@ function executeSupervisedCheckpoint(options = {}) {
     timedOut: false,
     changedFiles: [],
     scope: { status: "pending", warnings: [] },
+    testAuthoring: { policy: found.run.assurance.testAuthoring, status: "pending", violations: [] },
     usage: { label: "unknown", value: null },
   };
   let startedRun = {
@@ -325,8 +332,13 @@ function executeSupervisedCheckpoint(options = {}) {
   if (changes.committedDiffError) {
     scopeWarnings.push(changes.committedDiffError.message);
   }
+  const testAuthoring = getTestAuthoringVerdict(found.run, changes.changedFiles);
   const lastMessagePresent = fs.existsSync(lastMessagePath);
-  const succeeded = exitCode === 0 && !timedOut && scopeWarnings.length === 0 && lastMessagePresent;
+  const succeeded = exitCode === 0
+    && !timedOut
+    && scopeWarnings.length === 0
+    && testAuthoring.status === "pass"
+    && lastMessagePresent;
   const completedAt = new Date().toISOString();
   const completedAttempt = {
     ...attempt,
@@ -339,6 +351,7 @@ function executeSupervisedCheckpoint(options = {}) {
       status: scopeWarnings.length === 0 ? "pass" : "fail",
       warnings: scopeWarnings,
     },
+    testAuthoring,
     usage,
     logs: {
       stdout: path.relative(found.runRoot, stdoutPath).replace(/\\/g, "/"),
@@ -354,6 +367,7 @@ function executeSupervisedCheckpoint(options = {}) {
   if (exitCode !== 0) blockerReasons.push(`codex-exec exited with code ${exitCode}`);
   if (timedOut) blockerReasons.push(`codex-exec timed out after ${options.timeoutSeconds}s`);
   blockerReasons.push(...scopeWarnings);
+  blockerReasons.push(...testAuthoring.violations);
   if (!lastMessagePresent) blockerReasons.push("codex-exec last message is missing");
   const completedRun = {
     ...startedRun,
@@ -386,6 +400,7 @@ function executeSupervisedCheckpoint(options = {}) {
     exitCode,
     timedOut,
     scopeStatus: completedAttempt.scope.status,
+    testAuthoringStatus: completedAttempt.testAuthoring.status,
     usageLabel: usage.label,
   });
 
@@ -429,6 +444,8 @@ The approved verification failed.
 
 Allowed files:
 ${task.allowedFiles.map((file) => `- ${file}`).join("\n")}
+
+${renderTestAuthoringInstruction(run)}
 
 Do one bounded repair inside the existing managed worktree. Do not weaken or delete tests,
 expand scope, change the approved budget, merge, push, publish, or finalize.
@@ -480,6 +497,7 @@ function retrySupervisedCheckpoint(options = {}) {
     timedOut: false,
     changedFiles: [],
     scope: { status: "pending", warnings: [] },
+    testAuthoring: { policy: found.run.assurance.testAuthoring, status: "pending", violations: [] },
     usage: { label: "unknown", value: null },
   };
   let startedRun = {
@@ -544,8 +562,13 @@ function retrySupervisedCheckpoint(options = {}) {
   const changes = getWorktreeChangeSummary(ownership.worktree.path, found.run.repo.baseCommit);
   const scopeWarnings = findScopeWarnings(task.id, changes.changedFiles, task);
   if (changes.committedDiffError) scopeWarnings.push(changes.committedDiffError.message);
+  const testAuthoring = getTestAuthoringVerdict(found.run, changes.changedFiles);
   const lastMessagePresent = fs.existsSync(lastMessagePath);
-  const succeeded = exitCode === 0 && !timedOut && scopeWarnings.length === 0 && lastMessagePresent;
+  const succeeded = exitCode === 0
+    && !timedOut
+    && scopeWarnings.length === 0
+    && testAuthoring.status === "pass"
+    && lastMessagePresent;
   const completedAt = new Date().toISOString();
   const completedAttempt = {
     ...attempt,
@@ -558,6 +581,7 @@ function retrySupervisedCheckpoint(options = {}) {
       status: scopeWarnings.length === 0 ? "pass" : "fail",
       warnings: scopeWarnings,
     },
+    testAuthoring,
     usage,
     logs: {
       stdout: path.relative(found.runRoot, stdoutPath).replace(/\\/g, "/"),
@@ -587,6 +611,7 @@ function retrySupervisedCheckpoint(options = {}) {
           ...(exitCode === 0 ? [] : [`codex-exec exited with code ${exitCode}`]),
           ...(timedOut ? [`codex-exec timed out after ${options.timeoutSeconds}s`] : []),
           ...scopeWarnings,
+          ...testAuthoring.violations,
           ...(lastMessagePresent ? [] : ["codex-exec last message is missing"]),
         ],
         actions: ["revise", "rollback", "abandon"],
@@ -605,6 +630,7 @@ function retrySupervisedCheckpoint(options = {}) {
     exitCode,
     timedOut,
     scopeStatus: completedAttempt.scope.status,
+    testAuthoringStatus: completedAttempt.testAuthoring.status,
     usageLabel: usage.label,
   });
   return {

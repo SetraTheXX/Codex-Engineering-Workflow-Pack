@@ -9,7 +9,7 @@ const { cleanupRepo, makeTempRepo, runNode } = require("../harness/lib/temp-repo
 const cewpCli = path.join(__dirname, "..", "..", "bin", "cewp.js");
 
 function parseJson(result, label) {
-  assert(result.status === 0, `${label} failed: ${result.stderr}`);
+  assert(result.status === 0, `${label} failed: ${result.stderr || result.stdout}`);
   return JSON.parse(result.stdout);
 }
 
@@ -46,6 +46,7 @@ function runReviewerDecisionContract() {
   const repoRoot = makeTempRepo("cewp-supervised-review-");
   const requestChanges = createFakeCodexAdapter(FAKE_ADAPTER_MODES.REVIEWER_REQUEST_CHANGES);
   const missingDecision = createFakeCodexAdapter(FAKE_ADAPTER_MODES.REVIEWER_MISSING_DECISION);
+  const testAuthor = createFakeCodexAdapter(FAKE_ADAPTER_MODES.TEST_AUTHORING);
   const pass = createFakeCodexAdapter();
   try {
     assert(runNode(cewpCli, ["policy", "set", "full-authority"], repoRoot).status === 0, "fixture grants worker and reviewer authority");
@@ -119,10 +120,100 @@ function runReviewerDecisionContract() {
     assert(prototypeReceipt.data.receipt.assurance.productionVerificationClaimAllowed === false, "prototype receipt closes production-verification claim");
     assert(prototypeReceipt.data.receipt.warnings.includes("Prototype assurance cannot claim production verification."), "prototype limitation is visible in the receipt");
 
+    const neverPlan = parseJson(runNode(cewpCli, [
+      "supervise", "plan",
+      "--goal", "Refuse unapproved test authoring",
+      "--scope", "tests/generated.test.js",
+      "--verify", "git diff --check",
+      "--stop", "No test file is authored",
+      "--test-authoring", "never",
+      "--json",
+    ], repoRoot), "plan never test-authoring enforcement fixture");
+    const neverRunId = neverPlan.data.run.runId;
+    parseJson(runNode(cewpCli, [
+      "supervise", "approve", neverRunId, "--yes", "--json",
+    ], repoRoot), "approve never test-authoring enforcement fixture");
+    const neverExecution = parseRejectedJson(runNode(cewpCli, [
+      "supervise", "execute", neverRunId, "--yes", "--json",
+    ], repoRoot, { env: testAuthor.env }), "never test-authoring enforcement");
+    assert(neverExecution.data.ok === false, "never rejects a test file even when it is inside approved scope");
+    assert(neverExecution.data.run.status === "blocked", "test-authoring policy violation closes the checkpoint gate");
+    assert(neverExecution.data.run.tasks[0].attempts[0].testAuthoring.status === "fail", "attempt records the enforced test-authoring verdict");
+    assert(neverExecution.data.run.tasks[0].blocker.reasons.some((reason) => reason.includes("Test authoring policy never")), "blocker explains the assurance violation");
+
+    const askWithoutApproval = parseJson(runNode(cewpCli, [
+      "supervise", "plan",
+      "--goal", "Require an explicit test-authoring decision",
+      "--scope", "tests/generated.test.js",
+      "--verify", "git diff --check",
+      "--stop", "The operator explicitly decides whether tests may be authored",
+      "--test-authoring", "ask",
+      "--json",
+    ], repoRoot), "plan ask test-authoring fixture");
+    const askWithoutApprovalId = askWithoutApproval.data.run.runId;
+    parseJson(runNode(cewpCli, [
+      "supervise", "approve", askWithoutApprovalId, "--yes", "--json",
+    ], repoRoot), "approve ask fixture without test authorization");
+    const unapprovedTest = parseRejectedJson(runNode(cewpCli, [
+      "supervise", "execute", askWithoutApprovalId, "--yes", "--json",
+    ], repoRoot, { env: testAuthor.env }), "ask blocks unapproved test authoring");
+    assert(unapprovedTest.data.run.tasks[0].attempts[0].testAuthoring.status === "fail", "ask remains closed without explicit authorization");
+    assert(unapprovedTest.data.run.tasks[0].blocker.reasons.some((reason) => reason.includes("requires explicit approval")), "ask blocker names the missing decision");
+
+    const askWithApproval = parseJson(runNode(cewpCli, [
+      "supervise", "plan",
+      "--goal", "Allow explicitly approved test authoring",
+      "--scope", "tests/generated.test.js",
+      "--verify", "git diff --check",
+      "--stop", "The approved test file passes verification",
+      "--test-authoring", "ask",
+      "--json",
+    ], repoRoot), "plan approved ask test-authoring fixture");
+    const askWithApprovalId = askWithApproval.data.run.runId;
+    const approvedTests = parseJson(runNode(cewpCli, [
+      "supervise", "approve", askWithApprovalId,
+      "--allow-test-authoring", "--yes", "--json",
+    ], repoRoot), "explicitly approve test authoring");
+    assert(approvedTests.data.run.approval.testAuthoringApproved === true, "ask approval is canonical run state");
+    const authoredTest = parseJson(runNode(cewpCli, [
+      "supervise", "execute", askWithApprovalId, "--yes", "--json",
+    ], repoRoot, { env: testAuthor.env }), "execute approved test authoring");
+    assert(authoredTest.data.run.tasks[0].attempts[0].testAuthoring.status === "pass", "explicit ask approval opens only the test-authoring gate");
+    assert(authoredTest.data.run.tasks[0].attempts[0].scope.status === "pass", "approved test remains constrained by ordinary scope enforcement");
+
+    const postDispatchPlan = parseJson(runNode(cewpCli, [
+      "supervise", "plan",
+      "--goal", "Recheck test policy at verification",
+      "--scope", "README.md",
+      "--scope", "tests/external.test.js",
+      "--verify", "git diff --check",
+      "--stop", "No test file enters a never-policy checkpoint",
+      "--test-authoring", "never",
+      "--json",
+    ], repoRoot), "plan post-dispatch test-policy fixture");
+    const postDispatchRunId = postDispatchPlan.data.run.runId;
+    parseJson(runNode(cewpCli, [
+      "supervise", "approve", postDispatchRunId, "--yes", "--json",
+    ], repoRoot), "approve post-dispatch test-policy fixture");
+    const postDispatchExecution = parseJson(runNode(cewpCli, [
+      "supervise", "execute", postDispatchRunId, "--yes", "--json",
+    ], repoRoot, { env: pass.env }), "execute post-dispatch test-policy fixture");
+    const ownership = JSON.parse(fs.readFileSync(path.join(
+      repoRoot, ".cewp", "supervised-runs", postDispatchRunId, "ownership.json",
+    ), "utf8"));
+    fs.mkdirSync(path.join(ownership.worktree.path, "tests"), { recursive: true });
+    fs.writeFileSync(path.join(ownership.worktree.path, "tests", "external.test.js"), "throw new Error('must be blocked');\n");
+    const postDispatchVerification = parseRejectedJson(runNode(cewpCli, [
+      "supervise", "verify", postDispatchRunId, "--json",
+    ], repoRoot), "verification rechecks test-authoring policy");
+    assert(postDispatchExecution.data.run.tasks[0].attempts[0].testAuthoring.status === "pass", "worker attempt was policy-compliant before the external edit");
+    assert(postDispatchVerification.data.run.status === "blocked", "a later test-file change cannot advance verification");
+    assert(postDispatchVerification.data.run.tasks[0].blocker.code === "test-authoring-policy-violation", "verification records the hard policy blocker");
+
     const progress = fs.readFileSync(path.join(repoRoot, ".cewp", "supervised-runs", missingRunId, "progress.md"), "utf8");
     assert(!progress.includes("Reviewer: PASS"), "generated progress never fabricates reviewer PASS");
   } finally {
-    for (const fake of [requestChanges, missingDecision, pass]) {
+    for (const fake of [requestChanges, missingDecision, testAuthor, pass]) {
       fs.rmSync(fake.fakeRoot, { recursive: true, force: true });
     }
     cleanupRepo(repoRoot);

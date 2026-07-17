@@ -54,6 +54,9 @@ function printPlanPreview(run, runRoot) {
   console.log("Host-internal usage: unknown");
   console.log("");
   console.log(`Approve: cewp supervise approve ${run.runId} --yes`);
+  if (run.assurance.testAuthoring === "ask") {
+    console.log(`Approve test authoring: cewp supervise approve ${run.runId} --allow-test-authoring --yes`);
+  }
 }
 
 function runSupervise(options = {}) {

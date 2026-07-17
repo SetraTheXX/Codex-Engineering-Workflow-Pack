@@ -316,6 +316,11 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (args.command === "supervise" && arg === "--allow-test-authoring") {
+      args.allowTestAuthoring = true;
+      continue;
+    }
+
     if (args.command === "run" && arg === "--yes") {
       args.yes = true;
       continue;

@@ -8,6 +8,7 @@ const { assertPolicyAllows } = require("../run/policy");
 const { makeFailureSignature, runApprovedCommand, writeBoundedLog } = require("./commands");
 const { pauseForBudget } = require("./budget");
 const { appendEvent, findSupervisedRun, getNextAction, writeCanonicalRun } = require("./state");
+const { getTestAuthoringVerdict } = require("./test-authoring");
 
 function classifyFailure(result, signature, baseline) {
   if (!signature) return "pass";
@@ -164,8 +165,11 @@ function verifySupervisedCheckpoint(options = {}) {
   const changes = getWorktreeChangeSummary(ownership.worktree.path, found.run.repo.baseCommit);
   const scopeWarnings = findScopeWarnings(task.id, changes.changedFiles, task);
   if (changes.committedDiffError) scopeWarnings.push(changes.committedDiffError.message);
+  const testAuthoring = getTestAuthoringVerdict(found.run, changes.changedFiles);
   const failures = result.runs.filter((entry) => entry.status === "fail");
-  const passed = failures.length === 0 && scopeWarnings.length === 0;
+  const passed = failures.length === 0
+    && scopeWarnings.length === 0
+    && testAuthoring.status === "pass";
   const observedAt = new Date().toISOString();
   const failureHistory = [
     ...(task.verification.failures || []),
@@ -179,7 +183,8 @@ function verifySupervisedCheckpoint(options = {}) {
   const repeated = failures.some((failure) => (
     failureHistory.filter((entry) => entry.signature === failure.failureSignature).length >= 2
   ));
-  const blocked = !passed && repeated;
+  const policyBlocked = testAuthoring.status === "fail";
+  const blocked = !passed && (repeated || policyBlocked);
   const run = {
     ...found.run,
     status: passed ? "checkpoint-complete" : blocked ? "blocked" : "needs-repair",
@@ -197,6 +202,7 @@ function verifySupervisedCheckpoint(options = {}) {
           status: scopeWarnings.length === 0 ? "pass" : "fail",
           warnings: scopeWarnings,
         },
+        testAuthoring,
       },
       evidence: passed
         ? [...task.evidence, {
@@ -206,8 +212,10 @@ function verifySupervisedCheckpoint(options = {}) {
         }]
         : task.evidence,
       blocker: blocked ? {
-        code: "repeated-verification-failure",
-        reasons: failures.map((entry) => `${entry.classification}: ${entry.failureSignature}`),
+        code: policyBlocked ? "test-authoring-policy-violation" : "repeated-verification-failure",
+        reasons: policyBlocked
+          ? testAuthoring.violations
+          : failures.map((entry) => `${entry.classification}: ${entry.failureSignature}`),
         actions: ["revise", "rollback", "abandon"],
       } : null,
     }],
@@ -227,6 +235,8 @@ function verifySupervisedCheckpoint(options = {}) {
     failureSignatures: failures.map((entry) => entry.failureSignature),
     classifications: failures.map((entry) => entry.classification),
     scopeStatus: scopeWarnings.length === 0 ? "pass" : "fail",
+    testAuthoringStatus: testAuthoring.status,
+    testAuthoringViolations: testAuthoring.violations,
   });
   return { ok: passed, run, runRoot: found.runRoot, nextAction: getNextAction(run) };
 }

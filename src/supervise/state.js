@@ -307,6 +307,7 @@ function renderProgress(run) {
 - Execution: ${run.execution.owner} / ${run.execution.backend}
 - Assurance: ${run.assurance.profile}
 - Test authoring: ${run.assurance.testAuthoring}
+- Test authoring approved: ${run.approval ? (run.approval.testAuthoringApproved ? "yes" : "no") : "pending"}
 - Current checkpoint: ${task.id} (${task.status})
 - Attempts: ${task.attempts.length}
 - Latest verification: ${latestDetail}
@@ -560,8 +561,13 @@ function approveSupervisedRun(options = {}) {
   if (found.run.status !== "proposed" || found.run.tasks[0].status !== "proposed") {
     throw new Error(`Run ${found.runId} cannot be approved from status ${found.run.status}.`);
   }
+  if (options.allowTestAuthoring && found.run.assurance.testAuthoring === "never") {
+    throw new Error("Test authoring cannot be approved when the run policy is never.");
+  }
 
   const approvedAt = new Date().toISOString();
+  const testAuthoringApproved = found.run.assurance.testAuthoring === "ask"
+    && Boolean(options.allowTestAuthoring);
   const run = {
     ...found.run,
     status: "approved",
@@ -570,6 +576,7 @@ function approveSupervisedRun(options = {}) {
       actor: "operator",
       approvedAt,
       planRevision: found.run.planRevision,
+      testAuthoringApproved,
       execution: { ...found.run.execution },
       assurance: { ...found.run.assurance },
       budget: JSON.parse(JSON.stringify(found.run.budget)),
@@ -586,6 +593,8 @@ function approveSupervisedRun(options = {}) {
     runId: found.runId,
     planRevision: run.planRevision,
     actor: "operator",
+    testAuthoringPolicy: run.assurance.testAuthoring,
+    testAuthoringApproved,
   });
   return {
     run,

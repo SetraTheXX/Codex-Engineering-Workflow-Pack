@@ -37,7 +37,7 @@ function branchExists(repoRoot, branch) {
 }
 
 function getGitStatusShort(worktreePath) {
-  const result = getGitOutput(["status", "--short"], worktreePath);
+  const result = getGitOutput(["status", "--short", "--untracked-files=all"], worktreePath);
 
   if (result.status !== 0) {
     throw new Error(`Failed to inspect git status for ${worktreePath}: ${(result.stderr || result.stdout || "").trim()}`);

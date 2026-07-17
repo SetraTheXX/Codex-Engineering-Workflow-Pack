@@ -8,6 +8,7 @@ const { writeFile } = require("./temp-repo");
 const FAKE_ADAPTER_MODES = Object.freeze({
   PASS: "pass",
   SCOPE_VIOLATION: "scope-violation",
+  TEST_AUTHORING: "test-authoring",
   WORKER_NONZERO: "worker-nonzero",
   REVIEWER_MISSING_DECISION: "reviewer-missing-decision",
   REVIEWER_REQUEST_CHANGES: "reviewer-request-changes",
@@ -103,8 +104,13 @@ if (isReviewer) {
 }
 
 const shouldViolateScope = mode === "scope-violation" && role === "worker-a";
+const shouldAuthorTest = mode === "test-authoring" && role === "worker-a";
 const shouldExitNonZero = mode === "worker-nonzero" && role === "worker-a";
-const workerChangedFile = shouldViolateScope ? "secret.txt" : changedFile;
+const workerChangedFile = shouldViolateScope
+  ? "secret.txt"
+  : shouldAuthorTest
+    ? "tests/generated.test.js"
+    : changedFile;
 
 fs.mkdirSync(path.dirname(path.join(worktree, workerChangedFile)), { recursive: true });
 fs.writeFileSync(path.join(worktree, workerChangedFile), \`# Fake Codex \${role}\\n\\nTask \${task} changed \${workerChangedFile}.\\n\`);
