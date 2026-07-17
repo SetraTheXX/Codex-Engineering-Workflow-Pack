@@ -12,6 +12,7 @@ const {
   getWorktreeChangeSummary,
 } = require("../lib/scope-check");
 const { evaluateControlledOperation } = require("../run/control-gates");
+const { assertPolicyAllows } = require("../run/policy");
 const {
   runCodexExecAdapter,
   getAdapterExitCode,
@@ -219,6 +220,7 @@ function executeSupervisedCheckpoint(options = {}) {
   if (found.run.status !== "approved" || task.status !== "ready") {
     throw new Error(`Checkpoint cannot execute from run=${found.run.status}, task=${task.status}.`);
   }
+  assertPolicyAllows(found.repoRoot, "runWorkers");
   ensureOperationBudget(found.run, "implementation");
 
   const startedAt = new Date().toISOString();

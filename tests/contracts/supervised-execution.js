@@ -52,6 +52,17 @@ function runSupervisedExecutionContract() {
 
   try {
     const runId = createApprovedRun(repoRoot);
+    const policyBlocked = runNode(cewpCli, [
+      "supervise",
+      "execute",
+      runId,
+      "--yes",
+      "--json",
+    ], repoRoot, { env: fake.env });
+    assert(policyBlocked.status === 1, "safe operator policy blocks managed execution");
+    assert(policyBlocked.stderr.includes("operator policy blocks dispatch worker execution"), "policy refusal is actionable");
+    assert(runNode(cewpCli, ["policy", "set", "full-authority"], repoRoot).status === 0, "fixture explicitly grants worker authority");
+
     const executed = parseJson(runNode(cewpCli, [
       "supervise",
       "execute",
