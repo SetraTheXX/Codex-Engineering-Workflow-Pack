@@ -10,8 +10,8 @@ const {
   runCodexExecAdapter,
 } = require("../run/adapters/codex-exec");
 const { validateOwnershipRecord } = require("../run/ownership");
+const { applyThresholdObservation, enforceOperationBudget } = require("./budget");
 const {
-  ensureOperationBudget,
   mergeManagedUsage,
   parseManagedUsage,
   writeBoundedLog,
@@ -60,7 +60,7 @@ function reviewSupervisedCheckpoint(options = {}) {
     throw new Error(`Independent reviewer PASS is required after a verified checkpoint; current run=${found.run.status}, task=${task.status}.`);
   }
   assertPolicyAllows(found.repoRoot, "runReviewer");
-  ensureOperationBudget(found.run, "reviewer");
+  enforceOperationBudget(found, "reviewer");
   const ownership = validateOwnershipRecord(
     readJsonFile(path.join(found.runRoot, "ownership.json"), "execution ownership"),
   );
@@ -78,7 +78,7 @@ function reviewSupervisedCheckpoint(options = {}) {
   const reportPath = path.join(outputRoot, "reviewer-report.md");
   fs.writeFileSync(promptPath, makeReviewerPrompt(found.run));
 
-  const startedRun = {
+  let startedRun = {
     ...found.run,
     status: "reviewing",
     updatedAt: startedAt,
@@ -94,6 +94,8 @@ function reviewSupervisedCheckpoint(options = {}) {
   startedRun.budget.consumed.modelOperations += 1;
   startedRun.budget.consumed.allocations.reviewer += 1;
   startedRun.usage.managedOperations.value += 1;
+  const threshold = applyThresholdObservation(startedRun, "reviewer", startedAt);
+  startedRun = threshold.run;
   writeCanonicalRun(found.runRoot, startedRun);
   appendEvent(found.runRoot, {
     schemaVersion: "supervised-event/v1-beta",
@@ -103,6 +105,15 @@ function reviewSupervisedCheckpoint(options = {}) {
     checkpointId: task.id,
     allocation: "reviewer",
   });
+  if (threshold.event) {
+    appendEvent(found.runRoot, {
+      schemaVersion: "supervised-event/v1-beta",
+      timestamp: startedAt,
+      type: "budget-threshold",
+      runId: found.runId,
+      ...threshold.event,
+    });
+  }
 
   const execResult = runCodexExecAdapter({
     worktreePath: ownership.worktree.path,

@@ -100,6 +100,22 @@ function runSupervisedExecutionContract() {
     assert(ownership.owner === "managed" && ownership.backend === "codex-exec", "one owner/backend pair owns the checkpoint");
     assert(path.resolve(ownership.worktree.path) !== path.resolve(repoRoot), "worker uses a distinct CEWP worktree");
 
+    const partialPause = parseJson(runNode(cewpCli, [
+      "supervise", "pause", runId,
+      "--reason", "budget-unverified",
+      "--yes", "--json",
+    ], repoRoot), "pause partial checkpoint");
+    assert(partialPause.data.run.status === "paused-budget-unverified", "partial isolated work pauses as unverified");
+    assert(partialPause.data.run.tasks[0].status === "awaiting-verification", "pause cannot turn partial work into PASS");
+    const partialFinalize = runNode(cewpCli, [
+      "supervise", "finalize", runId, "--yes", "--json",
+    ], repoRoot);
+    assert(partialFinalize.status === 1, "unverified pause cannot finalize");
+    const partialResume = parseJson(runNode(cewpCli, [
+      "supervise", "resume", runId, "--yes", "--json",
+    ], repoRoot), "resume partial checkpoint");
+    assert(partialResume.data.run.status === "verifying", "partial pause resumes at verification, not dispatch");
+
     const repeated = runNode(cewpCli, [
       "supervise",
       "execute",
@@ -128,6 +144,12 @@ function runSupervisedExecutionContract() {
     assert(verified.data.run.budget.consumed.fullVerificationRuns === 1, "full verification has a separate counter");
     assert(verified.data.run.budget.consumed.modelOperations === 1, "local checks do not inflate model-operation usage");
     assert(verified.data.nextAction.command.includes("supervise review"), "verified checkpoint requires independent review");
+
+    const continued = parseJson(runNode(cewpCli, [
+      "supervise", "continue", runId, "--json",
+    ], repoRoot), "continue after checkpoint");
+    assert(continued.data.run.status === "checkpoint-complete", "continue preserves verified checkpoint state");
+    assert(continued.data.nextAction.command.includes("supervise review"), "single-checkpoint continue advances to review");
 
     const prematureFinalize = runNode(cewpCli, [
       "supervise", "finalize", runId, "--yes", "--json",

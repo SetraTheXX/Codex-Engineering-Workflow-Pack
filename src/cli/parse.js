@@ -59,6 +59,10 @@ function parseArgs(argv) {
     testAuthoring: undefined,
     proposalFile: undefined,
     sourceKind: undefined,
+    reason: undefined,
+    note: undefined,
+    operations: undefined,
+    allocation: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -120,7 +124,10 @@ function parseArgs(argv) {
 
     if (
       args.command === "supervise"
-      && ["approve", "status", "execute", "verify", "retry", "review", "receipt", "finalize"].includes(args.subcommand)
+      && [
+        "approve", "status", "execute", "verify", "retry", "review", "receipt", "finalize",
+        "revise", "pause", "resume", "add-budget", "cancel", "abandon", "block", "continue", "reassign",
+      ].includes(args.subcommand)
       && index === 2
       && !arg.startsWith("--")
     ) {
@@ -154,6 +161,46 @@ function parseArgs(argv) {
         throw new Error("--source-kind requires issue, prd, plan, progress, or direct-goal.");
       }
       args.sourceKind = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--reason") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--reason requires text.");
+      }
+      args.reason = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--note") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--note requires text.");
+      }
+      args.note = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--operations") {
+      const value = argv[index + 1];
+      if (!value || !/^\d+$/.test(value)) {
+        throw new Error("--operations requires a positive integer.");
+      }
+      args.operations = Number.parseInt(value, 10);
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--allocation") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--allocation requires an allocation name.");
+      }
+      args.allocation = value;
       index += 1;
       continue;
     }

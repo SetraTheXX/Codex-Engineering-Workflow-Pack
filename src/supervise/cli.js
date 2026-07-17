@@ -9,6 +9,11 @@ const { executeSupervisedCheckpoint, retrySupervisedCheckpoint } = require("./ex
 const { verifySupervisedCheckpoint } = require("./verification");
 const { reviewSupervisedCheckpoint } = require("./review");
 const { finalizeSupervisedRun, previewSupervisedReceipt } = require("./receipt");
+const { runSupervisedControl } = require("./controls");
+
+const CONTROL_COMMANDS = new Set([
+  "revise", "pause", "resume", "add-budget", "cancel", "abandon", "block", "continue", "reassign",
+]);
 
 function outputJson(command, data) {
   console.log(JSON.stringify({
@@ -183,6 +188,20 @@ function runSupervise(options = {}) {
       outputJson("supervise.finalize", result);
     } else {
       printStatus("CEWP supervised run finalized", result);
+    }
+    return;
+  }
+
+  if (CONTROL_COMMANDS.has(options.subcommand)) {
+    const result = runSupervisedControl({
+      ...options,
+      repoRoot: process.cwd(),
+    });
+    if (options.json) {
+      outputJson(`supervise.${options.subcommand}`, result);
+    } else {
+      printStatus(`CEWP supervised ${options.subcommand}`, result);
+      if (result.supported === false) console.log(`Unavailable: ${result.reason}`);
     }
     return;
   }

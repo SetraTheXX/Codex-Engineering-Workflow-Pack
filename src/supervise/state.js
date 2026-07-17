@@ -330,6 +330,21 @@ function getNextAction(run) {
       summary: "run completed",
     };
   }
+  if (run.status.startsWith("paused-") && run.pause) {
+    return {
+      action: "resume",
+      command: `cewp supervise resume ${run.runId} --yes`,
+      summary: `recover from ${run.status}`,
+      alternatives: run.pause.actions,
+    };
+  }
+  if (["cancelled", "abandoned"].includes(run.status)) {
+    return {
+      action: "none",
+      command: null,
+      summary: `run ${run.status}`,
+    };
+  }
   if (run.status === "blocked") {
     return {
       action: "inspect-blocker",
@@ -526,6 +541,7 @@ module.exports = {
   getSupervisedRunsRoot,
   getNextAction,
   inspectSupervisedRun,
+  normalizeScope,
   renderProgress,
   writeCanonicalRun,
 };

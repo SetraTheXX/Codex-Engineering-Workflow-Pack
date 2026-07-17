@@ -103,6 +103,9 @@ function makeBudgetEnvelope(profile) {
       fullVerificationRuns: 0,
       capturedOutputBytes: 0,
     },
+    thresholdEvents: [],
+    revisions: [],
+    hostLimit: null,
   };
 }
 

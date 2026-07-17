@@ -13,6 +13,7 @@ const {
 } = require("../lib/scope-check");
 const { evaluateControlledOperation } = require("../run/control-gates");
 const { assertPolicyAllows } = require("../run/policy");
+const { applyThresholdObservation, enforceOperationBudget } = require("./budget");
 const {
   runCodexExecAdapter,
   getAdapterExitCode,
@@ -100,20 +101,6 @@ function parseManagedUsage(stdout) {
     observations,
     ...categories,
   };
-}
-
-function ensureOperationBudget(run, allocation) {
-  const budget = run.budget;
-  const totalConsumed = budget.consumed.modelOperations;
-  const totalMaximum = budget.modelOperations.value;
-  const allocationConsumed = budget.consumed.allocations[allocation];
-  const allocationMaximum = budget.allocations[allocation].value;
-  if (totalConsumed >= totalMaximum) {
-    throw new Error("Absolute model-operation ceiling is exhausted; no controlled operation may start.");
-  }
-  if (allocationConsumed >= allocationMaximum) {
-    throw new Error(`${allocation} model-operation allocation is exhausted; protected allocations cannot be borrowed.`);
-  }
 }
 
 function getWorktreePaths(found) {
@@ -224,7 +211,7 @@ function executeSupervisedCheckpoint(options = {}) {
   }
   assertPolicyAllows(found.repoRoot, "runWorkers");
   assertPolicyAllows(found.repoRoot, "runCommands");
-  ensureOperationBudget(found.run, "implementation");
+  enforceOperationBudget(found, "implementation");
 
   const startedAt = new Date().toISOString();
   const owned = createOwnedWorktree(found, startedAt);
@@ -254,7 +241,7 @@ function executeSupervisedCheckpoint(options = {}) {
     scope: { status: "pending", warnings: [] },
     usage: { label: "unknown", value: null },
   };
-  const startedRun = {
+  let startedRun = {
     ...found.run,
     status: "executing",
     updatedAt: startedAt,
@@ -276,6 +263,8 @@ function executeSupervisedCheckpoint(options = {}) {
   startedRun.budget.consumed.targetedVerificationRuns += baseline.runs.length;
   startedRun.budget.consumed.capturedOutputBytes += baseline.capturedBytes;
   startedRun.usage.managedOperations.value += 1;
+  const threshold = applyThresholdObservation(startedRun, "implementation", startedAt);
+  startedRun = threshold.run;
   writeCanonicalRun(found.runRoot, startedRun);
   appendEvent(found.runRoot, {
     schemaVersion: "supervised-event/v1-beta",
@@ -288,6 +277,15 @@ function executeSupervisedCheckpoint(options = {}) {
     owner: "managed",
     backend: "codex-exec",
   });
+  if (threshold.event) {
+    appendEvent(found.runRoot, {
+      schemaVersion: "supervised-event/v1-beta",
+      timestamp: startedAt,
+      type: "budget-threshold",
+      runId: found.runId,
+      ...threshold.event,
+    });
+  }
   appendEvent(found.runRoot, {
     schemaVersion: "supervised-event/v1-beta",
     timestamp: startedAt,
@@ -447,7 +445,7 @@ function retrySupervisedCheckpoint(options = {}) {
     throw new Error(`Checkpoint cannot retry from run=${found.run.status}, task=${task.status}.`);
   }
   assertPolicyAllows(found.repoRoot, "runWorkers");
-  ensureOperationBudget(found.run, "repair");
+  enforceOperationBudget(found, "repair");
   const repairCount = task.attempts.filter((attempt) => attempt.kind === "repair").length;
   if (repairCount >= found.run.budget.maxRepairsPerCheckpoint.value) {
     throw new Error("Checkpoint repair limit is exhausted; explicit budget revision is required.");
@@ -484,7 +482,7 @@ function retrySupervisedCheckpoint(options = {}) {
     scope: { status: "pending", warnings: [] },
     usage: { label: "unknown", value: null },
   };
-  const startedRun = {
+  let startedRun = {
     ...found.run,
     status: "executing",
     updatedAt: startedAt,
@@ -500,6 +498,8 @@ function retrySupervisedCheckpoint(options = {}) {
   startedRun.budget.consumed.modelOperations += 1;
   startedRun.budget.consumed.allocations.repair += 1;
   startedRun.usage.managedOperations.value += 1;
+  const threshold = applyThresholdObservation(startedRun, "repair", startedAt);
+  startedRun = threshold.run;
   writeCanonicalRun(found.runRoot, startedRun);
   appendEvent(found.runRoot, {
     schemaVersion: "supervised-event/v1-beta",
@@ -510,6 +510,15 @@ function retrySupervisedCheckpoint(options = {}) {
     attemptId,
     allocation: "repair",
   });
+  if (threshold.event) {
+    appendEvent(found.runRoot, {
+      schemaVersion: "supervised-event/v1-beta",
+      timestamp: startedAt,
+      type: "budget-threshold",
+      runId: found.runId,
+      ...threshold.event,
+    });
+  }
 
   const execResult = runCodexExecAdapter({
     worktreePath: ownership.worktree.path,
@@ -608,7 +617,6 @@ function retrySupervisedCheckpoint(options = {}) {
 }
 
 module.exports = {
-  ensureOperationBudget,
   executeSupervisedCheckpoint,
   mergeManagedUsage,
   retrySupervisedCheckpoint,
