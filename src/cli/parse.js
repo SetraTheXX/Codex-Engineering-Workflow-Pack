@@ -306,7 +306,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (["run", "supervise"].includes(args.command) && arg === "--json") {
+    if (["doctor", "run", "supervise"].includes(args.command) && arg === "--json") {
       args.json = true;
       continue;
     }
