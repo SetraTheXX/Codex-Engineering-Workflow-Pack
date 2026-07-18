@@ -13,6 +13,9 @@ const OPERATING_MODES = Object.freeze(["supervised", "autonomous", "audit-only"]
 const ALLOCATION_NAMES = Object.freeze([
   "implementation", "repair", "completion", "reviewer", "finalization",
 ]);
+const VAGUE_STOPPING_CONDITIONS = new Set([
+  "all good", "complete", "completed", "done", "finished", "it works", "looks good", "task complete", "works",
+]);
 
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -91,23 +94,38 @@ function normalizeVerification(value, label) {
   return { targeted, full };
 }
 
+function normalizeStoppingConditions(value, label) {
+  const conditions = normalizeTextList(value, label, { required: true });
+  for (const condition of conditions) {
+    const comparable = condition.toLowerCase().replace(/[^a-z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
+    if (VAGUE_STOPPING_CONDITIONS.has(comparable)) {
+      throw new Error(`${label} contains a vague stopping condition: ${condition}. Require an observable outcome.`);
+    }
+  }
+  return conditions;
+}
+
 function normalizeTask(value, index) {
   if (!isObject(value)) throw new Error(`tasks[${index}] must be an object.`);
+  const id = normalizeId(value.id, `tasks[${index}].id`);
+  const allowedFiles = normalizeScopeList(value.allowedFiles, `tasks[${index}].allowedFiles`, true);
+  if (allowedFiles.length > 8) {
+    throw new Error(`Workflow task ${id} is too broad: use at most 8 independent write scopes per micro-goal.`);
+  }
   const risk = requiredText(value.risk, `tasks[${index}].risk`);
   if (!TASK_RISKS.includes(risk)) {
     throw new Error(`tasks[${index}].risk must be ${TASK_RISKS.join(", ")}.`);
   }
   return {
-    id: normalizeId(value.id, `tasks[${index}].id`),
+    id,
     title: requiredText(value.title, `tasks[${index}].title`),
     dependsOn: normalizeTextList(value.dependsOn, `tasks[${index}].dependsOn`, { required: false })
       .map((entry, dependencyIndex) => normalizeId(entry, `tasks[${index}].dependsOn[${dependencyIndex}]`)),
-    allowedFiles: normalizeScopeList(value.allowedFiles, `tasks[${index}].allowedFiles`, true),
+    allowedFiles,
     forbiddenFiles: normalizeScopeList(value.forbiddenFiles, `tasks[${index}].forbiddenFiles`, false),
-    stoppingConditions: normalizeTextList(
+    stoppingConditions: normalizeStoppingConditions(
       value.stoppingConditions,
       `tasks[${index}].stoppingConditions`,
-      { required: true },
     ),
     verification: normalizeVerification(value.verification, `tasks[${index}].verification`),
     risk,
@@ -140,6 +158,9 @@ function normalizeBudget(value) {
   for (const required of ["completion", "reviewer", "finalization"]) {
     if (!protectedAllocations.includes(required)) {
       throw new Error(`budget.protectedAllocations must include ${required}.`);
+    }
+    if (allocations[required] < 1) {
+      throw new Error(`budget ${required} allocation must reserve at least one operation.`);
     }
   }
   if (!isObject(value.thresholds)) throw new Error("budget.thresholds is required.");
@@ -194,6 +215,22 @@ function normalizeExecution(value) {
   return { owner, backend, allowedModes };
 }
 
+function assertVerificationBudgetFits(tasks, budget) {
+  const targetedCommands = tasks.reduce((total, task) => total + task.verification.targeted.length, 0);
+  const requiredTargetedRuns = targetedCommands * (2 + budget.maxRepairsPerCheckpoint);
+  if (requiredTargetedRuns > budget.maxTargetedVerificationRuns) {
+    throw new Error(
+      `Workflow targeted verification budget requires ${requiredTargetedRuns} runs, but only ${budget.maxTargetedVerificationRuns} are approved.`,
+    );
+  }
+  const requiredFullRuns = tasks.reduce((total, task) => total + task.verification.full.length, 0);
+  if (requiredFullRuns > budget.maxFullVerificationRuns) {
+    throw new Error(
+      `Workflow full verification budget requires ${requiredFullRuns} runs, but only ${budget.maxFullVerificationRuns} are approved.`,
+    );
+  }
+}
+
 function validateWorkflowDefinition(value) {
   if (!isObject(value) || value.schemaVersion !== WORKFLOW_DEFINITION_SCHEMA_VERSION) {
     throw new Error(`Workflow definition must use ${WORKFLOW_DEFINITION_SCHEMA_VERSION}.`);
@@ -220,6 +257,8 @@ function validateWorkflowDefinition(value) {
   validateTestAuthoring(value.assurance.testAuthoring);
   if (!isObject(value.checkpointPolicy)) throw new Error("checkpointPolicy is required.");
   if (!isObject(value.reviewerPolicy)) throw new Error("reviewerPolicy is required.");
+  const budget = normalizeBudget(value.budget);
+  assertVerificationBudgetFits(tasks, budget);
 
   return {
     schemaVersion: WORKFLOW_DEFINITION_SCHEMA_VERSION,
@@ -249,7 +288,7 @@ function validateWorkflowDefinition(value) {
       ),
     },
     execution: normalizeExecution(value.execution),
-    budget: normalizeBudget(value.budget),
+    budget,
   };
 }
 

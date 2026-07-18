@@ -140,6 +140,47 @@ function runWorkflowDefinitionContract() {
     assert(overlapping.status === 1, "independent write-scope overlap is rejected");
     assert(overlapping.stderr.includes("scope overlap"), "overlap refusal is actionable");
     assert(overlapping.stderr.includes("implement-example"), "overlap refusal names the conflicting tasks");
+
+    const broadDefinition = validDefinition();
+    broadDefinition.tasks[0].allowedFiles = Array.from(
+      { length: 9 },
+      (_, index) => `src/area-${index + 1}.js`,
+    );
+    writeJson(path.join(repoRoot, "broad-workflow.json"), broadDefinition);
+    const broad = runNode(cewpCli, [
+      "workflow", "validate", "broad-workflow.json", "--json",
+    ], repoRoot);
+    assert(broad.status === 1, "over-broad micro-goal is rejected");
+    assert(broad.stderr.includes("too broad"), "broad-task refusal asks for a smaller checkpoint");
+    assert(broad.stderr.includes("implement-example"), "broad-task refusal names the task");
+
+    const vagueDefinition = validDefinition();
+    vagueDefinition.tasks[0].stoppingConditions = ["done"];
+    writeJson(path.join(repoRoot, "vague-workflow.json"), vagueDefinition);
+    const vague = runNode(cewpCli, [
+      "workflow", "validate", "vague-workflow.json", "--json",
+    ], repoRoot);
+    assert(vague.status === 1, "vague stopping condition is rejected");
+    assert(vague.stderr.includes("vague stopping condition"), "vague refusal requests observable completion evidence");
+
+    const unreservedDefinition = validDefinition();
+    unreservedDefinition.budget.allocations.completion = 0;
+    unreservedDefinition.budget.allocations.implementation += 1;
+    writeJson(path.join(repoRoot, "unreserved-workflow.json"), unreservedDefinition);
+    const unreserved = runNode(cewpCli, [
+      "workflow", "validate", "unreserved-workflow.json", "--json",
+    ], repoRoot);
+    assert(unreserved.status === 1, "zero completion reserve is rejected");
+    assert(unreserved.stderr.includes("completion allocation"), "reserve refusal names the missing allocation");
+
+    const underfundedDefinition = validDefinition();
+    underfundedDefinition.budget.maxTargetedVerificationRuns = 7;
+    writeJson(path.join(repoRoot, "underfunded-workflow.json"), underfundedDefinition);
+    const underfunded = runNode(cewpCli, [
+      "workflow", "validate", "underfunded-workflow.json", "--json",
+    ], repoRoot);
+    assert(underfunded.status === 1, "underfunded workflow verification schedule is rejected");
+    assert(underfunded.stderr.includes("targeted verification budget"), "verification refusal explains the required capacity");
   } finally {
     cleanupRepo(repoRoot);
   }
