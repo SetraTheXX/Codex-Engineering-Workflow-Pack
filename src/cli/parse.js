@@ -64,6 +64,7 @@ function parseArgs(argv) {
     operations: undefined,
     allocation: undefined,
     definitionFile: undefined,
+    digest: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -151,7 +152,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "supervise" && arg === "--proposal") {
+    if (["supervise", "workflow"].includes(args.command) && arg === "--proposal") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
         throw new Error("--proposal requires a repository-relative JSON file.");
@@ -161,12 +162,22 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "supervise" && arg === "--source-kind") {
+    if (["supervise", "workflow"].includes(args.command) && arg === "--source-kind") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
         throw new Error("--source-kind requires issue, prd, plan, progress, or direct-goal.");
       }
       args.sourceKind = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--digest") {
+      const value = argv[index + 1];
+      if (!value || !/^sha256:[a-f0-9]{64}$/.test(value)) {
+        throw new Error("--digest requires a sha256:<64 lowercase hex> workflow digest.");
+      }
+      args.digest = value;
       index += 1;
       continue;
     }
@@ -322,6 +333,11 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (args.command === "workflow" && arg === "--yes") {
+      args.yes = true;
+      continue;
+    }
+
     if (args.command === "supervise" && arg === "--allow-test-authoring") {
       args.allowTestAuthoring = true;
       continue;
@@ -375,7 +391,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (["run", "supervise"].includes(args.command) && arg === "--from") {
+    if (["run", "supervise", "workflow"].includes(args.command) && arg === "--from") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
         throw new Error("--from requires a file path.");
