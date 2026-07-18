@@ -71,6 +71,14 @@ function runBudgetDecisionContract() {
     now: new Date("2026-07-16T00:10:00.000Z"),
   });
   assert(early.allowed === true && early.warning === "budget-early-warning", "70 percent emits a non-bypassing warning");
+
+  const elapsed = budgetRun("ready");
+  const elapsedBlock = evaluateOperationBudget(elapsed, "implementation", {
+    now: new Date("2026-07-16T00:46:00.000Z"),
+  });
+  assert(elapsedBlock.allowed === false, "elapsed-time ceiling blocks a new controlled operation");
+  assert(elapsedBlock.reason === "elapsed-time-ceiling-exhausted", "elapsed-time refusal has a distinct reason");
+  assert(elapsedBlock.pauseStatus === "paused-budget-safe", "elapsed ceiling before dispatch preserves a safe checkpoint");
 }
 
 function createPlan(repoRoot, goal) {
@@ -212,6 +220,37 @@ function runManagedTerminationContract() {
     assert(cancelled.data.run.status === "cancelled", "active cancel is not represented as success");
     assert(JSON.parse(fs.readFileSync(cancelledRun.ownershipPath, "utf8")).status === "cancelled", "cancelled ownership is distinct from abandonment");
     assert(fs.existsSync(cancelledRun.worktreePath), "cancel preserves isolated partial work for inspection");
+
+    const unverifiedRun = createActiveRun(repoRoot, fake, "Pause this unverified checkpoint");
+    const unverifiedPause = parseJson(runNode(cewpCli, [
+      "supervise", "pause", unverifiedRun.runId,
+      "--reason", "budget-unverified", "--yes", "--json",
+    ], repoRoot), "pause unverified partial work");
+    assert(unverifiedPause.data.run.status === "paused-budget-unverified", "partial work has a distinct unverified pause state");
+    assert(fs.existsSync(unverifiedRun.worktreePath), "unverified pause keeps partial work isolated");
+    assert(JSON.parse(fs.readFileSync(unverifiedRun.ownershipPath, "utf8")).status === "active", "unverified pause preserves managed ownership");
+    assert(runNode(cewpCli, ["supervise", "receipt", unverifiedRun.runId, "--json"], repoRoot).status === 1, "unverified pause cannot preview PASS receipt");
+    assert(runNode(cewpCli, ["supervise", "finalize", unverifiedRun.runId, "--yes", "--json"], repoRoot).status === 1, "unverified pause cannot finalize");
+    const unverifiedResume = parseJson(runNode(cewpCli, [
+      "supervise", "resume", unverifiedRun.runId, "--yes", "--json",
+    ], repoRoot), "resume unverified partial work");
+    assert(unverifiedResume.data.run.status === "verifying", "unverified pause resumes at the exact prior gate");
+
+    const hostLimitedRun = createActiveRun(repoRoot, fake, "Pause this checkpoint for a host limit");
+    const hostLimitedPause = parseJson(runNode(cewpCli, [
+      "supervise", "pause", hostLimitedRun.runId,
+      "--reason", "host-limit", "--note", "controlled fixture limit",
+      "--yes", "--json",
+    ], repoRoot), "pause partial work for host limit");
+    assert(hostLimitedPause.data.run.status === "paused-host-limit", "host limit pause remains distinct from CEWP budget exhaustion");
+    assert(hostLimitedPause.data.run.pause.previousTaskStatus === "awaiting-verification", "host pause records the unverified checkpoint boundary");
+    assert(fs.existsSync(hostLimitedRun.worktreePath), "host-limited partial work remains isolated");
+    assert(runNode(cewpCli, ["supervise", "receipt", hostLimitedRun.runId, "--json"], repoRoot).status === 1, "host-limited run cannot claim PASS");
+    const hostLimitedResume = parseJson(runNode(cewpCli, [
+      "supervise", "resume", hostLimitedRun.runId, "--yes", "--json",
+    ], repoRoot), "resume host-limited partial work");
+    assert(hostLimitedResume.data.run.status === "verifying", "host-limit recovery returns to the exact unverified gate");
+    assert(hostLimitedResume.data.run.budget.hostLimit === null, "host-limit resume clears only the explicit host pause evidence");
 
     const abandonedRun = createActiveRun(repoRoot, fake, "Abandon this active checkpoint");
     const abandoned = parseJson(runNode(cewpCli, [
