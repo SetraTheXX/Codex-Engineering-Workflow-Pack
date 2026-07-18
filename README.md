@@ -3,123 +3,126 @@
 [![npm version](https://img.shields.io/npm/v/@setrathex/codex-engineering-workflow-pack?tag=latest)](https://www.npmjs.com/package/@setrathex/codex-engineering-workflow-pack)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-Local-first engineering workflow toolkit for Codex: skills, PRDs, issues, TDD, diagnostics, handoffs, and multi-agent Coordinator Mode.
+**Long-running goals without blind runs.**
 
-CEWP is an unofficial local-first pack for structured engineering work in Codex. It installs reusable repo or global skills, and it provides a local runtime for coordinating Manager, Worker, and Reviewer Codex sessions through files under `.cewp/`. Coordinator Mode supports worktree isolation, guarded `codex-exec` dispatch, sequential or parallel workers, review packets, reviewer decisions, and operator policy modes.
+CEWP is an unofficial, local-first supervision layer for risky or long-running Codex work. Codex still writes the code. CEWP adds a bounded plan, an isolated worktree, scope and policy gates, deterministic verification, explicit repair limits, an independent reviewer, and a portable receipt.
 
-## Highlights
+It is not another chat client, model router, or endless agent loop. It does not attach to a private ChatGPT task, patch the desktop UI, or make a model intrinsically faster.
 
-- 10 engineering workflow skills for setup, diagnosis, TDD, PRDs, issue slicing, handoff, prototyping, architecture review, and context mapping.
-- Repo-scoped or global installation.
-- Local Coordinator Mode runtime under `.cewp/runs/<run-id>/`.
-- Worktree helpers for isolated worker branches.
-- Dispatch planning, readiness checks, prompt bundles, and dry-run previews.
-- Guarded `codex-exec` execution for workers and reviewers.
-- Sequential and parallel worker execution with scope checks.
-- Reviewer gate with `Decision: PASS | REQUEST_CHANGES | BLOCK`.
-- Operator policy modes: `safe`, `trusted`, and `full-authority`.
-- Deterministic harness smoke tests for release prep.
+## Native Goal Or CEWP?
 
-## Quick Start
+Use a native Codex goal alone when the task is small, low risk, easy to inspect, and interruption is unlikely to cost much.
 
-Run once in a repo:
+Use CEWP when you need one or more of these:
 
-```bash
-npx @setrathex/codex-engineering-workflow-pack init
-```
+- approved scope and stopping conditions before execution,
+- a hard limit on worker, repair, and reviewer operations,
+- safe pause and resume evidence,
+- deterministic tests outside the model loop,
+- an independent reviewer PASS before finalization,
+- a receipt that explains what changed and what remains unknown.
 
-Or install globally:
+CEWP currently selects one golden-path pair: execution owner `managed`, backend `codex-exec`. Experimental OpenCode support remains optional and is not part of this path.
+
+## Five-Minute Start
+
+Requirements: maintained Node.js 22 or newer, Git, and Codex CLI for managed execution.
 
 ```bash
 npm install -g @setrathex/codex-engineering-workflow-pack
 cewp init
-```
-
-Check the install:
-
-```bash
 cewp doctor
-cewp list
 ```
 
-Start a local Coordinator Mode run:
+Run the credential-free deterministic walkthrough first:
 
 ```bash
-cewp run init --workers 2 --reviewer
-cewp run worktrees create --dry-run
-cewp run dispatch pipeline --adapter codex-exec --dry-run
+npm run demo:supervised
 ```
 
-Ask Codex naturally:
-
-```txt
-Use CEWP Coordinator Mode to implement this docs-only change with two workers and a reviewer. Show me the plan before dispatch.
-```
-
-## Coordinator Mode
-
-Coordinator Mode is CEWP's local runtime for multi-agent engineering work. A Manager plans and splits tasks, Workers implement in isolated worktrees, a Reviewer verifies the result, and the user decides whether to finalize, merge, push, publish, or release.
-
-Typical flow:
+In a disposable or reviewed repository, create one bounded checkpoint:
 
 ```bash
-cewp run init --workers 2 --reviewer
-cewp run worktrees create --run <run-id>
-cewp run dispatch pipeline --run <run-id> --adapter codex-exec --dry-run
-cewp run dispatch pipeline --run <run-id> --adapter codex-exec --yes --parallel --timeout 120
-cewp run finalize --run <run-id> --dry-run
-cewp run finalize --run <run-id>
-cewp run cleanup --run <run-id>
+cewp supervise plan \
+  --goal "Update the install example" \
+  --scope README.md \
+  --verify "git diff --check" \
+  --stop "The install example is accurate and the approved check passes"
 ```
 
-See [Coordinator Mode](docs/coordinator-mode.md).
-
-## Operator Policy
-
-CEWP can store a local operator policy in `.cewp/policy.json` so Codex can understand how much autonomy the user allows in a repo.
+Inspect the preview, then explicitly approve it. Managed worker, reviewer, and finalize operations require the advanced local policy; this does not disable scope, verification, budget, or reviewer gates.
 
 ```bash
-cewp policy show
-cewp policy set safe
-cewp policy set trusted
 cewp policy set full-authority
-cewp policy reset
+cewp supervise approve <run-id> --yes
+cewp supervise execute <run-id> --yes
+cewp supervise verify <run-id>
+cewp supervise continue <run-id>
+cewp supervise review <run-id> --yes
+cewp supervise receipt <run-id>
+cewp supervise finalize <run-id> --yes
 ```
 
-`safe` is the default. `full-authority` is a supported advanced mode for experienced users, but it does not disable CEWP guardrails. Push, publish, and release remain disabled by default unless explicitly allowed by policy later.
+Nothing in that flow merges, pushes, publishes, tags, or creates a release.
 
-The CLI enforces policy for actual high-impact local actions such as worker execution, reviewer execution, pipeline execution, finalize, cleanup, and prune deletion. Dry-run and read-only commands remain available in every mode.
+## Codex Plugin
 
-See [Operator Policy](docs/operator-policy.md).
+The thin plugin contributes exactly three conversational skills. CEWP Core and the CLI remain authoritative.
 
-## Safety Model
+From a source checkout:
 
-CEWP is local-first and approval-gated. It does not automatically merge, push, publish, or create releases. Worker scope checks include both working tree changes and committed branch changes since the registered `baseCommit`. Cleanup and prune are dry-run by default.
+```bash
+codex plugin marketplace add /path/to/Codex-Engineering-Workflow-Pack
+codex plugin add cewp@cewp-local
+codex plugin list
+```
 
-See [Security Model](docs/security-model.md).
+Then ask Codex to plan a supervised run, run the current checkpoint, or resume an existing run. The plugin does not gain direct access to the host's private thread, native goal lifecycle, billing data, or persistent UI.
+
+## What CEWP Records
+
+Canonical state lives under `.cewp/supervised-runs/<run-id>/`. Human-readable `progress.md` is generated from that state and cannot silently change it.
+
+CEWP keeps four truth labels separate:
+
+- `observed`: reported by a supported structured interface,
+- `estimated`: a range learned from enough comparable local runs,
+- `budgeted`: an approved CEWP-controlled maximum,
+- `unknown`: unavailable from the selected host or authentication boundary.
+
+ChatGPT subscription usage is not converted into a fabricated per-run dollar value. A soft estimate never pretends to be an exact mid-turn token cap.
+
+## Assurance And Recovery
+
+The `prototype`, `standard`, and `critical` profiles set bounded operation, repair, elapsed-time, verification, and reserve envelopes. `standard` is the default with one worker and at most two repairs per checkpoint.
+
+Test authoring is separate from verification:
+
+- `auto`: tests may change inside approved scope,
+- `ask`: test changes require `approve --allow-test-authoring --yes`,
+- `never`: Core blocks detectable test-file changes, while approved non-test verification still runs.
+
+Budget or host exhaustion produces a resumable pause, not a fake PASS. Partial files remain isolated and cannot finalize without verification and reviewer PASS.
+
+## Existing Toolkit
+
+CEWP still ships ten reusable engineering skills and the earlier Coordinator Mode runtime for compatibility. The supervised single-checkpoint workflow is the primary product direction; legacy Coordinator Mode remains documented for existing users.
 
 ## Documentation
 
 - [Install Guide](docs/install.md)
-- [Coordinator Mode](docs/coordinator-mode.md)
-- [Adapter Contract](docs/adapter-contract.md)
+- [Supervised Workflow](docs/supervised-workflow.md)
+- [Known Limitations](docs/known-limitations.md)
+- [Pilot Kit](docs/pilot-kit.md)
 - [Operator Policy](docs/operator-policy.md)
 - [Security Model](docs/security-model.md)
+- [Coordinator Mode Compatibility](docs/coordinator-mode.md)
+- [Adapter Contract](docs/adapter-contract.md)
 - [Release Notes](docs/release-notes.md)
-
-## Harness Smoke
-
-For release prep:
-
-```bash
-node tests/harness/run-smoke.js
-```
-
-The harness uses temporary repos, checks Coordinator Mode helpers, and does not run `codex exec`, publish, push, merge, or change package version.
 
 ## Status
 
-`0.7.0-beta.0` is beta software. Use it for local-first workflow automation and dogfooding, and keep reviewing generated plans, worker output, and reviewer decisions before integrating changes.
+CEWP is beta software. The supervised contracts are versioned beta surfaces, the general multi-checkpoint workflow compiler is not shipped yet, and external pilot gates are still required before the next release is declared complete. Review the plan, evidence, and receipt before integrating changes.
 
 ## License
 

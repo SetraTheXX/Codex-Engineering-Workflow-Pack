@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Added
+
+- Added the first managed `codex-exec` supervised checkpoint path: bounded intake, explicit approval, isolated execution, baseline and targeted verification, bounded repair, independent review, receipt preview, and explicit finalize.
+- Added three thin plugin skills for planning, running, and resuming supervised work plus a credential-free deterministic end-to-end demo.
+- Added versioned machine-readable doctor, supervised run, budget, progress, event, and receipt beta surfaces with explicit owner/backend and usage truth labels.
+- Added resumable budget-safe, budget-unverified, and host-limit pauses; protected allocations; operator interventions; rollback; and actionable blocked states.
+- Added public supervised workflow, known-limitations, and external pilot guides.
+
+### Changed
+
+- Reframed the public product around long-running goals without blind runs and documented when native Codex goal mode is the simpler choice.
+- Enforced `auto`, `ask`, and `never` test-authoring policies independently from required verification evidence.
+- Kept OpenCode experimental and outside the golden path; no new provider, desktop UI, terminal server, direct native-goal control, automatic model routing, merge, push, publish, tag, or release behavior was added.
+
 ## 0.8.0-beta.0
 
 ### Summary

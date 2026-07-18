@@ -2574,12 +2574,18 @@ async function main() {
       assertExit(pack, 0, "npm pack --dry-run");
       assert(packageJson.version === "0.8.0-beta.0", `unexpected package version: ${packageJson.version}`);
       assert(packOutput.includes("docs/adapter-contract.md"), "adapter contract doc should be packed");
+      assert(packOutput.includes("docs/supervised-workflow.md"), "supervised workflow doc should be packed");
+      assert(packOutput.includes("docs/known-limitations.md"), "known limitations should be packed");
+      assert(packOutput.includes("docs/pilot-kit.md"), "external pilot kit should be packed");
+      assert(packOutput.includes("docs/codex-capability-matrix.md"), "public capability evidence should be packed");
       assert(packOutput.includes(".agents/plugins/marketplace.json"), "plugin marketplace should be packed");
       assert(packOutput.includes("plugins/cewp/.codex-plugin/plugin.json"), "plugin manifest should be packed");
       assert(!packOutput.includes(".cewp/"), ".cewp/ should not be packed");
       assert(!packOutput.includes(".cewp-worktrees/"), ".cewp-worktrees/ should not be packed");
       assert(!packOutput.includes(".ctxo/"), ".ctxo/ should not be packed");
       assert(!packOutput.includes(".codegraph/"), ".codegraph/ should not be packed");
+      assert(!packOutput.includes(".cewp-private/"), ".cewp-private/ should not be packed");
+      assert(!packOutput.includes("phase-8-to-1.0-implementation-plan.md"), "private implementation roadmap should not be packed");
       assert(!packOutput.includes("docs/agents/"), "docs/agents/ should not be packed");
       assert(!packOutput.includes("tests/"), "tests/ should not be packed");
     });

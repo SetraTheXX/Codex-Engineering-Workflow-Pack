@@ -9,3 +9,12 @@ It ships exactly three entry skills:
 - `resume-supervised-run`: inspect or recover canonical state without silently restarting work.
 
 The plugin does not attach to the ChatGPT desktop app's private thread, automate native goals, inject persistent UI, expose hidden host usage, execute the optional OpenCode adapter, or add another provider. Phase 9 uses one selected pair: `managed` owner with the `codex-exec` backend.
+
+Install from the CEWP source marketplace:
+
+```bash
+codex plugin marketplace add /path/to/Codex-Engineering-Workflow-Pack
+codex plugin add cewp@cewp-local
+```
+
+The npm package supplies the `cewp` runtime used by these skills. Run `cewp doctor --json` before the first supervised checkpoint.
