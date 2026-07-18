@@ -20,21 +20,26 @@ const { appendEvent, findSupervisedRun, getNextAction, writeCanonicalRun } = req
 
 function makeReviewerPrompt(run) {
   const task = run.tasks[0];
-  const verification = task.verification.runs
-    .filter((entry) => entry.stage !== "baseline")
-    .map((entry) => `- ${entry.command}: ${entry.status} (${entry.classification})`)
-    .join("\n");
+  const checkpoints = [
+    ...(Array.isArray(run.checkpointHistory) ? run.checkpointHistory : []),
+    task,
+  ];
+  const checkpointSummary = checkpoints.map((checkpoint) => {
+    const verification = checkpoint.verification.runs
+      .filter((entry) => entry.stage !== "baseline")
+      .map((entry) => `${entry.command}: ${entry.status} (${entry.classification})`)
+      .join("; ") || "none";
+    const changedFiles = [...new Set(checkpoint.attempts.flatMap((attempt) => attempt.changedFiles || []))];
+    const snapshot = checkpoint.snapshot ? `; snapshot ${checkpoint.snapshot.commit}` : "";
+    return `- ${checkpoint.id}: ${checkpoint.title}; scope ${checkpoint.allowedFiles.join(", ")}; changed ${changedFiles.join(", ") || "none"}; verification ${verification}${snapshot}`;
+  }).join("\n");
   return `# CEWP Dispatch Prompt - Reviewer
 
 You are the independent reviewer. Do not edit files.
 
 Goal: ${run.goal}
-Checkpoint: ${task.id}
-Allowed files: ${task.allowedFiles.join(", ")}
-Changed files: ${task.attempts.at(-1).changedFiles.join(", ")}
-
-Verification evidence:
-${verification || "- none"}
+Checkpoints:
+${checkpointSummary}
 
 Inspect the Git diff, scope, stopping conditions, and verification evidence.
 Your final response must begin with exactly one decision line:
@@ -78,7 +83,13 @@ function reviewSupervisedCheckpoint(options = {}) {
   const ownership = validateOwnershipRecord(
     readJsonFile(path.join(found.runRoot, "ownership.json"), "execution ownership"),
   );
-  if (ownership.status !== "verified" || !fs.existsSync(ownership.worktree.path)) {
+  if (
+    ownership.runId !== found.runId
+    || ownership.taskId !== task.id
+    || ownership.checkpointId !== task.id
+    || ownership.status !== "verified"
+    || !fs.existsSync(ownership.worktree.path)
+  ) {
     throw new Error("Independent review requires a verified managed worktree.");
   }
 

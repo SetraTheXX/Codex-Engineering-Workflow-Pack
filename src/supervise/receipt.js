@@ -11,7 +11,17 @@ const { getTestAuthoringVerdict } = require("./test-authoring");
 
 function buildReceipt(run, options = {}) {
   const task = run.tasks[0];
-  const finalizable = task.status === "verified" && run.reviewer.decision === "PASS";
+  const checkpointHistory = Array.isArray(run.checkpointHistory) ? run.checkpointHistory : [];
+  const checkpoints = [...checkpointHistory, task];
+  const historyFinalizable = checkpointHistory.every((checkpoint) => (
+    checkpoint.status === "completed"
+    && checkpoint.snapshot
+    && typeof checkpoint.snapshot.commit === "string"
+  ));
+  const finalizable = historyFinalizable
+    && task.status === "verified"
+    && run.reviewer.decision === "PASS";
+  const verificationRuns = checkpoints.flatMap((checkpoint) => checkpoint.verification.runs || []);
   return {
     schemaVersion: "supervised-receipt/v1-beta",
     generatedAt: options.generatedAt || new Date().toISOString(),
@@ -38,12 +48,13 @@ function buildReceipt(run, options = {}) {
       verification: task.verification,
       evidence: task.evidence,
     },
+    checkpoints,
     reviewer: run.reviewer,
     budget: run.budget,
     usage: run.usage,
     localVerificationActivity: {
-      runs: task.verification.runs.length,
-      durationMs: task.verification.runs.reduce((total, entry) => total + entry.durationMs, 0),
+      runs: verificationRuns.length,
+      durationMs: verificationRuns.reduce((total, entry) => total + entry.durationMs, 0),
     },
     managedModelOperations: run.usage.managedOperations,
     finalizable,
@@ -70,7 +81,7 @@ function renderReceiptMarkdown(receipt) {
 - Execution: ${receipt.execution.owner} / ${receipt.execution.backend}
 - Assurance: ${receipt.assurance.profile}
 - Test authoring: ${receipt.testAuthoringApproval.policy}; explicit approval: ${receipt.testAuthoringApproval.explicitlyApproved ? "yes" : "no"}
-- Checkpoint: ${receipt.task.status}
+- Checkpoints: ${receipt.checkpoints.length}; current ${receipt.task.id} (${receipt.task.status})
 - Reviewer: ${receipt.reviewer.decision || "none"}
 - Finalizable: ${receipt.finalizable ? "yes" : "no"}
 - Observed managed model operations: ${receipt.managedModelOperations.value}
@@ -103,10 +114,20 @@ function assertCurrentWorktreeGates(found) {
   const ownership = validateOwnershipRecord(
     readJsonFile(path.join(found.runRoot, "ownership.json"), "execution ownership"),
   );
+  if (
+    ownership.runId !== found.runId
+    || ownership.taskId !== task.id
+    || ownership.checkpointId !== task.id
+  ) {
+    throw new Error("Receipt ownership identity does not match the active checkpoint.");
+  }
   if (!fs.existsSync(ownership.worktree.path)) {
     throw new Error(`Managed worktree is missing: ${ownership.worktree.path}`);
   }
-  const changes = getWorktreeChangeSummary(ownership.worktree.path, found.run.repo.baseCommit);
+  const changes = getWorktreeChangeSummary(
+    ownership.worktree.path,
+    task.baseCommit || found.run.repo.baseCommit,
+  );
   const scopeWarnings = findScopeWarnings(task.id, changes.changedFiles, task);
   if (changes.committedDiffError) scopeWarnings.push(changes.committedDiffError.message);
   const testAuthoring = getTestAuthoringVerdict(found.run, changes.changedFiles);

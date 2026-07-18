@@ -20,6 +20,7 @@ function classifyFailure(result, signature, baseline) {
 }
 
 function runVerificationSet({
+  checkpointId,
   stage,
   commands,
   worktreePath,
@@ -29,7 +30,7 @@ function runVerificationSet({
   baselineRuns = [],
   startIndex = 0,
 }) {
-  const outputRoot = path.join(runRoot, "verification");
+  const outputRoot = path.join(runRoot, "verification", checkpointId || "checkpoint-1");
   fs.mkdirSync(outputRoot, { recursive: true });
   const runs = [];
   let capturedBytes = 0;
@@ -71,9 +72,11 @@ function runVerificationSet({
 }
 
 function captureBaseline({ run, runRoot, worktreePath, timeoutSeconds }) {
+  const task = run.tasks[0];
   return runVerificationSet({
+    checkpointId: task.id,
     stage: "baseline",
-    commands: run.tasks[0].verification.targeted,
+    commands: task.verification.targeted,
     worktreePath,
     runRoot,
     timeoutSeconds,
@@ -109,7 +112,14 @@ function verifySupervisedCheckpoint(options = {}) {
   }
   assertPolicyAllows(found.repoRoot, "runCommands");
   const ownership = readJsonFile(path.join(found.runRoot, "ownership.json"), "execution ownership");
-  if (ownership.owner !== "managed" || ownership.backend !== "codex-exec" || ownership.status !== "active") {
+  if (
+    ownership.runId !== found.runId
+    || ownership.taskId !== task.id
+    || ownership.checkpointId !== task.id
+    || ownership.owner !== "managed"
+    || ownership.backend !== "codex-exec"
+    || ownership.status !== "active"
+  ) {
     throw new Error("Managed ownership is not active for this checkpoint.");
   }
   if (!fs.existsSync(ownership.worktree.path)) {
@@ -130,6 +140,7 @@ function verifySupervisedCheckpoint(options = {}) {
   }
   const baselineRuns = task.verification.runs.filter((entry) => entry.stage === "baseline");
   const targetedResult = runVerificationSet({
+    checkpointId: task.id,
     stage: "targeted",
     commands,
     worktreePath: ownership.worktree.path,
@@ -144,6 +155,7 @@ function verifySupervisedCheckpoint(options = {}) {
   let fullResult = { runs: [], capturedBytes: 0 };
   if (targetedPassed && task.verification.full.length > 0) {
     fullResult = runVerificationSet({
+      checkpointId: task.id,
       stage: "full",
       commands: task.verification.full,
       worktreePath: ownership.worktree.path,
@@ -162,7 +174,10 @@ function verifySupervisedCheckpoint(options = {}) {
     runs: [...targetedResult.runs, ...fullResult.runs],
     capturedBytes: targetedResult.capturedBytes + fullResult.capturedBytes,
   };
-  const changes = getWorktreeChangeSummary(ownership.worktree.path, found.run.repo.baseCommit);
+  const changes = getWorktreeChangeSummary(
+    ownership.worktree.path,
+    task.baseCommit || found.run.repo.baseCommit,
+  );
   const scopeWarnings = findScopeWarnings(task.id, changes.changedFiles, task);
   if (changes.committedDiffError) scopeWarnings.push(changes.committedDiffError.message);
   const testAuthoring = getTestAuthoringVerdict(found.run, changes.changedFiles);

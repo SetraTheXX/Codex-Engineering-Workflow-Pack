@@ -7,9 +7,11 @@ const {
   getGitOutput,
   isRepoDirty,
 } = require("../lib/git");
+const { normalizeComparePath } = require("../lib/paths");
 const {
   findScopeWarnings,
   getWorktreeChangeSummary,
+  isWorkerRuntimeOutputPath,
 } = require("../lib/scope-check");
 const { evaluateControlledOperation } = require("../run/control-gates");
 const { assertPolicyAllows } = require("../run/policy");
@@ -118,6 +120,83 @@ function getWorktreePaths(found) {
   };
 }
 
+function checkpointBaseCommit(run, task) {
+  return task.baseCommit || run.repo.baseCommit;
+}
+
+function reuseOwnedWorktree(found, startedAt) {
+  const task = found.run.tasks[0];
+  const history = Array.isArray(found.run.checkpointHistory) ? found.run.checkpointHistory : [];
+  if (history.length === 0) return null;
+  const previousCheckpoint = history.at(-1);
+  const ownershipPath = path.join(found.runRoot, "ownership.json");
+  const previous = validateOwnershipRecord(JSON.parse(fs.readFileSync(ownershipPath, "utf8")));
+  if (
+    previous.runId !== found.runId
+    || previous.checkpointId !== previousCheckpoint.id
+    || previous.taskId !== previousCheckpoint.id
+    || previous.status !== "released"
+  ) {
+    throw new Error("Linear continuation requires released ownership from the immediately preceding checkpoint.");
+  }
+  if (!fs.existsSync(previous.worktree.path) || !fs.statSync(previous.worktree.path).isDirectory()) {
+    throw new Error(`Managed continuation worktree is missing: ${previous.worktree.path}`);
+  }
+  const actualPath = fs.realpathSync.native(previous.worktree.path);
+  const expectedRoot = fs.realpathSync.native(path.resolve(
+    found.repoRoot,
+    "..",
+    ".cewp-worktrees",
+    path.basename(found.repoRoot),
+    found.runId,
+  ));
+  if (normalizeComparePath(path.dirname(actualPath)) !== normalizeComparePath(expectedRoot)) {
+    throw new Error("Managed continuation worktree is outside the expected CEWP run root.");
+  }
+  const baseCommit = checkpointBaseCommit(found.run, task);
+  if (getGitHeadCommit(actualPath) !== baseCommit) {
+    throw new Error("Managed continuation worktree no longer matches the verified checkpoint snapshot.");
+  }
+  const pending = getWorktreeChangeSummary(actualPath, baseCommit).changedFiles
+    .filter((file) => !isWorkerRuntimeOutputPath(file));
+  if (pending.length > 0) {
+    throw new Error(`Managed continuation has unverified changes after the checkpoint snapshot: ${pending.join(", ")}`);
+  }
+
+  const ownership = validateOwnershipRecord({
+    ...previous,
+    taskId: task.id,
+    checkpointId: task.id,
+    status: "active",
+    createdAt: startedAt,
+    updatedAt: startedAt,
+    releasedAt: undefined,
+    worktree: {
+      id: `${found.runId}:${task.id}`,
+      path: actualPath,
+    },
+  });
+  const gate = evaluateControlledOperation({
+    coreGate: { status: "open" },
+    warningSurfaces: {
+      conversation: true,
+      hook: false,
+      app: false,
+      notification: false,
+    },
+    ownershipRecords: [previous],
+    requestedOwnership: ownership,
+  }, { repoRoot: found.repoRoot });
+  if (!gate.allowed) throw new Error(`Controlled continuation blocked: ${gate.reason}`);
+  writeJsonAtomic(ownershipPath, ownership);
+  return {
+    managedRoot: path.dirname(expectedRoot),
+    worktreePath: actualPath,
+    branch: getGitOutput(["branch", "--show-current"], actualPath).stdout.trim(),
+    ownership,
+  };
+}
+
 function createOwnedWorktree(found, startedAt) {
   if (isRepoDirty(found.repoRoot)) {
     throw new Error("Cannot dispatch a supervised checkpoint while the source repository is dirty.");
@@ -126,6 +205,9 @@ function createOwnedWorktree(found, startedAt) {
   if (currentHead !== found.run.repo.baseCommit) {
     throw new Error("Repository HEAD changed after plan approval. Revise or recreate the supervised run.");
   }
+
+  const continued = reuseOwnedWorktree(found, startedAt);
+  if (continued) return continued;
 
   const paths = getWorktreePaths(found);
   if (fs.existsSync(paths.worktreePath)) {
@@ -143,7 +225,7 @@ function createOwnedWorktree(found, startedAt) {
     paths.worktreePath,
     "-b",
     paths.branch,
-    found.run.repo.baseCommit,
+    checkpointBaseCommit(found.run, found.run.tasks[0]),
   ], found.repoRoot);
   if (created.status !== 0) {
     throw new Error(`Failed to create managed checkpoint worktree: ${(created.stderr || created.stdout || "").trim()}`);
@@ -189,6 +271,7 @@ function makeWorkerPrompt(run) {
 Role: worker-a
 Task: ${task.id}
 Goal: ${run.goal}
+Checkpoint objective: ${task.title}
 
 Allowed files:
 ${task.allowedFiles.map((file) => `- ${file}`).join("\n")}
@@ -229,10 +312,10 @@ function executeSupervisedCheckpoint(options = {}) {
   });
   const outputRoot = path.join(found.runRoot, "adapter-output");
   fs.mkdirSync(outputRoot, { recursive: true });
-  const promptPath = path.join(outputRoot, "checkpoint-1-prompt.md");
-  const stdoutPath = path.join(outputRoot, "checkpoint-1-stdout.jsonl");
-  const stderrPath = path.join(outputRoot, "checkpoint-1-stderr.log");
-  const lastMessagePath = path.join(outputRoot, "checkpoint-1-last-message.md");
+  const promptPath = path.join(outputRoot, `${task.id}-prompt.md`);
+  const stdoutPath = path.join(outputRoot, `${task.id}-stdout.jsonl`);
+  const stderrPath = path.join(outputRoot, `${task.id}-stderr.log`);
+  const lastMessagePath = path.join(outputRoot, `${task.id}-last-message.md`);
   fs.writeFileSync(promptPath, makeWorkerPrompt(found.run));
 
   const attempt = {
@@ -327,7 +410,10 @@ function executeSupervisedCheckpoint(options = {}) {
   const exitCode = getAdapterExitCode(execResult);
   const timedOut = didAdapterTimeOut(execResult);
   const usage = parseManagedUsage(execResult.stdout);
-  const changes = getWorktreeChangeSummary(owned.worktreePath, found.run.repo.baseCommit);
+  const changes = getWorktreeChangeSummary(
+    owned.worktreePath,
+    checkpointBaseCommit(found.run, task),
+  );
   const scopeWarnings = findScopeWarnings(task.id, changes.changedFiles, task);
   if (changes.committedDiffError) {
     scopeWarnings.push(changes.committedDiffError.message);
@@ -375,7 +461,7 @@ function executeSupervisedCheckpoint(options = {}) {
     updatedAt: completedAt,
     usage: {
       ...startedRun.usage,
-      managedTokens: usage,
+      managedTokens: mergeManagedUsage(startedRun.usage.managedTokens, usage),
     },
     tasks: [{
       ...startedRun.tasks[0],
@@ -471,7 +557,14 @@ function retrySupervisedCheckpoint(options = {}) {
   const ownershipPath = path.join(found.runRoot, "ownership.json");
   const ownership = JSON.parse(fs.readFileSync(ownershipPath, "utf8"));
   validateOwnershipRecord(ownership);
-  if (ownership.status !== "active" || ownership.owner !== "managed" || ownership.backend !== "codex-exec") {
+  if (
+    ownership.runId !== found.runId
+    || ownership.taskId !== task.id
+    || ownership.checkpointId !== task.id
+    || ownership.status !== "active"
+    || ownership.owner !== "managed"
+    || ownership.backend !== "codex-exec"
+  ) {
     throw new Error("Managed codex-exec ownership is not active for repair.");
   }
   if (!fs.existsSync(ownership.worktree.path)) {
@@ -482,10 +575,10 @@ function retrySupervisedCheckpoint(options = {}) {
   const attemptId = `attempt-${attemptNumber}`;
   const startedAt = new Date().toISOString();
   const outputRoot = path.join(found.runRoot, "adapter-output");
-  const promptPath = path.join(outputRoot, `checkpoint-1-${attemptId}-prompt.md`);
-  const stdoutPath = path.join(outputRoot, `checkpoint-1-${attemptId}-stdout.jsonl`);
-  const stderrPath = path.join(outputRoot, `checkpoint-1-${attemptId}-stderr.log`);
-  const lastMessagePath = path.join(outputRoot, `checkpoint-1-${attemptId}-last-message.md`);
+  const promptPath = path.join(outputRoot, `${task.id}-${attemptId}-prompt.md`);
+  const stdoutPath = path.join(outputRoot, `${task.id}-${attemptId}-stdout.jsonl`);
+  const stderrPath = path.join(outputRoot, `${task.id}-${attemptId}-stderr.log`);
+  const lastMessagePath = path.join(outputRoot, `${task.id}-${attemptId}-last-message.md`);
   fs.writeFileSync(promptPath, makeRepairPrompt(found.run));
   const attempt = {
     id: attemptId,
@@ -559,7 +652,10 @@ function retrySupervisedCheckpoint(options = {}) {
   const exitCode = getAdapterExitCode(execResult);
   const timedOut = didAdapterTimeOut(execResult);
   const usage = parseManagedUsage(execResult.stdout);
-  const changes = getWorktreeChangeSummary(ownership.worktree.path, found.run.repo.baseCommit);
+  const changes = getWorktreeChangeSummary(
+    ownership.worktree.path,
+    checkpointBaseCommit(found.run, task),
+  );
   const scopeWarnings = findScopeWarnings(task.id, changes.changedFiles, task);
   if (changes.committedDiffError) scopeWarnings.push(changes.committedDiffError.message);
   const testAuthoring = getTestAuthoringVerdict(found.run, changes.changedFiles);

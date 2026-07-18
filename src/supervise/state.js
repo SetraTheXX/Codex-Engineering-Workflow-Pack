@@ -267,6 +267,17 @@ function formatProgressEvidence(evidence) {
   return `- ${evidence.type || "unknown"}`;
 }
 
+function getCheckpointHistory(run) {
+  return Array.isArray(run.checkpointHistory) ? run.checkpointHistory : [];
+}
+
+function formatCompletedCheckpoint(checkpoint) {
+  const verificationEvidence = checkpoint.evidence
+    .filter((entry) => entry.type === "verification")
+    .flatMap((entry) => entry.verificationIds || []);
+  return `- ${checkpoint.id}: ${checkpoint.title}; snapshot ${checkpoint.snapshot.commit}; verification ${verificationEvidence.join(", ") || "none"}`;
+}
+
 function formatProgressEstimate(estimate) {
   if (estimate.label === "estimated" && estimate.range) {
     return `${estimate.range.min}-${estimate.range.max} (${estimate.confidence}; ${estimate.sampleCount} comparable runs)`;
@@ -276,6 +287,8 @@ function formatProgressEstimate(estimate) {
 
 function renderProgress(run) {
   const task = run.tasks[0];
+  const checkpointHistory = getCheckpointHistory(run);
+  const completedCheckpointCount = checkpointHistory.length + (task.status === "completed" ? 1 : 0);
   const nextAction = getNextAction(run);
   const latestVerification = task.verification && task.verification.latest;
   const blocker = task.blocker;
@@ -309,6 +322,8 @@ function renderProgress(run) {
 - Test authoring: ${run.assurance.testAuthoring}
 - Test authoring approved: ${run.approval ? (run.approval.testAuthoringApproved ? "yes" : "no") : "pending"}
 - Current checkpoint: ${task.id} (${task.status})
+- Current checkpoint objective: ${task.title}
+- Completed checkpoints: ${completedCheckpointCount}
 - Attempts: ${task.attempts.length}
 - Latest verification: ${latestDetail}
 - Blockers: ${blockerDetail}
@@ -328,6 +343,10 @@ function renderProgress(run) {
 ## Attempts
 
 ${attempts}
+
+## Completed Checkpoints
+
+${checkpointHistory.length > 0 ? checkpointHistory.map(formatCompletedCheckpoint).join("\n") : "- none"}
 
 ## Evidence
 
@@ -353,14 +372,14 @@ function getNextAction(run) {
     return {
       action: "execute",
       command: `cewp supervise execute ${run.runId} --yes`,
-      summary: "execute checkpoint-1",
+      summary: `execute ${run.tasks[0].id}`,
     };
   }
   if (run.status === "verifying" && run.tasks[0].status === "awaiting-verification") {
     return {
       action: "verify",
       command: `cewp supervise verify ${run.runId}`,
-      summary: "run targeted verification for checkpoint-1",
+      summary: `run targeted verification for ${run.tasks[0].id}`,
     };
   }
   if (run.status === "checkpoint-complete" && run.tasks[0].status === "verified") {
@@ -464,6 +483,7 @@ function createProposedRun(options = {}) {
   const createdAt = new Date().toISOString();
   const runId = nextRunId(repoRoot);
   const runRoot = path.join(getSupervisedRunsRoot(repoRoot), runId);
+  const baseCommit = readBaseCommit(repoRoot);
   const run = {
     schemaVersion: SUPERVISED_RUN_SCHEMA_VERSION,
     runId,
@@ -471,7 +491,7 @@ function createProposedRun(options = {}) {
     updatedAt: createdAt,
     repo: {
       root: repoRoot,
-      baseCommit: readBaseCommit(repoRoot),
+      baseCommit,
     },
     source: intake.source,
     proposal: intake.proposal,
@@ -491,10 +511,12 @@ function createProposedRun(options = {}) {
     },
     budget: previewBudget,
     usage: makeUsagePreview(),
+    checkpointHistory: [],
     tasks: [
       {
         id: "checkpoint-1",
         title: intake.title,
+        baseCommit,
         status: "proposed",
         allowedFiles: scopes,
         forbiddenFiles: [...new Set([".git/**", ".cewp/**", ...intake.forbiddenFiles])],
