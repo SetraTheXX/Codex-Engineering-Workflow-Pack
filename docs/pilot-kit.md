@@ -34,7 +34,7 @@ Then run:
 
 ```bash
 cewp doctor --json
-npm run demo:supervised
+cewp demo supervised
 ```
 
 Do not include authentication files, prompts, source code, raw private logs, or repository paths in a public report.

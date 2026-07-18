@@ -82,7 +82,7 @@ function parseArgs(argv) {
     return args;
   }
 
-  const optionStart = ["run", "supervise"].includes(args.command) ? 2 : 1;
+  const optionStart = ["run", "supervise", "demo"].includes(args.command) ? 2 : 1;
 
   for (let index = optionStart; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -306,7 +306,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (["doctor", "run", "supervise"].includes(args.command) && arg === "--json") {
+    if (["doctor", "run", "supervise", "demo"].includes(args.command) && arg === "--json") {
       args.json = true;
       continue;
     }

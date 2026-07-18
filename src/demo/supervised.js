@@ -144,5 +144,6 @@ if (require.main === module) {
 }
 
 module.exports = {
+  printHuman,
   runSupervisedDemo,
 };

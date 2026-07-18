@@ -6,6 +6,7 @@ const { runNode } = require("../harness/lib/temp-repo");
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 const demo = path.join(repoRoot, "src", "demo", "supervised.js");
+const cewpCli = path.join(repoRoot, "bin", "cewp.js");
 
 function runSupervisedDemoContract() {
   const result = runNode(demo, ["--json"], repoRoot, { timeout: 120000 });
@@ -22,6 +23,12 @@ function runSupervisedDemoContract() {
   assert(report.localVerificationRuns >= 2, "demo keeps local verification separate from model operations");
   assert(report.receiptSchemaVersion === "supervised-receipt/v1-beta", "demo previews the real supervised receipt contract");
   assert(report.cleanup === "complete", "demo removes its temporary repository and worktree state");
+
+  const cliResult = runNode(cewpCli, ["demo", "supervised", "--json"], repoRoot, { timeout: 120000 });
+  assert(cliResult.status === 0, `packaged CLI exposes the supervised demo: ${cliResult.stderr}`);
+  const cliReport = JSON.parse(cliResult.stdout);
+  assert(cliReport.schemaVersion === "supervised-demo/v1-beta", "CLI demo preserves the versioned report");
+  assert(cliReport.status === "PASS" && cliReport.cleanup === "complete", "CLI demo completes and cleans up");
 }
 
 try {

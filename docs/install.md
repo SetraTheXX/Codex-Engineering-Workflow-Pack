@@ -81,7 +81,7 @@ The plugin installs three skills and does not copy authentication state. It does
 Validate the no-credentials fixture from a CEWP checkout:
 
 ```bash
-npm run demo:supervised
+cewp demo supervised
 ```
 
 Then see [Supervised Workflow](supervised-workflow.md) for plan, approve, execute, verify, review, receipt, finalize, pause, and recovery commands.

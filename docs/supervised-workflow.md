@@ -121,7 +121,7 @@ Editing `progress.md` does not mutate `run.json`. Managed token categories are o
 
 ## Cleanup
 
-`npm run demo:supervised` removes its temporary repository and worktree automatically.
+`cewp demo supervised` removes its temporary repository and worktree automatically.
 
 For a real unverified checkpoint, prefer explicit rollback before deleting evidence:
 

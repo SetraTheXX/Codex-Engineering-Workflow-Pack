@@ -37,7 +37,7 @@ cewp doctor
 Run the credential-free deterministic walkthrough first:
 
 ```bash
-npm run demo:supervised
+cewp demo supervised
 ```
 
 In a disposable or reviewed repository, create one bounded checkpoint:
