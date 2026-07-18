@@ -2578,6 +2578,7 @@ async function main() {
       assert(packOutput.includes("docs/known-limitations.md"), "known limitations should be packed");
       assert(packOutput.includes("docs/pilot-kit.md"), "external pilot kit should be packed");
       assert(packOutput.includes("docs/codex-capability-matrix.md"), "public capability evidence should be packed");
+      assert(packOutput.includes("docs/adr/0004-workflow-contract-boundaries.md"), "workflow contract ADR should be packed");
       assert(packOutput.includes(".agents/plugins/marketplace.json"), "plugin marketplace should be packed");
       assert(packOutput.includes("plugins/cewp/.codex-plugin/plugin.json"), "plugin manifest should be packed");
       assert(!packOutput.includes(".cewp/"), ".cewp/ should not be packed");
