@@ -10,6 +10,8 @@ Usage:
   cewp workflow validate <definition.json> [--json]
   cewp workflow propose --proposal <definition.json> [--from <issue|PRD|PLAN.md|progress.md>] [--source-kind <kind>] [--json]
   cewp workflow approve --proposal <definition.json> [--from <source>] --digest <sha256> --yes [--json]
+  cewp workflow status <run-id> [--json]
+  cewp workflow start <run-id> --task <task-id> --yes [--json]
   cewp demo supervised [--json]
   cewp policy show
   cewp policy set <safe|trusted|full-authority>

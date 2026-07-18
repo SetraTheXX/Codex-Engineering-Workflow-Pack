@@ -5,7 +5,8 @@ const {
   validateWorkflowDefinition,
 } = require("./definition");
 const { makeSourceIdentity, readRepoJson } = require("./source");
-const { createApprovedRun } = require("./state");
+const { createApprovedRun, loadWorkflowRun, startWorkflowTask } = require("./state");
+const { deriveSchedule } = require("./scheduler");
 
 function outputJson(command, data) {
   console.log(JSON.stringify({
@@ -96,6 +97,38 @@ function runWorkflow(options = {}) {
       console.log("CEWP workflow approved");
       console.log(`Run ID: ${result.run.runId}`);
       console.log(`Ready tasks: ${result.run.tasks.filter((task) => task.status === "ready").map((task) => task.id).join(", ")}`);
+    }
+    return;
+  }
+
+  if (options.subcommand === "status") {
+    if (!options.workflowRunId) throw new Error("workflow status requires a run id.");
+    const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
+    const schedule = deriveSchedule(found.run, found.definition);
+    const result = { run: found.run, ...schedule };
+    if (options.json) outputJson("workflow.status", result);
+    else {
+      console.log("CEWP workflow status");
+      console.log(`Run ID: ${found.run.runId}`);
+      console.log(`Status: ${found.run.status}`);
+      console.log(`Ready: ${schedule.readyTasks.map((task) => task.id).join(", ") || "none"}`);
+      console.log(`Worker capacity: ${schedule.capacity.available}/${schedule.capacity.maximum}`);
+    }
+    return;
+  }
+
+  if (options.subcommand === "start") {
+    if (!options.yes) throw new Error("Starting a workflow task requires --yes.");
+    if (!options.workflowRunId) throw new Error("workflow start requires a run id.");
+    if (!options.taskId) throw new Error("workflow start requires --task.");
+    const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
+    const result = startWorkflowTask(found, options.taskId);
+    if (options.json) outputJson("workflow.start", result);
+    else {
+      console.log("CEWP workflow task started");
+      console.log(`Run ID: ${result.run.runId}`);
+      console.log(`Task: ${result.checkpoint.taskId}`);
+      console.log(`Checkpoint: ${result.checkpoint.checkpointId}`);
     }
     return;
   }

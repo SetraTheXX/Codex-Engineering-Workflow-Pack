@@ -65,6 +65,8 @@ function parseArgs(argv) {
     allocation: undefined,
     definitionFile: undefined,
     digest: undefined,
+    workflowRunId: undefined,
+    taskId: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -121,6 +123,21 @@ function parseArgs(argv) {
 
     if (args.command === "workflow" && args.subcommand === "validate" && index === 2 && !arg.startsWith("--")) {
       args.definitionFile = arg;
+      continue;
+    }
+
+    if (args.command === "workflow" && ["status", "start"].includes(args.subcommand) && index === 2 && !arg.startsWith("--")) {
+      args.workflowRunId = arg;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--task") {
+      const value = argv[index + 1];
+      if (!value || !/^[a-z][a-z0-9-]{0,63}$/.test(value)) {
+        throw new Error("--task requires a workflow task id.");
+      }
+      args.taskId = value;
+      index += 1;
       continue;
     }
 
