@@ -23,6 +23,7 @@ Read CEWP Core state before suggesting an action. This workflow may perform an e
    - resume: `cewp supervise resume <run-id> --yes --json`;
    - add approved operations: `cewp supervise add-budget <run-id> --operations <count> --allocation <implementation|repair|reviewer|finalization> --yes --json`;
    - revise an unstarted checkpoint: `cewp supervise revise <run-id> <changed fields> --json`, then require fresh approval;
+   - after a verified `budget-safe` pause, propose exactly one next bounded checkpoint with `--goal`, `--scope`, `--verify`, and `--stop`; CEWP seals prior evidence, and `resume` returns to fresh proposal approval;
    - rollback isolated work: `cewp supervise rollback <run-id> --yes --json`;
    - cancel or abandon: `cewp supervise cancel <run-id> --yes --json` or `cewp supervise abandon <run-id> --yes --json`;
    - record a blocker: `cewp supervise block <run-id> --reason "<reason>" --json`.

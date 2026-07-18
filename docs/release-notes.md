@@ -5,6 +5,7 @@
 ### Added
 
 - Added the first managed `codex-exec` supervised checkpoint path: bounded intake, explicit approval, isolated execution, baseline and targeted verification, bounded repair, independent review, receipt preview, and explicit finalize.
+- Added manual linear continuation at a verified checkpoint boundary. CEWP seals prior evidence in the isolated worktree, requires complete bounds and fresh approval for the next checkpoint, and keeps the general graph compiler out of this phase.
 - Added three thin plugin skills for planning, running, and resuming supervised work plus a credential-free deterministic end-to-end demo.
 - Added versioned machine-readable doctor, supervised run, budget, progress, event, and receipt beta surfaces with explicit owner/backend and usage truth labels.
 - Added resumable budget-safe, budget-unverified, and host-limit pauses; protected allocations; operator interventions; rollback; and actionable blocked states.

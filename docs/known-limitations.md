@@ -2,7 +2,7 @@
 
 CEWP is beta software. These limits are product boundaries, not hidden roadmap promises.
 
-- The supervised golden path supports one active checkpoint per run. A general multi-checkpoint graph, dependency scheduler, and plan migration engine are not shipped.
+- The supervised golden path supports one active checkpoint per run and manual linear continuation from a verified snapshot. A general multi-checkpoint graph, dependency scheduler, automatic plan compiler, and plan migration engine are not shipped.
 - Managed supervised execution uses exactly one owner/backend pair: `managed` with `codex-exec`.
 - CEWP does not attach to a ChatGPT desktop task's private thread or native goal lifecycle.
 - CEWP does not inject persistent desktop UI, a title-bar meter, or arbitrary notifications. Structured conversation and CLI output are the minimum warning surface.

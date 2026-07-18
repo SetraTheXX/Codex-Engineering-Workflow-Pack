@@ -106,7 +106,7 @@ Budget or host exhaustion produces a resumable pause, not a fake PASS. Partial f
 
 ## Existing Toolkit
 
-CEWP still ships ten reusable engineering skills and the earlier Coordinator Mode runtime for compatibility. The supervised single-checkpoint workflow is the primary product direction; legacy Coordinator Mode remains documented for existing users.
+CEWP still ships ten reusable engineering skills and the earlier Coordinator Mode runtime for compatibility. The supervised single-active-checkpoint workflow is the primary product direction; a verified run can continue linearly with fresh approval, while legacy Coordinator Mode remains documented for existing users.
 
 ## Documentation
 
@@ -122,7 +122,7 @@ CEWP still ships ten reusable engineering skills and the earlier Coordinator Mod
 
 ## Status
 
-CEWP is beta software. The supervised contracts are versioned beta surfaces, the general multi-checkpoint workflow compiler is not shipped yet, and external pilot gates are still required before the next release is declared complete. Review the plan, evidence, and receipt before integrating changes.
+CEWP is beta software. The supervised contracts are versioned beta surfaces, manual linear continuation is not a general multi-checkpoint workflow compiler, and external pilot gates are still required before the next release is declared complete. Review the plan, evidence, and receipt before integrating changes.
 
 ## License
 

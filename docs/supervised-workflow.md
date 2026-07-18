@@ -1,6 +1,6 @@
 # Supervised Workflow
 
-CEWP's first supervised path runs one bounded Codex checkpoint in an isolated worktree. CEWP Core owns canonical state and gates; the plugin and Markdown files are presentation surfaces.
+CEWP's first supervised path runs one bounded Codex checkpoint at a time in an isolated worktree. A verified checkpoint can be sealed before the operator proposes the next linear checkpoint. CEWP Core owns canonical state and gates; the plugin and Markdown files are presentation surfaces.
 
 ## Before You Start
 
@@ -75,7 +75,24 @@ cewp supervise verify <run-id>
 
 The same normalized failure twice blocks the checkpoint. Repair count, model operations, local verification runs, elapsed time, and captured output have separate limits.
 
-## 4. Continue, Review, And Finalize
+## 4. Pause, Revise, And Resume
+
+At a verified checkpoint boundary, either continue to final review or pause before proposing one remaining bounded checkpoint:
+
+```bash
+cewp supervise pause <run-id> --reason budget-safe --yes
+cewp supervise revise <run-id> \
+  --goal "Apply the next bounded change" \
+  --scope path/to/file \
+  --verify "git diff --check" \
+  --stop "The next checkpoint passes"
+cewp supervise resume <run-id> --yes
+cewp supervise approve <run-id> --yes
+```
+
+CEWP seals the verified checkpoint on the isolated branch, preserves its canonical evidence, and reuses the same owned worktree. The revised checkpoint requires complete bounds and fresh approval. This is a manual linear continuation, not the general plan compiler or dependency graph.
+
+## 5. Continue, Review, And Finalize
 
 ```bash
 cewp supervise continue <run-id>
@@ -102,7 +119,7 @@ cewp supervise cancel <run-id> --yes
 cewp supervise abandon <run-id> --yes
 ```
 
-Every operator intervention is an event. Budget expansion never happens automatically. A warning surface can fail or be absent without reopening a Core gate.
+Every operator intervention is an event. Budget expansion never happens automatically. A warning surface can fail or be absent without reopening a Core gate. `run.json`, generated progress, and receipts retain sealed checkpoint history; only one checkpoint is active at a time.
 
 ## Progress And Receipts
 

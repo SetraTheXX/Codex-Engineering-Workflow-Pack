@@ -13,7 +13,7 @@ Use canonical JSON from `cewp supervise`; generated Markdown is a view, not muta
    - `proposed`: show the plan and run `cewp supervise approve <run-id> --yes --json` only after explicit approval. Stop before dispatch.
    - `approved/ready`: run `cewp supervise execute <run-id> --yes --json` only after explicit execution approval. If dispatch reaches `verifying`, run `cewp supervise verify <run-id> --json`; then stop at the verified, repair, paused, or blocked result.
    - `needs-repair/repair-ready`: explain the failure signature and remaining repair allocation. Run `cewp supervise retry <run-id> --yes --json` only when the user explicitly chooses retry, then run local verification and stop.
-   - `checkpoint-complete/verified`: when the user explicitly continues, record `cewp supervise continue <run-id> --json`, run `cewp supervise review <run-id> --yes --json`, and stop at the reviewer decision.
+   - `checkpoint-complete/verified`: offer final review or a safe pause for one manually bounded next checkpoint. For final review, record `cewp supervise continue <run-id> --json`, run `cewp supervise review <run-id> --yes --json`, and stop at the reviewer decision. For more work, hand off to the resume workflow without dispatching another model operation.
    - `review-passed`: run `cewp supervise receipt <run-id> --json` to preview the receipt. Do not finalize in the same step unless the user already gave explicit finalize intent after seeing equivalent receipt facts.
    - `ready-to-finalize`: run `cewp supervise finalize <run-id> --yes --json` only after explicit finalization approval.
    - any `paused-*` or `blocked`: do not dispatch. Present Core recovery actions and hand off to the resume workflow.

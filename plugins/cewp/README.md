@@ -1,6 +1,6 @@
 # CEWP Codex Plugin
 
-This thin plugin exposes CEWP's Phase 9 supervised workflow through supported Codex discovery and conversation surfaces. The local `cewp` CLI/runtime remains authoritative for run state, scope, policy, budget enforcement, verification, reviewer PASS, and finalization.
+This thin plugin exposes CEWP's Phase 9 supervised workflow through supported Codex discovery and conversation surfaces. The local `cewp` CLI/runtime remains authoritative for run state, scope, policy, budget enforcement, verification, checkpoint snapshots, reviewer PASS, and finalization. A run has one active checkpoint at a time and may continue linearly only after fresh operator approval.
 
 It ships exactly three entry skills:
 
