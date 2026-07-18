@@ -7,6 +7,7 @@ Usage:
   cewp init [--mode repo|global] [--target <path>] [--force] [--with-config]
   cewp list [--mode repo|global] [--target <path>]
   cewp doctor [--mode repo|global] [--target <path>] [--json]
+  cewp workflow validate <definition.json> [--json]
   cewp demo supervised [--json]
   cewp policy show
   cewp policy set <safe|trusted|full-authority>

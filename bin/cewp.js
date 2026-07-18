@@ -33,6 +33,7 @@ const { printCliError } = require("../src/cli/errors");
 const { init } = require("../src/skills/install");
 const { list, doctor } = require("../src/skills/status");
 const { runSupervise } = require("../src/supervise/cli");
+const { runWorkflow } = require("../src/workflow/cli");
 const { printHuman: printSupervisedDemo, runSupervisedDemo } = require("../src/demo/supervised");
 
 function runDemo(options) {
@@ -203,12 +204,17 @@ async function main() {
       return;
     }
 
+    if (args.command === "workflow") {
+      runWorkflow(args);
+      return;
+    }
+
     if (args.command === "demo") {
       runDemo(args);
       return;
     }
 
-    if (!["init", "list", "doctor", "policy", "run", "supervise", "demo"].includes(args.command)) {
+    if (!["init", "list", "doctor", "policy", "run", "supervise", "workflow", "demo"].includes(args.command)) {
       throw new Error(`Unsupported command: ${args.command}`);
     }
   } catch (error) {

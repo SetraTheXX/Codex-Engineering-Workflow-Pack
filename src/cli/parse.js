@@ -63,6 +63,7 @@ function parseArgs(argv) {
     note: undefined,
     operations: undefined,
     allocation: undefined,
+    definitionFile: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -82,7 +83,7 @@ function parseArgs(argv) {
     return args;
   }
 
-  const optionStart = ["run", "supervise", "demo"].includes(args.command) ? 2 : 1;
+  const optionStart = ["run", "supervise", "workflow", "demo"].includes(args.command) ? 2 : 1;
 
   for (let index = optionStart; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -114,6 +115,11 @@ function parseArgs(argv) {
 
     if (args.command === "policy" && index === 1) {
       args.subcommand = arg;
+      continue;
+    }
+
+    if (args.command === "workflow" && args.subcommand === "validate" && index === 2 && !arg.startsWith("--")) {
+      args.definitionFile = arg;
       continue;
     }
 
@@ -306,7 +312,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (["doctor", "run", "supervise", "demo"].includes(args.command) && arg === "--json") {
+    if (["doctor", "run", "supervise", "workflow", "demo"].includes(args.command) && arg === "--json") {
       args.json = true;
       continue;
     }
