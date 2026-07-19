@@ -28,6 +28,13 @@ function assertEvidenceGates(run, definition) {
 }
 
 function nextActionFor(run, definition, schedule) {
+  if (run.compatibility && run.compatibility.migrationRequired) {
+    return {
+      kind: "migration",
+      command: `cewp workflow migrate ${run.compatibility.sourceRunId}`,
+      reason: `${run.compatibility.sourceSchema} is read-only until explicit backed-up migration`,
+    };
+  }
   if (["paused-budget-safe", "paused-budget-unverified"].includes(run.status)) {
     return {
       kind: "budget-decision",
@@ -149,6 +156,7 @@ function deriveProgressView(run, definition, schedule, options = {}) {
       revisions: run.budget.revisions,
     },
     reviewer: run.reviewer,
+    compatibility: run.compatibility || null,
     interventions: run.interventions,
     warnings: run.warnings || [],
     nextAction: nextActionFor(run, definition, schedule),

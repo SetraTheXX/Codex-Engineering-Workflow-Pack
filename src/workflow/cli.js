@@ -5,6 +5,12 @@ const {
   validateWorkflowDefinition,
 } = require("./definition");
 const { makeSourceIdentity, readRepoJson } = require("./source");
+const {
+  applyLegacyMigration,
+  loadLegacyWorkflowCompatibility,
+  previewLegacyMigration,
+} = require("./migration");
+const { deriveProgressView } = require("./progress");
 const { previewWorkflowRevision } = require("./revision");
 const {
   applyWorkflowRevision,
@@ -49,6 +55,44 @@ function runWorkflow(options = {}) {
       console.log(`Revision: ${definition.revision.number}`);
       console.log(`Tasks: ${definition.tasks.length}`);
       console.log(`Digest: ${result.digest}`);
+    }
+    return;
+  }
+
+  if (options.subcommand === "migrate") {
+    if (!options.workflowRunId) throw new Error("workflow migrate requires a supervised v1 run id.");
+    if (options.yes) {
+      if (!options.digest) throw new Error("Applying a workflow migration requires the previewed --digest.");
+      const result = applyLegacyMigration(process.cwd(), options.workflowRunId, {
+        expectedDigest: options.digest,
+      });
+      if (options.json) outputJson("workflow.migrate", result);
+      else {
+        console.log("CEWP workflow migration applied");
+        console.log(`Source run: ${options.workflowRunId}`);
+        console.log(`Migrated run: ${result.run.runId}`);
+      }
+      return;
+    }
+    const preview = previewLegacyMigration(process.cwd(), options.workflowRunId);
+    const result = {
+      definition: preview.definition,
+      definitionDigest: preview.definitionDigest,
+      migrationDigest: preview.migrationDigest,
+      projection: preview.projection,
+      compatibility: preview.compatibility,
+      warnings: preview.warnings,
+      approval: {
+        required: true,
+        command: `cewp workflow migrate ${options.workflowRunId} --digest ${preview.migrationDigest} --yes`,
+      },
+    };
+    if (options.json) outputJson("workflow.migrate", result);
+    else {
+      console.log("CEWP workflow migration preview");
+      console.log(`Source run: ${options.workflowRunId}`);
+      console.log(`Digest: ${preview.migrationDigest}`);
+      console.log(`Approve: ${result.approval.command}`);
     }
     return;
   }
@@ -161,10 +205,23 @@ function runWorkflow(options = {}) {
 
   if (options.subcommand === "status") {
     if (!options.workflowRunId) throw new Error("workflow status requires a run id.");
-    const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
+    let found;
+    try {
+      found = loadWorkflowRun(process.cwd(), options.workflowRunId);
+    } catch (error) {
+      if (!error.message.startsWith("Workflow run not found:")) throw error;
+      found = loadLegacyWorkflowCompatibility(process.cwd(), options.workflowRunId);
+    }
     const schedule = deriveSchedule(found.run, found.definition);
-    const progress = writeWorkflowProgress(found.runRoot, found.run, found.definition);
-    const result = { run: found.run, progress, ...schedule };
+    const progress = found.compatibility
+      ? deriveProgressView(found.run, found.definition, schedule)
+      : writeWorkflowProgress(found.runRoot, found.run, found.definition);
+    const result = {
+      run: found.run,
+      progress,
+      compatibility: found.compatibility || null,
+      ...schedule,
+    };
     if (options.json) outputJson("workflow.status", result);
     else {
       console.log("CEWP workflow status");

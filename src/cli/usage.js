@@ -17,6 +17,7 @@ Usage:
   cewp workflow finalize <run-id> --yes [--json]
   cewp workflow revise <run-id> --proposal <revision.json> [--from <source>] [--json]
   cewp workflow apply-revision <run-id> --proposal <revision.json> --digest <sha256> --yes [--json]
+  cewp workflow migrate <supervised-v1-run-id> [--digest <sha256> --yes] [--json]
   cewp workflow intervene <run-id> --task <task-id> --event <block|retry|waive|reassign> [--classification <kind>] [--signature <id>] [--worker <worker-id>] --reason <text> --yes [--json]
   cewp workflow intervene <run-id> --event <add-budget|pause-budget-safe|pause-budget-unverified|pause-host-limit|resume> [--operations <count>] [--allocation <name>] --reason <text> --yes [--json]
   cewp workflow intervene <run-id> --event <continue|cancel|timeout|rollback|abandon> --reason <text> --yes [--json]
