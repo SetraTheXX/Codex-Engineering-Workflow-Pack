@@ -8,6 +8,7 @@ Usage:
   cewp list [--mode repo|global] [--target <path>]
   cewp doctor [--mode repo|global] [--target <path>] [--json]
   cewp workflow validate <definition.json> [--json]
+  cewp workflow template <list|guarded-change|migration|review-only> [--json]
   cewp workflow propose --proposal <definition.json> [--from <issue|PRD|PLAN.md|progress.md>] [--source-kind <kind>] [--json]
   cewp workflow approve --proposal <definition.json> [--from <source>] --digest <sha256> --yes [--json]
   cewp workflow status <run-id> [--json]

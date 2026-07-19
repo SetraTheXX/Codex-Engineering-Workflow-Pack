@@ -72,6 +72,7 @@ function parseArgs(argv) {
     classification: undefined,
     signature: undefined,
     workerId: undefined,
+    templateName: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -128,6 +129,11 @@ function parseArgs(argv) {
 
     if (args.command === "workflow" && args.subcommand === "validate" && index === 2 && !arg.startsWith("--")) {
       args.definitionFile = arg;
+      continue;
+    }
+
+    if (args.command === "workflow" && args.subcommand === "template" && index === 2 && !arg.startsWith("--")) {
+      args.templateName = arg;
       continue;
     }
 

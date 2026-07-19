@@ -1,0 +1,77 @@
+{
+  "schemaVersion": "workflow-definition/v1",
+  "workflowId": "migration-template",
+  "revision": {
+    "number": 1,
+    "parent": null,
+    "reason": "Initial guarded migration template"
+  },
+  "goal": "Prepare, apply, and verify one reversible migration",
+  "tasks": [
+    {
+      "id": "prepare-migration",
+      "title": "Prepare the migration and recovery evidence",
+      "dependsOn": [],
+      "allowedFiles": ["migrations/**", "src/**"],
+      "forbiddenFiles": ["package-lock.json"],
+      "stoppingConditions": ["A verified backup and rollback procedure are recorded before application"],
+      "verification": {
+        "targeted": ["git diff --check"],
+        "full": []
+      },
+      "risk": "high"
+    },
+    {
+      "id": "apply-migration",
+      "title": "Apply and verify the reversible migration",
+      "dependsOn": ["prepare-migration"],
+      "allowedFiles": ["migrations/**", "src/**"],
+      "forbiddenFiles": ["package-lock.json"],
+      "stoppingConditions": ["The migrated state and documented rollback path both pass approved verification"],
+      "verification": {
+        "targeted": ["git diff --check"],
+        "full": ["npm test"]
+      },
+      "risk": "high"
+    }
+  ],
+  "assurance": {
+    "profile": "critical",
+    "testAuthoring": "ask"
+  },
+  "checkpointPolicy": {
+    "required": true,
+    "reviewerAfterEachTask": false
+  },
+  "reviewerPolicy": {
+    "requiredForFinalize": true
+  },
+  "execution": {
+    "owner": "managed",
+    "backend": "codex-exec",
+    "allowedModes": ["supervised"]
+  },
+  "budget": {
+    "schemaVersion": "budget-envelope/v1",
+    "modelOperations": 10,
+    "allocations": {
+      "implementation": 4,
+      "repair": 2,
+      "completion": 1,
+      "reviewer": 2,
+      "finalization": 1
+    },
+    "protectedAllocations": ["completion", "reviewer", "finalization"],
+    "maxRepairsPerCheckpoint": 1,
+    "maxElapsedMinutes": 90,
+    "maxConcurrentWorkers": 1,
+    "maxCapturedOutputBytes": 1048576,
+    "maxTargetedVerificationRuns": 6,
+    "maxFullVerificationRuns": 1,
+    "thresholds": {
+      "earlyWarningPercent": 70,
+      "reservePercent": 90,
+      "absoluteCeilingPercent": 100
+    }
+  }
+}

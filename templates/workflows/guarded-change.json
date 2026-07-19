@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "workflow-definition/v1",
+  "workflowId": "guarded-change-template",
+  "revision": {
+    "number": 1,
+    "parent": null,
+    "reason": "Initial guarded-change template"
+  },
+  "goal": "Apply one bounded guarded change with focused evidence",
+  "tasks": [
+    {
+      "id": "guarded-change",
+      "title": "Implement and verify the bounded change",
+      "dependsOn": [],
+      "allowedFiles": ["src/**"],
+      "forbiddenFiles": ["package-lock.json"],
+      "stoppingConditions": ["The focused change and approved full suite pass without scope violations"],
+      "verification": {
+        "targeted": ["git diff --check"],
+        "full": ["npm test"]
+      },
+      "risk": "medium"
+    }
+  ],
+  "assurance": {
+    "profile": "standard",
+    "testAuthoring": "ask"
+  },
+  "checkpointPolicy": {
+    "required": true,
+    "reviewerAfterEachTask": false
+  },
+  "reviewerPolicy": {
+    "requiredForFinalize": true
+  },
+  "execution": {
+    "owner": "managed",
+    "backend": "codex-exec",
+    "allowedModes": ["supervised"]
+  },
+  "budget": {
+    "schemaVersion": "budget-envelope/v1",
+    "modelOperations": 8,
+    "allocations": {
+      "implementation": 3,
+      "repair": 1,
+      "completion": 1,
+      "reviewer": 2,
+      "finalization": 1
+    },
+    "protectedAllocations": ["completion", "reviewer", "finalization"],
+    "maxRepairsPerCheckpoint": 1,
+    "maxElapsedMinutes": 45,
+    "maxConcurrentWorkers": 1,
+    "maxCapturedOutputBytes": 1048576,
+    "maxTargetedVerificationRuns": 3,
+    "maxFullVerificationRuns": 1,
+    "thresholds": {
+      "earlyWarningPercent": 70,
+      "reservePercent": 90,
+      "absoluteCeilingPercent": 100
+    }
+  }
+}

@@ -24,6 +24,7 @@ const {
   writeWorkflowProgress,
 } = require("./state");
 const { deriveSchedule } = require("./scheduler");
+const { listWorkflowTemplates, loadWorkflowTemplate } = require("./templates");
 
 function outputJson(command, data) {
   console.log(JSON.stringify({
@@ -36,6 +37,19 @@ function outputJson(command, data) {
 }
 
 function runWorkflow(options = {}) {
+  if (options.subcommand === "template") {
+    if (options.templateName === "list") {
+      const result = { templates: listWorkflowTemplates() };
+      if (options.json) outputJson("workflow.template", result);
+      else result.templates.forEach((template) => console.log(`${template.name}: ${template.description}`));
+      return;
+    }
+    const result = loadWorkflowTemplate(options.templateName);
+    if (options.json) outputJson("workflow.template", result);
+    else console.log(JSON.stringify(result.definition, null, 2));
+    return;
+  }
+
   if (options.subcommand === "validate") {
     if (!options.definitionFile) {
       throw new Error("workflow validate requires a repository-relative JSON file.");
