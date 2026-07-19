@@ -72,6 +72,7 @@ const TASK_TRANSITIONS = Object.freeze({
     abandon: "abandoned",
   },
   completed: {
+    "reviewer-block": "blocked",
     rollback: "rolled-back",
   },
   cancelled: {
@@ -176,6 +177,8 @@ const RUN_TRANSITIONS = Object.freeze({
     abandon: "abandoned",
   },
   "review-pending": {
+    "pause-budget-safe": "paused-budget-safe",
+    "pause-host-limit": "paused-host-limit",
     "reviewer-pass": "completed",
     "reviewer-block": "blocked",
     cancel: "cancelled",

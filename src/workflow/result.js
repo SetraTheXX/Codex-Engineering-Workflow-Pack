@@ -170,6 +170,8 @@ function validateTaskResult(value, context) {
 
 module.exports = {
   TASK_RESULT_SCHEMA_VERSION,
+  normalizeEvidencePath,
+  normalizeTruthValue,
   pathMatchesScope,
   validateTaskResult,
 };

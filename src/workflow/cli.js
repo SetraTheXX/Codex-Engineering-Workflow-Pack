@@ -7,8 +7,10 @@ const {
 const { makeSourceIdentity, readRepoJson } = require("./source");
 const {
   createApprovedRun,
+  finalizeWorkflowRun,
   interveneWorkflow,
   loadWorkflowRun,
+  recordWorkflowReview,
   recordWorkflowResult,
   startWorkflowTask,
   writeWorkflowProgress,
@@ -155,6 +157,37 @@ function runWorkflow(options = {}) {
       console.log(`Run ID: ${result.run.runId}`);
       console.log(`Task: ${result.result.taskId}`);
       console.log(`Result: ${result.result.resultId}`);
+    }
+    return;
+  }
+
+  if (options.subcommand === "review") {
+    if (!options.yes) throw new Error("Recording a workflow review requires --yes.");
+    if (!options.workflowRunId) throw new Error("workflow review requires a run id.");
+    if (!options.resultFile) throw new Error("workflow review requires --result.");
+    const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
+    const candidate = readRepoJson(process.cwd(), options.resultFile, "review result");
+    const result = recordWorkflowReview(found, candidate.value);
+    if (options.json) outputJson("workflow.review", result);
+    else {
+      console.log("CEWP workflow review recorded");
+      console.log(`Run ID: ${result.run.runId}`);
+      console.log(`Decision: ${result.review.decision}`);
+    }
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
+
+  if (options.subcommand === "finalize") {
+    if (!options.yes) throw new Error("Workflow finalization requires --yes.");
+    if (!options.workflowRunId) throw new Error("workflow finalize requires a run id.");
+    const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
+    const result = finalizeWorkflowRun(found);
+    if (options.json) outputJson("workflow.finalize", result);
+    else {
+      console.log("CEWP workflow finalized");
+      console.log(`Run ID: ${result.run.runId}`);
+      console.log(`Status: ${result.run.status}`);
     }
     return;
   }

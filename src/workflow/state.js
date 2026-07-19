@@ -9,6 +9,7 @@ const { readRepoJson } = require("./source");
 const { deriveSchedule } = require("./scheduler");
 const { evaluateWorkflowOperation } = require("./budget");
 const { deriveProgressView, renderProgressMarkdown } = require("./progress");
+const { validateReviewResult } = require("./review");
 const { validateTaskResult } = require("./result");
 const {
   WAIVABLE_FAILURES,
@@ -114,6 +115,7 @@ function makeRuntimeBudget(budget) {
     revisions: [],
     hostLimit: null,
     pauseReason: null,
+    resumeStatus: null,
   };
 }
 
@@ -169,6 +171,7 @@ function pauseForWorkflowBudget(found, allocation, decision, timestamp) {
     budget: {
       ...found.run.budget,
       pauseReason: decision.reason,
+      resumeStatus: found.run.status,
       thresholdEvents: [...found.run.budget.thresholdEvents, {
         threshold: decision.warning,
         percent: decision.percent,
@@ -447,6 +450,133 @@ function recordWorkflowResult(found, taskId, candidate) {
   };
 }
 
+function recordWorkflowReview(found, candidate) {
+  if (found.run.status !== "review-pending") {
+    throw new Error(`Workflow review requires review-pending; current status is ${found.run.status}.`);
+  }
+  if (!found.run.reviewerPolicy.requiredForFinalize) {
+    throw new Error("Workflow definition does not require an independent final reviewer.");
+  }
+  const review = validateReviewResult(candidate, { run: found.run, definition: found.definition });
+  const now = new Date(review.completedAt);
+  const budgetDecision = evaluateWorkflowOperation(found.run, "reviewer", { now });
+  if (!budgetDecision.allowed) {
+    pauseForWorkflowBudget(found, "reviewer", budgetDecision, review.completedAt);
+    throw new Error(`Controlled workflow review paused: ${budgetDecision.pauseStatus} (${budgetDecision.reason}).`);
+  }
+  const observedOperations = review.usage.managedOperations.value;
+  const consumedOperations = found.run.budget.consumed.modelOperations + observedOperations;
+  const consumedReviewer = found.run.budget.consumed.allocations.reviewer + observedOperations;
+  if (consumedOperations > found.run.budget.modelOperations) {
+    throw new Error("Review result would exceed the workflow absolute model-operation ceiling.");
+  }
+  if (consumedReviewer > found.run.budget.allocations.reviewer) {
+    throw new Error("Review result would exceed the workflow reviewer allocation.");
+  }
+  const reviewPath = path.join(found.runRoot, "reviews", `${review.reviewId}.json`);
+  writeJsonAtomic(reviewPath, review);
+  const passed = review.decision === "PASS";
+  const affectedTaskIds = new Set(review.findings.map((finding) => finding.taskId).filter(Boolean));
+  const tasks = passed ? found.run.tasks : found.run.tasks.map((task) => {
+    if (!affectedTaskIds.has(task.id)) return task;
+    const finding = review.findings.find((entry) => entry.taskId === task.id);
+    return {
+      ...task,
+      status: transitionTask(task.status, "reviewer-block"),
+      blocker: {
+        classification: finding.classification,
+        reason: finding.summary,
+        blockedAt: review.completedAt,
+        waivable: WAIVABLE_FAILURES.has(finding.classification),
+        source: "independent-review",
+        reviewId: review.reviewId,
+      },
+    };
+  });
+  const run = {
+    ...found.run,
+    status: transitionRun(found.run.status, passed ? "reviewer-pass" : "reviewer-block"),
+    updatedAt: review.completedAt,
+    tasks,
+    budget: {
+      ...found.run.budget,
+      consumed: {
+        ...found.run.budget.consumed,
+        modelOperations: consumedOperations,
+        allocations: {
+          ...found.run.budget.consumed.allocations,
+          reviewer: consumedReviewer,
+        },
+      },
+    },
+    reviewer: {
+      status: passed
+        ? "passed"
+        : review.decision === "REQUEST_CHANGES" ? "changes-requested" : "blocked",
+      decision: review.decision,
+      independent: true,
+      reviewId: review.reviewId,
+      reviewPath: normalizeSlashPath(path.relative(found.repoRoot, reviewPath)),
+      completedAt: review.completedAt,
+      findings: review.findings.length,
+    },
+    warnings: passed
+      ? found.run.warnings
+      : [...(found.run.warnings || []), `Independent reviewer decision: ${review.decision}.`],
+  };
+  writeJsonAtomic(found.runPath, run);
+  const progress = writeWorkflowProgress(found.runRoot, run, found.definition, { now });
+  appendWorkflowEvent(found.runRoot, {
+    schemaVersion: "workflow-event/v1",
+    timestamp: review.completedAt,
+    type: passed ? "review-passed" : "review-blocked",
+    runId: run.runId,
+    reviewId: review.reviewId,
+    decision: review.decision,
+    affectedTaskIds: [...affectedTaskIds].sort(),
+  });
+  return {
+    ok: passed,
+    run,
+    review,
+    reviewPath: normalizeSlashPath(path.relative(found.repoRoot, reviewPath)),
+    progress,
+    ...deriveSchedule(run, found.definition),
+  };
+}
+
+function finalizeWorkflowRun(found, options = {}) {
+  const now = options.now || new Date();
+  const timestamp = now.toISOString();
+  if (!found.run.tasks.every((task) => task.status === "completed" && task.resultId && task.verification && task.verification.status === "passed")) {
+    throw new Error("Workflow finalization requires every task to retain a verified result.");
+  }
+  if (found.run.reviewerPolicy.requiredForFinalize && found.run.reviewer.status !== "passed") {
+    throw new Error(`Workflow finalization requires reviewer PASS; current status is ${found.run.status}.`);
+  }
+  const run = {
+    ...found.run,
+    status: transitionRun(found.run.status, "finalize"),
+    updatedAt: timestamp,
+    finalization: {
+      actor: "operator",
+      finalizedAt: timestamp,
+      reviewerDecision: found.run.reviewer.decision,
+    },
+  };
+  writeJsonAtomic(found.runPath, run);
+  const progress = writeWorkflowProgress(found.runRoot, run, found.definition, { now });
+  appendWorkflowEvent(found.runRoot, {
+    schemaVersion: "workflow-event/v1",
+    timestamp,
+    type: "workflow-finalized",
+    runId: run.runId,
+    actor: "operator",
+    reviewerDecision: run.reviewer.decision,
+  });
+  return { run, progress, ...deriveSchedule(run, found.definition) };
+}
+
 function getActiveCheckpoint(found, runtimeTask) {
   if (!runtimeTask.activeCheckpointId) return { checkpoint: null, checkpointPath: null };
   const checkpointPath = path.join(
@@ -470,11 +600,20 @@ const RUN_INTERVENTION_EVENTS = new Set([
   "pause-host-limit",
   "resume",
 ]);
+const RESUMABLE_RUN_STATUSES = new Set(["approved", "active", "review-pending"]);
+
+function workflowResumeStatus(budget, fallback) {
+  if (budget.resumeStatus === null || budget.resumeStatus === undefined) return fallback;
+  if (!RESUMABLE_RUN_STATUSES.has(budget.resumeStatus)) {
+    throw new Error(`Invalid workflow resume status: ${budget.resumeStatus}.`);
+  }
+  return budget.resumeStatus;
+}
 
 function interveneWorkflowRun(found, options, timestamp, reason) {
   let budget = found.run.budget;
   const previousStatus = found.run.status;
-  const nextStatus = transitionRun(previousStatus, options.event);
+  let nextStatus = transitionRun(previousStatus, options.event);
   if (options.event === "add-budget") {
     if (!Number.isInteger(options.operations) || options.operations < 1) {
       throw new Error("add-budget requires --operations with a positive integer.");
@@ -483,6 +622,7 @@ function interveneWorkflowRun(found, options, timestamp, reason) {
       throw new Error("add-budget requires one approved model-operation --allocation.");
     }
     const previousModelOperations = budget.modelOperations;
+    nextStatus = workflowResumeStatus(budget, nextStatus);
     budget = {
       ...budget,
       modelOperations: previousModelOperations + options.operations,
@@ -491,6 +631,7 @@ function interveneWorkflowRun(found, options, timestamp, reason) {
         [options.allocation]: budget.allocations[options.allocation] + options.operations,
       },
       pauseReason: null,
+      resumeStatus: null,
       revisions: [...budget.revisions, {
         revision: budget.revisions.length + 1,
         event: "add-budget",
@@ -513,17 +654,21 @@ function interveneWorkflowRun(found, options, timestamp, reason) {
         reason,
       },
       pauseReason: "host-limit-active",
+      resumeStatus: previousStatus,
     };
   } else if (options.event === "resume") {
+    nextStatus = workflowResumeStatus(budget, nextStatus);
     budget = {
       ...budget,
       hostLimit: previousStatus === "paused-host-limit" ? null : budget.hostLimit,
       pauseReason: null,
+      resumeStatus: null,
     };
   } else {
     budget = {
       ...budget,
       pauseReason: reason,
+      resumeStatus: previousStatus,
     };
   }
   const intervention = {
@@ -738,9 +883,11 @@ function createApprovedRun(options) {
 module.exports = {
   RUN_STATE_SCHEMA_VERSION,
   createApprovedRun,
+  finalizeWorkflowRun,
   interveneWorkflow,
   RUN_INTERVENTION_EVENTS,
   loadWorkflowRun,
+  recordWorkflowReview,
   recordWorkflowResult,
   startWorkflowTask,
   validateWorkflowRunId,
