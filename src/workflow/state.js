@@ -10,6 +10,7 @@ const { deriveSchedule } = require("./scheduler");
 const { evaluateWorkflowOperation } = require("./budget");
 const { deriveProgressView, renderProgressMarkdown } = require("./progress");
 const { validateReviewResult } = require("./review");
+const { previewWorkflowRevision } = require("./revision");
 const { validateTaskResult } = require("./result");
 const {
   CHECKPOINT_TRANSITIONS,
@@ -101,6 +102,160 @@ function persistApprovedDefinition(repoRoot, definition, digest) {
     writeJsonAtomic(definitionPath, definition);
   }
   return definitionPath;
+}
+
+function runtimeBudgetForRevision(previous, definition) {
+  return {
+    ...definition.budget,
+    consumed: previous.consumed,
+    thresholdEvents: previous.thresholdEvents,
+    revisions: [...previous.revisions, {
+      revision: previous.revisions.length + 1,
+      event: "workflow-revision",
+      previousModelOperations: previous.modelOperations,
+      nextModelOperations: definition.budget.modelOperations,
+    }],
+    hostLimit: previous.hostLimit,
+    pauseReason: previous.pauseReason,
+    resumeStatus: previous.resumeStatus,
+  };
+}
+
+function initialRuntimeTask(task) {
+  return {
+    id: task.id,
+    status: "pending",
+    attempts: 0,
+    activeCheckpointId: null,
+    resultId: null,
+    verification: null,
+    blocker: null,
+    failureHistory: [],
+    assignedWorker: null,
+    stateHistory: [],
+  };
+}
+
+function applyWorkflowRevision(found, candidate, options = {}) {
+  const now = options.now || new Date();
+  const timestamp = now.toISOString();
+  const preview = previewWorkflowRevision(found.run, found.definition, candidate);
+  if (options.expectedDigest !== preview.digest) {
+    throw new Error("Workflow revision changed after preview. Run `cewp workflow revise` again and approve its digest.");
+  }
+  const revision = preview.definition.revision.number;
+  const backupPath = path.join(
+    found.runRoot,
+    "backups",
+    `run-before-revision-${String(revision).padStart(6, "0")}.json`,
+  );
+  if (fs.existsSync(backupPath)) throw new Error(`Workflow revision ${revision} already has a run backup.`);
+  const definitionPath = persistApprovedDefinition(found.repoRoot, preview.definition, preview.digest);
+  writeJsonAtomic(backupPath, found.run);
+  const previousById = new Map(found.run.tasks.map((task) => [task.id, task]));
+  let tasks = preview.definition.tasks.map((definitionTask) => {
+    const previous = previousById.get(definitionTask.id);
+    if (previous && previous.status === "completed") return previous;
+    const next = initialRuntimeTask(definitionTask);
+    if (!previous) return next;
+    return {
+      ...next,
+      attempts: previous.attempts,
+      failureHistory: previous.failureHistory || [],
+      assignedWorker: previous.assignedWorker || null,
+      stateHistory: [...(previous.stateHistory || []), {
+        workflowRevision: found.run.workflow.revision,
+        status: previous.status,
+        attempts: previous.attempts,
+        resultId: previous.resultId,
+        verification: previous.verification,
+        blocker: previous.blocker,
+        archivedAt: timestamp,
+      }],
+    };
+  });
+  const completedIds = new Set(tasks.filter((task) => task.status === "completed").map((task) => task.id));
+  tasks = tasks.map((task) => {
+    if (task.status === "completed") return task;
+    const definitionTask = preview.definition.tasks.find((entry) => entry.id === task.id);
+    return {
+      ...task,
+      status: definitionTask.dependsOn.every((dependencyId) => completedIds.has(dependencyId)) ? "ready" : "pending",
+    };
+  });
+  const allComplete = tasks.every((task) => task.status === "completed");
+  const pauseStatuses = new Set(["paused-budget-safe", "paused-budget-unverified", "paused-host-limit"]);
+  const status = pauseStatuses.has(found.run.status)
+    ? found.run.status
+    : allComplete
+      ? preview.definition.reviewerPolicy.requiredForFinalize ? "review-pending" : "completed"
+      : found.run.status === "approved" ? "approved" : "active";
+  const previousReviewer = found.run.reviewer;
+  const reviewHistory = [...(found.run.reviewHistory || [])];
+  if (previousReviewer && (previousReviewer.decision || previousReviewer.reviewId)) {
+    reviewHistory.push({ ...previousReviewer, archivedAt: timestamp });
+  }
+  const run = {
+    ...found.run,
+    workflow: {
+      id: preview.definition.workflowId,
+      revision,
+      digest: preview.digest,
+      definitionPath: normalizeSlashPath(path.relative(found.repoRoot, definitionPath)),
+    },
+    status,
+    updatedAt: timestamp,
+    goal: preview.definition.goal,
+    execution: preview.definition.execution,
+    assurance: preview.definition.assurance,
+    checkpointPolicy: preview.definition.checkpointPolicy,
+    reviewerPolicy: preview.definition.reviewerPolicy,
+    tasks,
+    budget: runtimeBudgetForRevision(found.run.budget, preview.definition),
+    approval: {
+      actor: "operator",
+      approvedAt: timestamp,
+      digest: preview.digest,
+      source: options.source,
+      previousDigest: found.run.workflow.digest,
+    },
+    reviewer: {
+      status: preview.definition.reviewerPolicy.requiredForFinalize ? "pending" : "not-required",
+      decision: null,
+    },
+    reviewHistory,
+    revisionHistory: [...(found.run.revisionHistory || []), {
+      revision: found.run.workflow.revision,
+      digest: found.run.workflow.digest,
+      definitionPath: found.run.workflow.definitionPath,
+      backupPath: normalizeSlashPath(path.relative(found.repoRoot, backupPath)),
+      supersededAt: timestamp,
+      reason: preview.definition.revision.reason,
+    }],
+  };
+  writeJsonAtomic(found.runPath, run);
+  const progress = writeWorkflowProgress(found.runRoot, run, preview.definition, { now });
+  appendWorkflowEvent(found.runRoot, {
+    schemaVersion: "workflow-event/v1",
+    timestamp,
+    type: "workflow-revised",
+    runId: run.runId,
+    previousRevision: found.run.workflow.revision,
+    revision,
+    previousDigest: found.run.workflow.digest,
+    digest: preview.digest,
+    reason: preview.definition.revision.reason,
+    backupPath: normalizeSlashPath(path.relative(found.repoRoot, backupPath)),
+    actor: "operator",
+  });
+  return {
+    run,
+    definition: preview.definition,
+    diff: preview.diff,
+    backupPath: normalizeSlashPath(path.relative(found.repoRoot, backupPath)),
+    progress,
+    ...deriveSchedule(run, preview.definition),
+  };
 }
 
 function makeRuntimeBudget(budget) {
@@ -531,6 +686,9 @@ function recordWorkflowReview(found, candidate) {
       completedAt: review.completedAt,
       findings: review.findings.length,
     },
+    reviewHistory: found.run.reviewer && (found.run.reviewer.decision || found.run.reviewer.reviewId)
+      ? [...(found.run.reviewHistory || []), { ...found.run.reviewer, archivedAt: review.completedAt }]
+      : [...(found.run.reviewHistory || [])],
     warnings: passed
       ? found.run.warnings
       : [...(found.run.warnings || []), `Independent reviewer decision: ${review.decision}.`],
@@ -980,6 +1138,7 @@ function createApprovedRun(options) {
       blocker: null,
       failureHistory: [],
       assignedWorker: null,
+      stateHistory: [],
     })),
     budget: makeRuntimeBudget(options.definition.budget),
     approval: {
@@ -992,6 +1151,8 @@ function createApprovedRun(options) {
       status: options.definition.reviewerPolicy.requiredForFinalize ? "pending" : "not-required",
       decision: null,
     },
+    reviewHistory: [],
+    revisionHistory: [],
     interventions: [],
     warnings: [],
   };
@@ -1016,6 +1177,7 @@ function createApprovedRun(options) {
 
 module.exports = {
   RUN_STATE_SCHEMA_VERSION,
+  applyWorkflowRevision,
   createApprovedRun,
   finalizeWorkflowRun,
   interveneWorkflow,

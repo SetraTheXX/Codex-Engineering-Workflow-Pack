@@ -5,7 +5,9 @@ const {
   validateWorkflowDefinition,
 } = require("./definition");
 const { makeSourceIdentity, readRepoJson } = require("./source");
+const { previewWorkflowRevision } = require("./revision");
 const {
+  applyWorkflowRevision,
   createApprovedRun,
   finalizeWorkflowRun,
   interveneWorkflow,
@@ -84,6 +86,53 @@ function runWorkflow(options = {}) {
       console.log(`Workflow: ${definition.workflowId}`);
       console.log(`Tasks added: ${result.diff.addedTasks.join(", ")}`);
       console.log(`Approve: ${result.approval.command}`);
+    }
+    return;
+  }
+
+  if (options.subcommand === "revise") {
+    if (!options.workflowRunId) throw new Error("workflow revise requires a run id.");
+    if (!options.proposalFile) throw new Error("workflow revise requires --proposal.");
+    const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
+    const file = readRepoJson(process.cwd(), options.proposalFile, "workflow revision proposal");
+    const preview = previewWorkflowRevision(found.run, found.definition, file.value);
+    const source = makeSourceIdentity(process.cwd(), options.fromFile, options.sourceKind);
+    const fromOption = options.fromFile ? ` --from ${options.fromFile}` : "";
+    const result = {
+      ...preview,
+      source,
+      approval: {
+        required: true,
+        command: `cewp workflow apply-revision ${found.run.runId} --proposal ${options.proposalFile}${fromOption} --digest ${preview.digest} --yes`,
+      },
+    };
+    if (options.json) outputJson("workflow.revise", result);
+    else {
+      console.log("CEWP workflow revision preview");
+      console.log(`Run ID: ${found.run.runId}`);
+      console.log(`Revision: ${preview.definition.revision.number}`);
+      console.log(`Approve: ${result.approval.command}`);
+    }
+    return;
+  }
+
+  if (options.subcommand === "apply-revision") {
+    if (!options.yes) throw new Error("Applying a workflow revision requires --yes after preview.");
+    if (!options.workflowRunId) throw new Error("workflow apply-revision requires a run id.");
+    if (!options.proposalFile) throw new Error("workflow apply-revision requires --proposal.");
+    if (!options.digest) throw new Error("workflow apply-revision requires the previewed --digest.");
+    const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
+    const file = readRepoJson(process.cwd(), options.proposalFile, "workflow revision proposal");
+    const source = makeSourceIdentity(process.cwd(), options.fromFile, options.sourceKind);
+    const result = applyWorkflowRevision(found, file.value, {
+      expectedDigest: options.digest,
+      source,
+    });
+    if (options.json) outputJson("workflow.apply-revision", result);
+    else {
+      console.log("CEWP workflow revision approved");
+      console.log(`Run ID: ${result.run.runId}`);
+      console.log(`Revision: ${result.run.workflow.revision}`);
     }
     return;
   }

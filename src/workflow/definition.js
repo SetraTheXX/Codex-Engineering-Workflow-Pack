@@ -243,6 +243,9 @@ function validateWorkflowDefinition(value) {
   if (revisionNumber === 1 && parent !== null) {
     throw new Error("Initial workflow revision must have a null parent.");
   }
+  if (revisionNumber > 1 && (parent === null || !/^sha256:[a-f0-9]{64}$/.test(parent))) {
+    throw new Error("Non-initial workflow revision must reference its parent sha256 digest.");
+  }
   if (!Array.isArray(value.tasks) || value.tasks.length === 0 || value.tasks.length > 256) {
     throw new Error("tasks must contain from 1 to 256 bounded tasks.");
   }
