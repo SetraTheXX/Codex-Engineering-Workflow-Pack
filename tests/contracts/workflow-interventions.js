@@ -37,7 +37,9 @@ function start(repoRoot, runId) {
 function runWorkflowInterventionContract() {
   const repoRoot = makeTempRepo("cewp-workflow-intervention-");
   try {
-    const run = approveWorkflow(repoRoot, validDefinition());
+    const definition = validDefinition();
+    definition.budget.maxRepairsPerCheckpoint = 1;
+    const run = approveWorkflow(repoRoot, definition);
     assert(start(repoRoot, run.runId).status === 0, "first checkpoint starts");
 
     const blockedResult = intervene(
@@ -80,7 +82,9 @@ function runWorkflowInterventionContract() {
 
     const secondStart = start(repoRoot, run.runId);
     assert(secondStart.status === 0, `second checkpoint starts: ${secondStart.stderr}`);
-    assert(JSON.parse(secondStart.stdout).data.checkpoint.attempt === 2, "retry creates a fresh attempt");
+    const secondCheckpoint = JSON.parse(secondStart.stdout).data.checkpoint;
+    assert(secondCheckpoint.attempt === 2, "retry creates a fresh attempt");
+    assert(secondCheckpoint.budget.activeAllocation === "repair", "retry cannot spend implementation allocation");
     const preExisting = intervene(
       repoRoot,
       run.runId,
@@ -101,6 +105,9 @@ function runWorkflowInterventionContract() {
     const waived = JSON.parse(waivedResult.stdout).data.run;
     assert(waived.tasks.find((task) => task.id === "implement-example").status === "ready", "waiver returns task to ready, not completed");
     assert(waived.interventions.at(-1).classification === "pre-existing-failure", "approved exception remains in canonical history");
+    const exhaustedRepair = start(repoRoot, run.runId);
+    assert(exhaustedRepair.status === 1, "waiver cannot expand the repair-attempt budget");
+    assert(exhaustedRepair.stderr.includes("repair-attempt budget"), "repair refusal names the exhausted limit");
 
     const eventsPath = path.join(repoRoot, ".cewp", "workflow-runs", run.runId, "events.jsonl");
     const events = fs.readFileSync(eventsPath, "utf8");

@@ -7,6 +7,7 @@ const { normalizeSlashPath } = require("../lib/paths");
 const { digestWorkflowDefinition, validateWorkflowDefinition } = require("./definition");
 const { readRepoJson } = require("./source");
 const { deriveSchedule } = require("./scheduler");
+const { evaluateWorkflowOperation } = require("./budget");
 const { validateTaskResult } = require("./result");
 const {
   WAIVABLE_FAILURES,
@@ -134,6 +135,40 @@ function appendWorkflowEvent(runRoot, event) {
   fs.appendFileSync(path.join(runRoot, "events.jsonl"), `${JSON.stringify(event)}\n`);
 }
 
+function pauseForWorkflowBudget(found, allocation, decision, timestamp) {
+  const pauseEvent = decision.pauseStatus === "paused-host-limit"
+    ? "pause-host-limit"
+    : decision.pauseStatus === "paused-budget-unverified"
+      ? "pause-budget-unverified"
+      : "pause-budget-safe";
+  const run = {
+    ...found.run,
+    status: transitionRun(found.run.status, pauseEvent),
+    updatedAt: timestamp,
+    budget: {
+      ...found.run.budget,
+      pauseReason: decision.reason,
+      thresholdEvents: [...found.run.budget.thresholdEvents, {
+        threshold: decision.warning,
+        percent: decision.percent,
+        allocation,
+        observedAt: timestamp,
+      }],
+    },
+    warnings: [...(found.run.warnings || []), `Workflow operation paused: ${decision.reason}.`],
+  };
+  writeJsonAtomic(found.runPath, run);
+  appendWorkflowEvent(found.runRoot, {
+    schemaVersion: "workflow-event/v1",
+    timestamp,
+    type: decision.pauseStatus,
+    runId: run.runId,
+    reason: decision.reason,
+    allocation,
+  });
+  return run;
+}
+
 function startWorkflowTask(found, taskId, options = {}) {
   const now = options.now || new Date();
   const timestamp = now.toISOString();
@@ -153,6 +188,34 @@ function startWorkflowTask(found, taskId, options = {}) {
     }
     throw new Error(`Workflow task ${taskId} is not ready because a dependency is incomplete.`);
   }
+  const allocation = runtimeTask.attempts === 0 ? "implementation" : "repair";
+  if (allocation === "repair" && runtimeTask.attempts > found.run.budget.maxRepairsPerCheckpoint) {
+    throw new Error(`Workflow task ${taskId} exhausted its repair-attempt budget.`);
+  }
+  const budgetDecision = evaluateWorkflowOperation(found.run, allocation, { now });
+  if (!budgetDecision.allowed) {
+    pauseForWorkflowBudget(found, allocation, budgetDecision, timestamp);
+    throw new Error(`Controlled workflow operation paused: ${budgetDecision.pauseStatus} (${budgetDecision.reason}).`);
+  }
+  let runBeforeStart = found.run;
+  if (
+    budgetDecision.warning
+    && !found.run.budget.thresholdEvents.some((event) => event.threshold === budgetDecision.warning)
+  ) {
+    runBeforeStart = {
+      ...found.run,
+      budget: {
+        ...found.run.budget,
+        thresholdEvents: [...found.run.budget.thresholdEvents, {
+          threshold: budgetDecision.warning,
+          percent: budgetDecision.percent,
+          allocation,
+          observedAt: timestamp,
+        }],
+      },
+      warnings: [...(found.run.warnings || []), `Workflow budget warning: ${budgetDecision.warning}.`],
+    };
+  }
   const attempt = runtimeTask.attempts + 1;
   const checkpointId = `${taskId}-attempt-${String(attempt).padStart(4, "0")}`;
   const checkpoint = {
@@ -164,7 +227,7 @@ function startWorkflowTask(found, taskId, options = {}) {
     status: "running",
     startedAt: timestamp,
     completedAt: null,
-    assurance: found.run.assurance,
+    assurance: runBeforeStart.assurance,
     scope: {
       allowedFiles: definitionTask.allowedFiles,
       forbiddenFiles: definitionTask.forbiddenFiles,
@@ -176,17 +239,18 @@ function startWorkflowTask(found, taskId, options = {}) {
       latest: null,
     },
     budget: {
-      implementationAllocation: found.run.budget.allocations.implementation,
-      repairAllocation: found.run.budget.allocations.repair,
-      maxRepairs: found.run.budget.maxRepairsPerCheckpoint,
-      maxCapturedOutputBytes: found.run.budget.maxCapturedOutputBytes,
+      activeAllocation: allocation,
+      implementationAllocation: runBeforeStart.budget.allocations.implementation,
+      repairAllocation: runBeforeStart.budget.allocations.repair,
+      maxRepairs: runBeforeStart.budget.maxRepairsPerCheckpoint,
+      maxCapturedOutputBytes: runBeforeStart.budget.maxCapturedOutputBytes,
     },
     result: null,
     failureClassification: null,
     interventionState: null,
     reviewer: {
-      required: found.run.checkpointPolicy.reviewerAfterEachTask,
-      status: found.run.checkpointPolicy.reviewerAfterEachTask ? "pending" : "not-required",
+      required: runBeforeStart.checkpointPolicy.reviewerAfterEachTask,
+      status: runBeforeStart.checkpointPolicy.reviewerAfterEachTask ? "pending" : "not-required",
     },
   };
   const checkpointPath = path.join(
@@ -197,10 +261,10 @@ function startWorkflowTask(found, taskId, options = {}) {
   );
   writeJsonAtomic(checkpointPath, checkpoint);
   const run = {
-    ...found.run,
-    status: transitionRun(found.run.status, "task-started"),
+    ...runBeforeStart,
+    status: transitionRun(runBeforeStart.status, "task-started"),
     updatedAt: timestamp,
-    tasks: found.run.tasks.map((task) => (task.id === taskId ? {
+    tasks: runBeforeStart.tasks.map((task) => (task.id === taskId ? {
       ...task,
       status: transitionTask(task.status, "start"),
       attempts: attempt,
@@ -254,13 +318,14 @@ function recordWorkflowResult(found, taskId, candidate) {
     definitionTask,
   });
   const observedOperations = result.usage.managedOperations.value;
+  const activeAllocation = checkpoint.budget.activeAllocation || "implementation";
   const consumedOperations = found.run.budget.consumed.modelOperations + observedOperations;
-  const consumedImplementation = found.run.budget.consumed.allocations.implementation + observedOperations;
+  const consumedAllocation = found.run.budget.consumed.allocations[activeAllocation] + observedOperations;
   if (consumedOperations > found.run.budget.modelOperations) {
     throw new Error("Task result would exceed the workflow absolute model-operation ceiling.");
   }
-  if (consumedImplementation > found.run.budget.allocations.implementation) {
-    throw new Error("Task result would exceed the workflow implementation allocation.");
+  if (consumedAllocation > found.run.budget.allocations[activeAllocation]) {
+    throw new Error(`Task result would exceed the workflow ${activeAllocation} allocation.`);
   }
   const resultPath = path.join(
     found.runRoot,
@@ -332,7 +397,7 @@ function recordWorkflowResult(found, taskId, candidate) {
         modelOperations: consumedOperations,
         allocations: {
           ...found.run.budget.consumed.allocations,
-          implementation: consumedImplementation,
+          [activeAllocation]: consumedAllocation,
         },
       },
     },
@@ -372,10 +437,110 @@ function getActiveCheckpoint(found, runtimeTask) {
   return { checkpoint, checkpointPath };
 }
 
+const RUN_INTERVENTION_EVENTS = new Set([
+  "add-budget",
+  "pause-budget-safe",
+  "pause-budget-unverified",
+  "pause-host-limit",
+  "resume",
+]);
+
+function interveneWorkflowRun(found, options, timestamp, reason) {
+  let budget = found.run.budget;
+  const previousStatus = found.run.status;
+  const nextStatus = transitionRun(previousStatus, options.event);
+  if (options.event === "add-budget") {
+    if (!Number.isInteger(options.operations) || options.operations < 1) {
+      throw new Error("add-budget requires --operations with a positive integer.");
+    }
+    if (!options.allocation || !Object.hasOwn(budget.allocations, options.allocation)) {
+      throw new Error("add-budget requires one approved model-operation --allocation.");
+    }
+    const previousModelOperations = budget.modelOperations;
+    budget = {
+      ...budget,
+      modelOperations: previousModelOperations + options.operations,
+      allocations: {
+        ...budget.allocations,
+        [options.allocation]: budget.allocations[options.allocation] + options.operations,
+      },
+      pauseReason: null,
+      revisions: [...budget.revisions, {
+        revision: budget.revisions.length + 1,
+        event: "add-budget",
+        allocation: options.allocation,
+        operations: options.operations,
+        previousModelOperations,
+        nextModelOperations: previousModelOperations + options.operations,
+        reason,
+        actor: "operator",
+        approvedAt: timestamp,
+      }],
+    };
+  } else if (options.event === "pause-host-limit") {
+    budget = {
+      ...budget,
+      hostLimit: {
+        active: true,
+        observedAt: timestamp,
+        source: "operator",
+        reason,
+      },
+      pauseReason: "host-limit-active",
+    };
+  } else if (options.event === "resume") {
+    budget = {
+      ...budget,
+      hostLimit: previousStatus === "paused-host-limit" ? null : budget.hostLimit,
+      pauseReason: null,
+    };
+  } else {
+    budget = {
+      ...budget,
+      pauseReason: reason,
+    };
+  }
+  const intervention = {
+    event: options.event,
+    taskId: null,
+    checkpointId: null,
+    classification: null,
+    reason,
+    actor: "operator",
+    recordedAt: timestamp,
+    allocation: options.allocation || null,
+    operations: options.operations || null,
+  };
+  const run = {
+    ...found.run,
+    status: nextStatus,
+    updatedAt: timestamp,
+    budget,
+    interventions: [...found.run.interventions, intervention],
+  };
+  writeJsonAtomic(found.runPath, run);
+  appendWorkflowEvent(found.runRoot, {
+    schemaVersion: "workflow-event/v1",
+    timestamp,
+    type: "workflow-intervention",
+    runId: run.runId,
+    ...intervention,
+  });
+  return {
+    run,
+    checkpoint: null,
+    intervention,
+    ...deriveSchedule(run, found.definition),
+  };
+}
+
 function interveneWorkflow(found, options) {
   const timestamp = (options.now || new Date()).toISOString();
   const reason = typeof options.reason === "string" ? options.reason.trim() : "";
   if (!reason) throw new Error("Workflow intervention requires --reason.");
+  if (RUN_INTERVENTION_EVENTS.has(options.event)) {
+    return interveneWorkflowRun(found, options, timestamp, reason);
+  }
   const runtimeTask = found.run.tasks.find((task) => task.id === options.taskId);
   if (!runtimeTask) throw new Error(`Unknown workflow task: ${options.taskId}.`);
   const active = getActiveCheckpoint(found, runtimeTask);
@@ -412,6 +577,9 @@ function interveneWorkflow(found, options) {
       };
     }
   } else if (options.event === "retry") {
+    if (runtimeTask.attempts > found.run.budget.maxRepairsPerCheckpoint) {
+      throw new Error(`Workflow task ${runtimeTask.id} exhausted its repair-attempt budget.`);
+    }
     taskStatus = transitionTask(runtimeTask.status, "retry");
     runStatus = transitionRun(found.run.status, "retry");
     activeCheckpointId = null;
@@ -516,6 +684,7 @@ function createApprovedRun(options) {
       decision: null,
     },
     interventions: [],
+    warnings: [],
   };
   writeJsonAtomic(runPath, run);
   fs.writeFileSync(path.join(runRoot, "events.jsonl"), `${JSON.stringify({
@@ -539,6 +708,7 @@ module.exports = {
   RUN_STATE_SCHEMA_VERSION,
   createApprovedRun,
   interveneWorkflow,
+  RUN_INTERVENTION_EVENTS,
   loadWorkflowRun,
   recordWorkflowResult,
   startWorkflowTask,

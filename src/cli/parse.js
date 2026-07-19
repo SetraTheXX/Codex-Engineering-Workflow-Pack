@@ -246,7 +246,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "supervise" && arg === "--operations") {
+    if (["supervise", "workflow"].includes(args.command) && arg === "--operations") {
       const value = argv[index + 1];
       if (!value || !/^\d+$/.test(value)) {
         throw new Error("--operations requires a positive integer.");
@@ -256,7 +256,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "supervise" && arg === "--allocation") {
+    if (["supervise", "workflow"].includes(args.command) && arg === "--allocation") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
         throw new Error("--allocation requires an allocation name.");

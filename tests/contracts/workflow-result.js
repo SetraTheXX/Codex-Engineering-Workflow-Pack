@@ -101,11 +101,17 @@ function runWorkflowResultContract() {
   }
 }
 
-try {
-  runWorkflowResultContract();
-  console.log("[PASS] workflow result requires scoped verification evidence");
-} catch (error) {
-  console.error("[FAIL] workflow result contract");
-  console.error(error && error.stack ? error.stack : error);
-  process.exitCode = 1;
+if (require.main === module) {
+  try {
+    runWorkflowResultContract();
+    console.log("[PASS] workflow result requires scoped verification evidence");
+  } catch (error) {
+    console.error("[FAIL] workflow result contract");
+    console.error(error && error.stack ? error.stack : error);
+    process.exitCode = 1;
+  }
 }
+
+module.exports = {
+  successfulResult,
+};

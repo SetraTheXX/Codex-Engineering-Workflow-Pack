@@ -160,7 +160,6 @@ function runWorkflow(options = {}) {
   if (options.subcommand === "intervene") {
     if (!options.yes) throw new Error("Workflow intervention requires --yes.");
     if (!options.workflowRunId) throw new Error("workflow intervene requires a run id.");
-    if (!options.taskId) throw new Error("workflow intervene requires --task.");
     if (!options.event) throw new Error("workflow intervene requires --event.");
     const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
     const result = interveneWorkflow(found, options);
