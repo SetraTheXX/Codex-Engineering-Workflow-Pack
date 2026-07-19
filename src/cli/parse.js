@@ -68,6 +68,8 @@ function parseArgs(argv) {
     workflowRunId: undefined,
     taskId: undefined,
     resultFile: undefined,
+    event: undefined,
+    classification: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -127,7 +129,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "workflow" && ["status", "start", "result"].includes(args.subcommand) && index === 2 && !arg.startsWith("--")) {
+    if (args.command === "workflow" && ["status", "start", "result", "intervene"].includes(args.subcommand) && index === 2 && !arg.startsWith("--")) {
       args.workflowRunId = arg;
       continue;
     }
@@ -146,6 +148,22 @@ function parseArgs(argv) {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) throw new Error("--result requires a repository-relative JSON file.");
       args.resultFile = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--event") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--event requires an intervention event.");
+      args.event = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--classification") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--classification requires a failure classification.");
+      args.classification = value;
       index += 1;
       continue;
     }
@@ -208,7 +226,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "supervise" && arg === "--reason") {
+    if (["supervise", "workflow"].includes(args.command) && arg === "--reason") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
         throw new Error("--reason requires text.");

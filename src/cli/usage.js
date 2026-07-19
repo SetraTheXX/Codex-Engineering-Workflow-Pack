@@ -13,6 +13,7 @@ Usage:
   cewp workflow status <run-id> [--json]
   cewp workflow start <run-id> --task <task-id> --yes [--json]
   cewp workflow result <run-id> --task <task-id> --result <task-result.json> --yes [--json]
+  cewp workflow intervene <run-id> --task <task-id> --event <block|retry|waive> [--classification <kind>] --reason <text> --yes [--json]
   cewp demo supervised [--json]
   cewp policy show
   cewp policy set <safe|trusted|full-authority>

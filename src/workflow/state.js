@@ -8,6 +8,14 @@ const { digestWorkflowDefinition, validateWorkflowDefinition } = require("./defi
 const { readRepoJson } = require("./source");
 const { deriveSchedule } = require("./scheduler");
 const { validateTaskResult } = require("./result");
+const {
+  WAIVABLE_FAILURES,
+  assertWaivableClassification,
+  transitionCheckpoint,
+  transitionRun,
+  transitionTask,
+  validateFailureClassification,
+} = require("./transitions");
 
 const RUN_STATE_SCHEMA_VERSION = "run-state/v2";
 
@@ -132,6 +140,9 @@ function startWorkflowTask(found, taskId, options = {}) {
   const definitionTask = found.definition.tasks.find((task) => task.id === taskId);
   const runtimeTask = found.run.tasks.find((task) => task.id === taskId);
   if (!definitionTask || !runtimeTask) throw new Error(`Unknown workflow task: ${taskId}.`);
+  if (!["approved", "active"].includes(found.run.status)) {
+    throw new Error(`Workflow run ${found.run.runId} cannot start work from status ${found.run.status}.`);
+  }
   const schedule = deriveSchedule(found.run, found.definition);
   if (runtimeTask.status !== "ready") {
     throw new Error(`Workflow task ${taskId} is not ready; current status is ${runtimeTask.status}.`);
@@ -187,11 +198,11 @@ function startWorkflowTask(found, taskId, options = {}) {
   writeJsonAtomic(checkpointPath, checkpoint);
   const run = {
     ...found.run,
-    status: "active",
+    status: transitionRun(found.run.status, "task-started"),
     updatedAt: timestamp,
     tasks: found.run.tasks.map((task) => (task.id === taskId ? {
       ...task,
-      status: "running",
+      status: transitionTask(task.status, "start"),
       attempts: attempt,
       activeCheckpointId: checkpointId,
     } : task)),
@@ -258,9 +269,10 @@ function recordWorkflowResult(found, taskId, candidate) {
     `attempt-${String(runtimeTask.attempts).padStart(4, "0")}.json`,
   );
   writeJsonAtomic(resultPath, result);
+  const resultRecordedCheckpointStatus = transitionCheckpoint(checkpoint.status, "result-recorded");
   const completedCheckpoint = {
     ...checkpoint,
-    status: "verified",
+    status: transitionCheckpoint(resultRecordedCheckpointStatus, "verification-passed"),
     completedAt: result.completedAt,
     result: {
       resultId: result.resultId,
@@ -277,9 +289,10 @@ function recordWorkflowResult(found, taskId, candidate) {
     },
   };
   writeJsonAtomic(checkpointPath, completedCheckpoint);
+  const verifyingTaskStatus = transitionTask(runtimeTask.status, "result-recorded");
   let tasks = found.run.tasks.map((task) => (task.id === taskId ? {
     ...task,
-    status: "completed",
+    status: transitionTask(verifyingTaskStatus, "verification-passed"),
     activeCheckpointId: null,
     resultId: result.resultId,
     verification: {
@@ -297,11 +310,19 @@ function recordWorkflowResult(found, taskId, candidate) {
       : task;
   });
   const allComplete = tasks.every((task) => task.status === "completed");
+  const hasBlockedTask = tasks.some((task) => task.status === "blocked");
+  let runStatus = found.run.status;
+  if (allComplete) {
+    runStatus = transitionRun(
+      found.run.status,
+      found.run.reviewerPolicy.requiredForFinalize ? "tasks-completed" : "tasks-completed-no-review",
+    );
+  } else if (!hasBlockedTask) {
+    runStatus = "active";
+  }
   const run = {
     ...found.run,
-    status: allComplete
-      ? (found.run.reviewerPolicy.requiredForFinalize ? "review-pending" : "completed")
-      : "active",
+    status: runStatus,
     updatedAt: result.completedAt,
     tasks,
     budget: {
@@ -331,6 +352,116 @@ function recordWorkflowResult(found, taskId, candidate) {
     checkpoint: completedCheckpoint,
     result,
     resultPath: normalizeSlashPath(path.relative(found.repoRoot, resultPath)),
+    ...deriveSchedule(run, found.definition),
+  };
+}
+
+function getActiveCheckpoint(found, runtimeTask) {
+  if (!runtimeTask.activeCheckpointId) return { checkpoint: null, checkpointPath: null };
+  const checkpointPath = path.join(
+    found.runRoot,
+    "checkpoints",
+    runtimeTask.id,
+    `attempt-${String(runtimeTask.attempts).padStart(4, "0")}.json`,
+  );
+  if (!fs.existsSync(checkpointPath)) throw new Error(`Active checkpoint file is missing for task ${runtimeTask.id}.`);
+  const checkpoint = JSON.parse(fs.readFileSync(checkpointPath, "utf8"));
+  if (checkpoint.checkpointId !== runtimeTask.activeCheckpointId) {
+    throw new Error(`Active checkpoint identity mismatch for task ${runtimeTask.id}.`);
+  }
+  return { checkpoint, checkpointPath };
+}
+
+function interveneWorkflow(found, options) {
+  const timestamp = (options.now || new Date()).toISOString();
+  const reason = typeof options.reason === "string" ? options.reason.trim() : "";
+  if (!reason) throw new Error("Workflow intervention requires --reason.");
+  const runtimeTask = found.run.tasks.find((task) => task.id === options.taskId);
+  if (!runtimeTask) throw new Error(`Unknown workflow task: ${options.taskId}.`);
+  const active = getActiveCheckpoint(found, runtimeTask);
+  let taskStatus;
+  let runStatus;
+  let blocker = runtimeTask.blocker;
+  let activeCheckpointId = runtimeTask.activeCheckpointId;
+  let checkpoint = active.checkpoint;
+  let classification = options.classification || (blocker && blocker.classification) || null;
+
+  if (options.event === "block") {
+    classification = validateFailureClassification(classification);
+    taskStatus = transitionTask(
+      runtimeTask.status,
+      ["running", "verifying"].includes(runtimeTask.status) ? classification : "block",
+    );
+    runStatus = transitionRun(found.run.status, "block");
+    blocker = {
+      classification,
+      reason,
+      blockedAt: timestamp,
+      waivable: WAIVABLE_FAILURES.has(classification),
+    };
+    if (checkpoint) {
+      checkpoint = {
+        ...checkpoint,
+        status: transitionCheckpoint(checkpoint.status, classification),
+        failureClassification: classification,
+        interventionState: {
+          event: "block",
+          reason,
+          recordedAt: timestamp,
+        },
+      };
+    }
+  } else if (options.event === "retry") {
+    taskStatus = transitionTask(runtimeTask.status, "retry");
+    runStatus = transitionRun(found.run.status, "retry");
+    activeCheckpointId = null;
+    blocker = null;
+  } else if (options.event === "waive") {
+    classification = assertWaivableClassification(classification);
+    taskStatus = transitionTask(runtimeTask.status, "waive");
+    runStatus = transitionRun(found.run.status, "waive");
+    activeCheckpointId = null;
+    blocker = null;
+  } else {
+    throw new Error(`Unsupported workflow intervention event: ${options.event || "missing"}.`);
+  }
+
+  if (checkpoint) writeJsonAtomic(active.checkpointPath, checkpoint);
+  const intervention = {
+    event: options.event,
+    taskId: runtimeTask.id,
+    checkpointId: runtimeTask.activeCheckpointId,
+    classification,
+    reason,
+    actor: "operator",
+    recordedAt: timestamp,
+  };
+  const tasks = found.run.tasks.map((task) => (task.id === runtimeTask.id ? {
+    ...task,
+    status: taskStatus,
+    activeCheckpointId,
+    blocker,
+  } : task));
+  if (tasks.some((task) => task.status === "blocked")) runStatus = "blocked";
+  const run = {
+    ...found.run,
+    status: runStatus,
+    updatedAt: timestamp,
+    tasks,
+    interventions: [...found.run.interventions, intervention],
+  };
+  writeJsonAtomic(found.runPath, run);
+  appendWorkflowEvent(found.runRoot, {
+    schemaVersion: "workflow-event/v1",
+    timestamp,
+    type: "workflow-intervention",
+    runId: run.runId,
+    ...intervention,
+  });
+  return {
+    run,
+    checkpoint,
+    intervention,
     ...deriveSchedule(run, found.definition),
   };
 }
@@ -407,6 +538,7 @@ function createApprovedRun(options) {
 module.exports = {
   RUN_STATE_SCHEMA_VERSION,
   createApprovedRun,
+  interveneWorkflow,
   loadWorkflowRun,
   recordWorkflowResult,
   startWorkflowTask,

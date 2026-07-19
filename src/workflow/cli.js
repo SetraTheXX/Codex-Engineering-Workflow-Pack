@@ -7,6 +7,7 @@ const {
 const { makeSourceIdentity, readRepoJson } = require("./source");
 const {
   createApprovedRun,
+  interveneWorkflow,
   loadWorkflowRun,
   recordWorkflowResult,
   startWorkflowTask,
@@ -152,6 +153,23 @@ function runWorkflow(options = {}) {
       console.log(`Run ID: ${result.run.runId}`);
       console.log(`Task: ${result.result.taskId}`);
       console.log(`Result: ${result.result.resultId}`);
+    }
+    return;
+  }
+
+  if (options.subcommand === "intervene") {
+    if (!options.yes) throw new Error("Workflow intervention requires --yes.");
+    if (!options.workflowRunId) throw new Error("workflow intervene requires a run id.");
+    if (!options.taskId) throw new Error("workflow intervene requires --task.");
+    if (!options.event) throw new Error("workflow intervene requires --event.");
+    const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
+    const result = interveneWorkflow(found, options);
+    if (options.json) outputJson("workflow.intervene", result);
+    else {
+      console.log("CEWP workflow intervention recorded");
+      console.log(`Run ID: ${result.run.runId}`);
+      console.log(`Task: ${result.intervention.taskId}`);
+      console.log(`Event: ${result.intervention.event}`);
     }
     return;
   }
