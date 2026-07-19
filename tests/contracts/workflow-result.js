@@ -95,6 +95,7 @@ function runWorkflowResultContract() {
     assert(recorded.data.run.tasks.find((task) => task.id === "implement-example").status === "completed", "verified task becomes completed");
     assert(recorded.data.run.tasks.find((task) => task.id === "document-example").status === "ready", "completed dependency opens its child");
     assert(recorded.data.run.status === "active", "remaining work keeps the run active");
+    assert(recorded.data.progress.summary.completed === 1, "derived progress counts only the verified result");
     assert(fs.existsSync(path.join(repoRoot, recorded.data.resultPath)), "validated result is persisted under the run");
   } finally {
     cleanupRepo(repoRoot);

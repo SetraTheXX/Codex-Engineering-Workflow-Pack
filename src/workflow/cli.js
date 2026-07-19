@@ -11,6 +11,7 @@ const {
   loadWorkflowRun,
   recordWorkflowResult,
   startWorkflowTask,
+  writeWorkflowProgress,
 } = require("./state");
 const { deriveSchedule } = require("./scheduler");
 
@@ -111,7 +112,8 @@ function runWorkflow(options = {}) {
     if (!options.workflowRunId) throw new Error("workflow status requires a run id.");
     const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
     const schedule = deriveSchedule(found.run, found.definition);
-    const result = { run: found.run, ...schedule };
+    const progress = writeWorkflowProgress(found.runRoot, found.run, found.definition);
+    const result = { run: found.run, progress, ...schedule };
     if (options.json) outputJson("workflow.status", result);
     else {
       console.log("CEWP workflow status");

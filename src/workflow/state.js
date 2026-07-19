@@ -8,6 +8,7 @@ const { digestWorkflowDefinition, validateWorkflowDefinition } = require("./defi
 const { readRepoJson } = require("./source");
 const { deriveSchedule } = require("./scheduler");
 const { evaluateWorkflowOperation } = require("./budget");
+const { deriveProgressView, renderProgressMarkdown } = require("./progress");
 const { validateTaskResult } = require("./result");
 const {
   WAIVABLE_FAILURES,
@@ -54,6 +55,26 @@ function writeJsonAtomic(filePath, value) {
     fs.rmSync(temporaryPath, { force: true });
     throw error;
   }
+}
+
+function writeTextAtomic(filePath, value) {
+  ensureDir(path.dirname(filePath));
+  const temporaryPath = `${filePath}.${process.pid}.tmp`;
+  fs.writeFileSync(temporaryPath, value, { flag: "wx" });
+  try {
+    fs.renameSync(temporaryPath, filePath);
+  } catch (error) {
+    fs.rmSync(temporaryPath, { force: true });
+    throw error;
+  }
+}
+
+function writeWorkflowProgress(runRoot, run, definition, options = {}) {
+  const schedule = deriveSchedule(run, definition);
+  const progress = deriveProgressView(run, definition, schedule, options);
+  writeJsonAtomic(path.join(runRoot, "progress.json"), progress);
+  writeTextAtomic(path.join(runRoot, "progress.md"), renderProgressMarkdown(progress));
+  return progress;
 }
 
 function persistApprovedDefinition(repoRoot, definition, digest) {
@@ -158,6 +179,7 @@ function pauseForWorkflowBudget(found, allocation, decision, timestamp) {
     warnings: [...(found.run.warnings || []), `Workflow operation paused: ${decision.reason}.`],
   };
   writeJsonAtomic(found.runPath, run);
+  writeWorkflowProgress(found.runRoot, run, found.definition, { now: new Date(timestamp) });
   appendWorkflowEvent(found.runRoot, {
     schemaVersion: "workflow-event/v1",
     timestamp,
@@ -272,6 +294,7 @@ function startWorkflowTask(found, taskId, options = {}) {
     } : task)),
   };
   writeJsonAtomic(found.runPath, run);
+  const progress = writeWorkflowProgress(found.runRoot, run, found.definition, { now });
   appendWorkflowEvent(found.runRoot, {
     schemaVersion: "workflow-event/v1",
     timestamp,
@@ -285,6 +308,7 @@ function startWorkflowTask(found, taskId, options = {}) {
     run,
     checkpoint,
     checkpointPath: normalizeSlashPath(path.relative(found.repoRoot, checkpointPath)),
+    progress,
     ...deriveSchedule(run, found.definition),
   };
 }
@@ -403,6 +427,7 @@ function recordWorkflowResult(found, taskId, candidate) {
     },
   };
   writeJsonAtomic(found.runPath, run);
+  const progress = writeWorkflowProgress(found.runRoot, run, found.definition, { now: new Date(result.completedAt) });
   appendWorkflowEvent(found.runRoot, {
     schemaVersion: "workflow-event/v1",
     timestamp: result.completedAt,
@@ -417,6 +442,7 @@ function recordWorkflowResult(found, taskId, candidate) {
     checkpoint: completedCheckpoint,
     result,
     resultPath: normalizeSlashPath(path.relative(found.repoRoot, resultPath)),
+    progress,
     ...deriveSchedule(run, found.definition),
   };
 }
@@ -519,6 +545,7 @@ function interveneWorkflowRun(found, options, timestamp, reason) {
     interventions: [...found.run.interventions, intervention],
   };
   writeJsonAtomic(found.runPath, run);
+  const progress = writeWorkflowProgress(found.runRoot, run, found.definition, { now: new Date(timestamp) });
   appendWorkflowEvent(found.runRoot, {
     schemaVersion: "workflow-event/v1",
     timestamp,
@@ -530,6 +557,7 @@ function interveneWorkflowRun(found, options, timestamp, reason) {
     run,
     checkpoint: null,
     intervention,
+    progress,
     ...deriveSchedule(run, found.definition),
   };
 }
@@ -619,6 +647,7 @@ function interveneWorkflow(found, options) {
     interventions: [...found.run.interventions, intervention],
   };
   writeJsonAtomic(found.runPath, run);
+  const progress = writeWorkflowProgress(found.runRoot, run, found.definition, { now: new Date(timestamp) });
   appendWorkflowEvent(found.runRoot, {
     schemaVersion: "workflow-event/v1",
     timestamp,
@@ -630,6 +659,7 @@ function interveneWorkflow(found, options) {
     run,
     checkpoint,
     intervention,
+    progress,
     ...deriveSchedule(run, found.definition),
   };
 }
@@ -697,6 +727,7 @@ function createApprovedRun(options) {
     digest,
     actor: "operator",
   })}\n`, { flag: "wx" });
+  writeWorkflowProgress(runRoot, run, options.definition, { now });
   return {
     run,
     definitionPath: normalizeSlashPath(path.relative(repoRoot, definitionPath)),
@@ -713,5 +744,6 @@ module.exports = {
   recordWorkflowResult,
   startWorkflowTask,
   validateWorkflowRunId,
+  writeWorkflowProgress,
   writeJsonAtomic,
 };
