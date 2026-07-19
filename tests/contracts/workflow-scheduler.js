@@ -107,13 +107,15 @@ function runWorkflowSchedulerContract() {
   }
 }
 
-try {
-  runWorkflowSchedulerContract();
-  console.log("[PASS] workflow scheduler derives deterministic ready tasks");
-} catch (error) {
-  console.error("[FAIL] workflow scheduler contract");
-  console.error(error && error.stack ? error.stack : error);
-  process.exitCode = 1;
+if (require.main === module) {
+  try {
+    runWorkflowSchedulerContract();
+    console.log("[PASS] workflow scheduler derives deterministic ready tasks");
+  } catch (error) {
+    console.error("[FAIL] workflow scheduler contract");
+    console.error(error && error.stack ? error.stack : error);
+    process.exitCode = 1;
+  }
 }
 
 module.exports = {

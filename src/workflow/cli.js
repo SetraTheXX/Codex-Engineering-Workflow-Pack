@@ -5,7 +5,12 @@ const {
   validateWorkflowDefinition,
 } = require("./definition");
 const { makeSourceIdentity, readRepoJson } = require("./source");
-const { createApprovedRun, loadWorkflowRun, startWorkflowTask } = require("./state");
+const {
+  createApprovedRun,
+  loadWorkflowRun,
+  recordWorkflowResult,
+  startWorkflowTask,
+} = require("./state");
 const { deriveSchedule } = require("./scheduler");
 
 function outputJson(command, data) {
@@ -129,6 +134,24 @@ function runWorkflow(options = {}) {
       console.log(`Run ID: ${result.run.runId}`);
       console.log(`Task: ${result.checkpoint.taskId}`);
       console.log(`Checkpoint: ${result.checkpoint.checkpointId}`);
+    }
+    return;
+  }
+
+  if (options.subcommand === "result") {
+    if (!options.yes) throw new Error("Recording a workflow result requires --yes.");
+    if (!options.workflowRunId) throw new Error("workflow result requires a run id.");
+    if (!options.taskId) throw new Error("workflow result requires --task.");
+    if (!options.resultFile) throw new Error("workflow result requires --result.");
+    const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
+    const candidate = readRepoJson(process.cwd(), options.resultFile, "task result");
+    const result = recordWorkflowResult(found, options.taskId, candidate.value);
+    if (options.json) outputJson("workflow.result", result);
+    else {
+      console.log("CEWP workflow result verified");
+      console.log(`Run ID: ${result.run.runId}`);
+      console.log(`Task: ${result.result.taskId}`);
+      console.log(`Result: ${result.result.resultId}`);
     }
     return;
   }

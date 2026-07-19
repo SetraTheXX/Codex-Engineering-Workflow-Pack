@@ -7,6 +7,7 @@ const { normalizeSlashPath } = require("../lib/paths");
 const { digestWorkflowDefinition, validateWorkflowDefinition } = require("./definition");
 const { readRepoJson } = require("./source");
 const { deriveSchedule } = require("./scheduler");
+const { validateTaskResult } = require("./result");
 
 const RUN_STATE_SCHEMA_VERSION = "run-state/v2";
 
@@ -213,6 +214,127 @@ function startWorkflowTask(found, taskId, options = {}) {
   };
 }
 
+function recordWorkflowResult(found, taskId, candidate) {
+  const runtimeTask = found.run.tasks.find((task) => task.id === taskId);
+  const definitionTask = found.definition.tasks.find((task) => task.id === taskId);
+  if (!runtimeTask || !definitionTask) throw new Error(`Unknown workflow task: ${taskId}.`);
+  if (runtimeTask.status !== "running" || !runtimeTask.activeCheckpointId) {
+    throw new Error(`Workflow task ${taskId} cannot accept a result from status ${runtimeTask.status}.`);
+  }
+  const checkpointPath = path.join(
+    found.runRoot,
+    "checkpoints",
+    taskId,
+    `attempt-${String(runtimeTask.attempts).padStart(4, "0")}.json`,
+  );
+  if (!fs.existsSync(checkpointPath)) throw new Error(`Active checkpoint file is missing for task ${taskId}.`);
+  const checkpoint = JSON.parse(fs.readFileSync(checkpointPath, "utf8"));
+  if (
+    checkpoint.schemaVersion !== "task-checkpoint/v1"
+    || checkpoint.checkpointId !== runtimeTask.activeCheckpointId
+    || checkpoint.status !== "running"
+  ) {
+    throw new Error(`Invalid active checkpoint for task ${taskId}.`);
+  }
+  const result = validateTaskResult(candidate, {
+    run: found.run,
+    task: runtimeTask,
+    checkpoint,
+    definitionTask,
+  });
+  const observedOperations = result.usage.managedOperations.value;
+  const consumedOperations = found.run.budget.consumed.modelOperations + observedOperations;
+  const consumedImplementation = found.run.budget.consumed.allocations.implementation + observedOperations;
+  if (consumedOperations > found.run.budget.modelOperations) {
+    throw new Error("Task result would exceed the workflow absolute model-operation ceiling.");
+  }
+  if (consumedImplementation > found.run.budget.allocations.implementation) {
+    throw new Error("Task result would exceed the workflow implementation allocation.");
+  }
+  const resultPath = path.join(
+    found.runRoot,
+    "results",
+    taskId,
+    `attempt-${String(runtimeTask.attempts).padStart(4, "0")}.json`,
+  );
+  writeJsonAtomic(resultPath, result);
+  const completedCheckpoint = {
+    ...checkpoint,
+    status: "verified",
+    completedAt: result.completedAt,
+    result: {
+      resultId: result.resultId,
+      path: normalizeSlashPath(path.relative(found.repoRoot, resultPath)),
+    },
+    verification: {
+      ...checkpoint.verification,
+      baseline: result.verification.baseline,
+      latest: {
+        status: "passed",
+        targeted: result.verification.targeted,
+        full: result.verification.full,
+      },
+    },
+  };
+  writeJsonAtomic(checkpointPath, completedCheckpoint);
+  let tasks = found.run.tasks.map((task) => (task.id === taskId ? {
+    ...task,
+    status: "completed",
+    activeCheckpointId: null,
+    resultId: result.resultId,
+    verification: {
+      status: "passed",
+      checkpointId: checkpoint.checkpointId,
+      resultId: result.resultId,
+    },
+  } : task));
+  const runtimeById = new Map(tasks.map((task) => [task.id, task]));
+  tasks = tasks.map((task) => {
+    if (task.status !== "pending") return task;
+    const taskDefinition = found.definition.tasks.find((entry) => entry.id === task.id);
+    return taskDefinition.dependsOn.every((dependencyId) => runtimeById.get(dependencyId).status === "completed")
+      ? { ...task, status: "ready" }
+      : task;
+  });
+  const allComplete = tasks.every((task) => task.status === "completed");
+  const run = {
+    ...found.run,
+    status: allComplete
+      ? (found.run.reviewerPolicy.requiredForFinalize ? "review-pending" : "completed")
+      : "active",
+    updatedAt: result.completedAt,
+    tasks,
+    budget: {
+      ...found.run.budget,
+      consumed: {
+        ...found.run.budget.consumed,
+        modelOperations: consumedOperations,
+        allocations: {
+          ...found.run.budget.consumed.allocations,
+          implementation: consumedImplementation,
+        },
+      },
+    },
+  };
+  writeJsonAtomic(found.runPath, run);
+  appendWorkflowEvent(found.runRoot, {
+    schemaVersion: "workflow-event/v1",
+    timestamp: result.completedAt,
+    type: "task-completed",
+    runId: run.runId,
+    taskId,
+    checkpointId: checkpoint.checkpointId,
+    resultId: result.resultId,
+  });
+  return {
+    run,
+    checkpoint: completedCheckpoint,
+    result,
+    resultPath: normalizeSlashPath(path.relative(found.repoRoot, resultPath)),
+    ...deriveSchedule(run, found.definition),
+  };
+}
+
 function createApprovedRun(options) {
   const repoRoot = path.resolve(options.repoRoot);
   const now = options.now || new Date();
@@ -286,6 +408,7 @@ module.exports = {
   RUN_STATE_SCHEMA_VERSION,
   createApprovedRun,
   loadWorkflowRun,
+  recordWorkflowResult,
   startWorkflowTask,
   validateWorkflowRunId,
   writeJsonAtomic,
