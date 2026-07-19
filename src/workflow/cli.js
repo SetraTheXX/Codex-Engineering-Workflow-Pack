@@ -132,7 +132,7 @@ function runWorkflow(options = {}) {
     if (!options.workflowRunId) throw new Error("workflow start requires a run id.");
     if (!options.taskId) throw new Error("workflow start requires --task.");
     const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
-    const result = startWorkflowTask(found, options.taskId);
+    const result = startWorkflowTask(found, options.taskId, { workerId: options.workerId });
     if (options.json) outputJson("workflow.start", result);
     else {
       console.log("CEWP workflow task started");

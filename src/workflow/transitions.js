@@ -23,6 +23,7 @@ const TASK_TRANSITIONS = Object.freeze({
     "dependencies-satisfied": "ready",
     block: "blocked",
     cancel: "cancelled",
+    rollback: "rolled-back",
     abandon: "abandoned",
   },
   ready: {
@@ -31,6 +32,7 @@ const TASK_TRANSITIONS = Object.freeze({
     reassign: "ready",
     block: "blocked",
     cancel: "cancelled",
+    rollback: "rolled-back",
     abandon: "abandoned",
   },
   running: {
@@ -39,6 +41,7 @@ const TASK_TRANSITIONS = Object.freeze({
     block: "blocked",
     timeout: "timed-out",
     cancel: "cancelled",
+    rollback: "rolled-back",
     abandon: "abandoned",
   },
   verifying: {
@@ -47,6 +50,7 @@ const TASK_TRANSITIONS = Object.freeze({
     block: "blocked",
     timeout: "timed-out",
     cancel: "cancelled",
+    rollback: "rolled-back",
     abandon: "abandoned",
   },
   blocked: {
@@ -79,7 +83,9 @@ const TASK_TRANSITIONS = Object.freeze({
     rollback: "rolled-back",
     abandon: "abandoned",
   },
-  "rolled-back": {},
+  "rolled-back": {
+    abandon: "abandoned",
+  },
   abandoned: {},
 });
 
@@ -90,6 +96,7 @@ const CHECKPOINT_TRANSITIONS = Object.freeze({
     block: "blocked",
     timeout: "timed-out",
     cancel: "cancelled",
+    rollback: "rolled-back",
     abandon: "abandoned",
   },
   "result-recorded": {
@@ -98,6 +105,7 @@ const CHECKPOINT_TRANSITIONS = Object.freeze({
     block: "blocked",
     timeout: "timed-out",
     cancel: "cancelled",
+    rollback: "rolled-back",
     abandon: "abandoned",
   },
   blocked: {
@@ -116,7 +124,9 @@ const CHECKPOINT_TRANSITIONS = Object.freeze({
     rollback: "rolled-back",
     abandon: "abandoned",
   },
-  "rolled-back": {},
+  "rolled-back": {
+    abandon: "abandoned",
+  },
   abandoned: {},
 });
 
@@ -164,6 +174,7 @@ const RUN_TRANSITIONS = Object.freeze({
   blocked: {
     retry: "active",
     revise: "active",
+    reassign: "active",
     waive: "active",
     rollback: "rolled-back",
     cancel: "cancelled",
@@ -192,7 +203,9 @@ const RUN_TRANSITIONS = Object.freeze({
     rollback: "rolled-back",
     abandon: "abandoned",
   },
-  "rolled-back": {},
+  "rolled-back": {
+    abandon: "abandoned",
+  },
   abandoned: {},
   finalized: {},
 });

@@ -44,9 +44,12 @@ function nextActionFor(run, definition, schedule) {
   }
   const blocked = run.tasks.find((task) => task.status === "blocked");
   if (blocked) {
+    const repeated = blocked.blocker && blocked.blocker.classification === "repeated-failure";
     return {
       kind: "intervention",
-      command: `cewp workflow intervene ${run.runId} --task ${blocked.id} --event retry --reason <text> --yes`,
+      command: repeated
+        ? `cewp workflow intervene ${run.runId} --task ${blocked.id} --event reassign --worker <worker-id> --reason <text> --yes`
+        : `cewp workflow intervene ${run.runId} --task ${blocked.id} --event retry --reason <text> --yes`,
       reason: blocked.blocker ? blocked.blocker.reason : "task is blocked",
     };
   }

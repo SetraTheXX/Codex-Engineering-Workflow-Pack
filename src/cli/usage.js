@@ -11,12 +11,13 @@ Usage:
   cewp workflow propose --proposal <definition.json> [--from <issue|PRD|PLAN.md|progress.md>] [--source-kind <kind>] [--json]
   cewp workflow approve --proposal <definition.json> [--from <source>] --digest <sha256> --yes [--json]
   cewp workflow status <run-id> [--json]
-  cewp workflow start <run-id> --task <task-id> --yes [--json]
+  cewp workflow start <run-id> --task <task-id> [--worker <worker-id>] --yes [--json]
   cewp workflow result <run-id> --task <task-id> --result <task-result.json> --yes [--json]
   cewp workflow review <run-id> --result <review-result.json> --yes [--json]
   cewp workflow finalize <run-id> --yes [--json]
-  cewp workflow intervene <run-id> --task <task-id> --event <block|retry|waive> [--classification <kind>] --reason <text> --yes [--json]
+  cewp workflow intervene <run-id> --task <task-id> --event <block|retry|waive|reassign> [--classification <kind>] [--signature <id>] [--worker <worker-id>] --reason <text> --yes [--json]
   cewp workflow intervene <run-id> --event <add-budget|pause-budget-safe|pause-budget-unverified|pause-host-limit|resume> [--operations <count>] [--allocation <name>] --reason <text> --yes [--json]
+  cewp workflow intervene <run-id> --event <continue|cancel|timeout|rollback|abandon> --reason <text> --yes [--json]
   cewp demo supervised [--json]
   cewp policy show
   cewp policy set <safe|trusted|full-authority>

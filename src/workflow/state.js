@@ -12,6 +12,8 @@ const { deriveProgressView, renderProgressMarkdown } = require("./progress");
 const { validateReviewResult } = require("./review");
 const { validateTaskResult } = require("./result");
 const {
+  CHECKPOINT_TRANSITIONS,
+  TASK_TRANSITIONS,
   WAIVABLE_FAILURES,
   assertWaivableClassification,
   transitionCheckpoint,
@@ -213,6 +215,10 @@ function startWorkflowTask(found, taskId, options = {}) {
     }
     throw new Error(`Workflow task ${taskId} is not ready because a dependency is incomplete.`);
   }
+  if (runtimeTask.assignedWorker && options.workerId && runtimeTask.assignedWorker !== options.workerId) {
+    throw new Error(`Workflow task ${taskId} is assigned to ${runtimeTask.assignedWorker}; use an explicit reassign intervention.`);
+  }
+  const workerId = runtimeTask.assignedWorker || options.workerId || null;
   const allocation = runtimeTask.attempts === 0 ? "implementation" : "repair";
   if (allocation === "repair" && runtimeTask.attempts > found.run.budget.maxRepairsPerCheckpoint) {
     throw new Error(`Workflow task ${taskId} exhausted its repair-attempt budget.`);
@@ -277,6 +283,10 @@ function startWorkflowTask(found, taskId, options = {}) {
       required: runBeforeStart.checkpointPolicy.reviewerAfterEachTask,
       status: runBeforeStart.checkpointPolicy.reviewerAfterEachTask ? "pending" : "not-required",
     },
+    worker: {
+      id: workerId,
+      source: runtimeTask.assignedWorker ? "intervention" : options.workerId ? "start" : "scheduler",
+    },
   };
   const checkpointPath = path.join(
     found.runRoot,
@@ -294,6 +304,7 @@ function startWorkflowTask(found, taskId, options = {}) {
       status: transitionTask(task.status, "start"),
       attempts: attempt,
       activeCheckpointId: checkpointId,
+      assignedWorker: workerId,
     } : task)),
   };
   writeJsonAtomic(found.runPath, run);
@@ -600,6 +611,7 @@ const RUN_INTERVENTION_EVENTS = new Set([
   "pause-host-limit",
   "resume",
 ]);
+const RUN_LIFECYCLE_EVENTS = new Set(["continue", "cancel", "timeout", "rollback", "abandon"]);
 const RESUMABLE_RUN_STATUSES = new Set(["approved", "active", "review-pending"]);
 
 function workflowResumeStatus(budget, fallback) {
@@ -707,12 +719,103 @@ function interveneWorkflowRun(found, options, timestamp, reason) {
   };
 }
 
+function transitionIfSupported(table, current, event, transitioner) {
+  return table[current] && table[current][event]
+    ? transitioner(current, event)
+    : current;
+}
+
+function interveneWorkflowLifecycle(found, options, timestamp, reason) {
+  if (options.taskId) throw new Error(`${options.event} is a run-level workflow lifecycle event.`);
+  if (options.event === "continue" && !["approved", "active", "review-pending"].includes(found.run.status)) {
+    throw new Error(`Workflow cannot continue from status ${found.run.status}; use the reported recovery action.`);
+  }
+  const runStatus = options.event === "continue"
+    ? found.run.status
+    : transitionRun(found.run.status, options.event);
+  const checkpoints = [];
+  const tasks = found.run.tasks.map((task) => {
+    let checkpoint = null;
+    let checkpointPath = null;
+    if (task.activeCheckpointId) {
+      ({ checkpoint, checkpointPath } = getActiveCheckpoint(found, task));
+      const checkpointStatus = transitionIfSupported(
+        CHECKPOINT_TRANSITIONS,
+        checkpoint.status,
+        options.event,
+        transitionCheckpoint,
+      );
+      if (checkpointStatus !== checkpoint.status) {
+        checkpoint = {
+          ...checkpoint,
+          status: checkpointStatus,
+          interventionState: {
+            event: options.event,
+            reason,
+            recordedAt: timestamp,
+          },
+        };
+        writeJsonAtomic(checkpointPath, checkpoint);
+      }
+      checkpoints.push(checkpoint);
+    }
+    return {
+      ...task,
+      status: transitionIfSupported(TASK_TRANSITIONS, task.status, options.event, transitionTask),
+    };
+  });
+  const intervention = {
+    event: options.event,
+    taskId: null,
+    checkpointId: null,
+    classification: null,
+    reason,
+    actor: "operator",
+    recordedAt: timestamp,
+  };
+  const run = {
+    ...found.run,
+    status: runStatus,
+    updatedAt: timestamp,
+    tasks,
+    interventions: [...found.run.interventions, intervention],
+  };
+  writeJsonAtomic(found.runPath, run);
+  const progress = writeWorkflowProgress(found.runRoot, run, found.definition, { now: new Date(timestamp) });
+  appendWorkflowEvent(found.runRoot, {
+    schemaVersion: "workflow-event/v1",
+    timestamp,
+    type: "workflow-lifecycle",
+    runId: run.runId,
+    ...intervention,
+  });
+  return {
+    run,
+    checkpoints,
+    intervention,
+    progress,
+    ...deriveSchedule(run, found.definition),
+  };
+}
+
+function normalizeFailureSignature(value) {
+  if (value === undefined || value === null || String(value).trim() === "") return null;
+  const signature = String(value).trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9:._-]{2,127}$/.test(signature)) {
+    throw new Error("Failure signature must be a normalized lowercase identifier.");
+  }
+  return signature;
+}
+
 function interveneWorkflow(found, options) {
   const timestamp = (options.now || new Date()).toISOString();
   const reason = typeof options.reason === "string" ? options.reason.trim() : "";
   if (!reason) throw new Error("Workflow intervention requires --reason.");
   if (RUN_INTERVENTION_EVENTS.has(options.event)) {
     return interveneWorkflowRun(found, options, timestamp, reason);
+  }
+  if (RUN_LIFECYCLE_EVENTS.has(options.event)) {
+    return interveneWorkflowLifecycle(found, options, timestamp, reason);
   }
   const runtimeTask = found.run.tasks.find((task) => task.id === options.taskId);
   if (!runtimeTask) throw new Error(`Unknown workflow task: ${options.taskId}.`);
@@ -723,9 +826,16 @@ function interveneWorkflow(found, options) {
   let activeCheckpointId = runtimeTask.activeCheckpointId;
   let checkpoint = active.checkpoint;
   let classification = options.classification || (blocker && blocker.classification) || null;
+  let failureHistory = Array.isArray(runtimeTask.failureHistory) ? runtimeTask.failureHistory : [];
+  let assignedWorker = runtimeTask.assignedWorker || null;
 
   if (options.event === "block") {
-    classification = validateFailureClassification(classification);
+    const signature = normalizeFailureSignature(options.signature);
+    const repeated = signature && failureHistory.some((failure) => failure.signature === signature);
+    if (classification === "repeated-failure" && !repeated) {
+      throw new Error("repeated-failure is derived only after the same failure signature is observed again.");
+    }
+    classification = repeated ? "repeated-failure" : validateFailureClassification(classification);
     taskStatus = transitionTask(
       runtimeTask.status,
       ["running", "verifying"].includes(runtimeTask.status) ? classification : "block",
@@ -742,6 +852,7 @@ function interveneWorkflow(found, options) {
         ...checkpoint,
         status: transitionCheckpoint(checkpoint.status, classification),
         failureClassification: classification,
+        failureSignature: signature,
         interventionState: {
           event: "block",
           reason,
@@ -749,7 +860,17 @@ function interveneWorkflow(found, options) {
         },
       };
     }
+    failureHistory = [...failureHistory, {
+      signature,
+      classification,
+      reason,
+      checkpointId: runtimeTask.activeCheckpointId,
+      observedAt: timestamp,
+    }];
   } else if (options.event === "retry") {
+    if (blocker && blocker.classification === "repeated-failure") {
+      throw new Error("Workflow repeated failure requires revise or reassign; ordinary retry is refused.");
+    }
     if (runtimeTask.attempts > found.run.budget.maxRepairsPerCheckpoint) {
       throw new Error(`Workflow task ${runtimeTask.id} exhausted its repair-attempt budget.`);
     }
@@ -757,6 +878,15 @@ function interveneWorkflow(found, options) {
     runStatus = transitionRun(found.run.status, "retry");
     activeCheckpointId = null;
     blocker = null;
+  } else if (options.event === "reassign") {
+    if (!options.workerId) throw new Error("Workflow reassign requires --worker.");
+    taskStatus = transitionTask(runtimeTask.status, "reassign");
+    runStatus = found.run.status === "blocked"
+      ? transitionRun(found.run.status, "reassign")
+      : found.run.status;
+    activeCheckpointId = null;
+    blocker = null;
+    assignedWorker = options.workerId;
   } else if (options.event === "waive") {
     classification = assertWaivableClassification(classification);
     taskStatus = transitionTask(runtimeTask.status, "waive");
@@ -782,6 +912,8 @@ function interveneWorkflow(found, options) {
     status: taskStatus,
     activeCheckpointId,
     blocker,
+    failureHistory,
+    assignedWorker,
   } : task));
   if (tasks.some((task) => task.status === "blocked")) runStatus = "blocked";
   const run = {
@@ -846,6 +978,8 @@ function createApprovedRun(options) {
       resultId: null,
       verification: null,
       blocker: null,
+      failureHistory: [],
+      assignedWorker: null,
     })),
     budget: makeRuntimeBudget(options.definition.budget),
     approval: {

@@ -70,6 +70,8 @@ function parseArgs(argv) {
     resultFile: undefined,
     event: undefined,
     classification: undefined,
+    signature: undefined,
+    workerId: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -164,6 +166,24 @@ function parseArgs(argv) {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) throw new Error("--classification requires a failure classification.");
       args.classification = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--signature") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--signature requires a normalized failure signature.");
+      args.signature = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--worker") {
+      const value = argv[index + 1];
+      if (!value || !/^[a-z][a-z0-9-]{0,63}$/.test(value)) {
+        throw new Error("--worker requires a lowercase workflow worker id.");
+      }
+      args.workerId = value;
       index += 1;
       continue;
     }
