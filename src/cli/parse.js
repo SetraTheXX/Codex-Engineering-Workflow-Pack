@@ -73,6 +73,7 @@ function parseArgs(argv) {
     signature: undefined,
     workerId: undefined,
     templateName: undefined,
+    compilerDigest: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -212,7 +213,13 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "supervise" && arg === "--goal") {
+    if (
+      (
+        args.command === "supervise"
+        || (args.command === "workflow" && ["compile", "propose", "approve"].includes(args.subcommand))
+      )
+      && arg === "--goal"
+    ) {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
         throw new Error("--goal requires text.");
@@ -248,6 +255,16 @@ function parseArgs(argv) {
         throw new Error("--digest requires a sha256:<64 lowercase hex> workflow digest.");
       }
       args.digest = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--compiler-digest") {
+      const value = argv[index + 1];
+      if (!value || !/^sha256:[a-f0-9]{64}$/.test(value)) {
+        throw new Error("--compiler-digest requires a sha256:<64 lowercase hex> compiler request digest.");
+      }
+      args.compilerDigest = value;
       index += 1;
       continue;
     }

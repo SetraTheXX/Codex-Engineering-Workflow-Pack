@@ -13,6 +13,7 @@ The contract names proposed in the Phase 10 roadmap need stable ownership bounda
 
 Phase 10 adopts these contract names:
 
+- `workflow-compiler-request/v1`: a non-executable, source-bound request for a host agent to propose one `workflow-definition/v1` candidate. It owns the untrusted source identity, compiler prompt, expected output contract, and trust flags, but no approval or runtime state.
 - `workflow-definition/v1`: an approved, declarative workflow revision. It owns the goal, task graph, scopes, stopping conditions, verification policy, assurance, checkpoint policy, budget proposal, execution owner/backend pair, allowed modes, reviewer policy, and revision metadata. It contains no live process state or mutable progress.
 - `run-state/v2`: the mutable runtime instance of one approved workflow revision. It owns run and task states, active checkpoints, scheduling decisions, operator interventions, counters, pause/block reasons, effective owner/backend, and references to immutable definition revisions and evidence.
 - `task-checkpoint/v1`: the attempt-level gate for one task. It owns baseline identity, allowed scope, verification schedule, attempt count, failure classification, intervention state, result reference, and reviewer requirement. A checkpoint cannot become complete without its required result and verification evidence.
@@ -24,7 +25,9 @@ The schema identifier is an exact contract discriminator, not a loose compatibil
 
 ## Compiler Boundary
 
-Codex may propose a structured workflow candidate from a prompt, issue, PRD, `PLAN.md`, or `progress.md`. The candidate is untrusted input. CEWP validates identifiers, dependency existence and acyclicity, scope safety and overlap, stopping conditions, verification commands, assurance policy, owner/backend compatibility, budgets, and graph size before it can be approved.
+Codex may propose a structured workflow candidate from a prompt, issue, PRD, `PLAN.md`, or `progress.md`. `workflow compile` produces a deterministic `workflow-compiler-request/v1`; it does not call a model, execute source text, or create canonical workflow state. A Codex host, plugin, or operator may give the request prompt to an agent and return its JSON candidate. The compiler request digest binds that candidate path to the exact source snapshot.
+
+The candidate is untrusted input. CEWP validates identifiers, dependency existence and acyclicity, scope safety and overlap, stopping conditions, verification commands, assurance policy, owner/backend compatibility, budgets, and graph size before it can be approved. Source drift invalidates both the compiler binding and the source-bound approval digest.
 
 CEWP presents a normalized proposal and source identity for explicit operator approval. It never executes arbitrary prose, Markdown checkboxes, or an unapproved compiler response. Approval records the exact workflow revision and content digest.
 

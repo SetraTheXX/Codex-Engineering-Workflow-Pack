@@ -36,6 +36,7 @@ function runWorkflowProposalContract() {
     const output = JSON.parse(result.stdout);
     assert(output.command === "workflow.propose", "proposal output identifies the command");
     assert(output.data.definition.schemaVersion === "workflow-definition/v1", "proposal contains a normalized definition");
+    assert(output.data.definitionDigest.startsWith("sha256:"), "proposal separates the immutable definition digest");
     assert(output.data.source.kind === "plan", "PLAN.md source kind is inferred");
     assert(output.data.source.path === "PLAN.md", "source path stays repository-relative");
     assert(output.data.source.sha256.startsWith("sha256:"), "source content is identified by digest");
@@ -72,6 +73,20 @@ function runWorkflowProposalContract() {
     assert(!fs.existsSync(path.join(repoRoot, ".cewp", "workflows")), "stale approval creates no definition state");
     writeJson(path.join(repoRoot, "proposal.json"), validDefinition());
 
+    writeFile(path.join(repoRoot, "PLAN.md"), "# Changed release plan\n\nThe source changed after preview.\n");
+    const staleSource = runNode(cewpCli, [
+      "workflow", "approve",
+      "--proposal", "proposal.json",
+      "--from", "PLAN.md",
+      "--digest", output.data.digest,
+      "--yes",
+      "--json",
+    ], repoRoot);
+    assert(staleSource.status === 1, "changed source cannot use a stale approval digest");
+    assert(staleSource.stderr.includes("source or proposal changed after preview"), "stale source refusal requests a fresh proposal preview");
+    assert(!fs.existsSync(path.join(repoRoot, ".cewp", "workflows")), "stale source approval creates no definition state");
+    writeFile(path.join(repoRoot, "PLAN.md"), "# Release plan\n\nThis prose is source context, not executable state.\n");
+
     const approvedResult = runNode(cewpCli, [
       "workflow", "approve",
       "--proposal", "proposal.json",
@@ -88,6 +103,7 @@ function runWorkflowProposalContract() {
     assert(approved.data.run.tasks.find((task) => task.id === "implement-example").status === "ready", "root task becomes ready");
     assert(approved.data.run.tasks.find((task) => task.id === "document-example").status === "pending", "dependent task waits");
     assert(approved.data.run.approval.digest === output.data.digest, "canonical approval records the reviewed digest");
+    assert(approved.data.run.workflow.digest === output.data.definitionDigest, "run keeps the definition digest distinct from approval context");
     assert(fs.existsSync(path.join(repoRoot, approved.data.definitionPath)), "approved definition is persisted");
     assert(fs.existsSync(path.join(repoRoot, approved.data.runPath)), "run state is persisted");
 

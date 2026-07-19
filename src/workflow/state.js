@@ -9,6 +9,7 @@ const { readRepoJson } = require("./source");
 const { deriveSchedule } = require("./scheduler");
 const { evaluateWorkflowOperation } = require("./budget");
 const { deriveProgressView, renderProgressMarkdown } = require("./progress");
+const { digestWorkflowApproval } = require("./proposal");
 const { validateReviewResult } = require("./review");
 const { previewWorkflowRevision } = require("./revision");
 const { validateTaskResult } = require("./result");
@@ -1104,7 +1105,11 @@ function createApprovedRun(options) {
   const now = options.now || new Date();
   const timestamp = now.toISOString();
   const digest = digestWorkflowDefinition(options.definition);
-  if (options.expectedDigest !== digest) {
+  const approvalDigest = digestWorkflowApproval(digest, options.source);
+  if (options.expectedApprovalDigest && options.expectedApprovalDigest !== approvalDigest) {
+    throw new Error("Workflow source or proposal changed after preview. Run `cewp workflow propose` again and approve its digest.");
+  }
+  if (!options.expectedApprovalDigest && options.expectedDigest !== digest) {
     throw new Error("Workflow proposal changed after preview. Run `cewp workflow propose` again and approve its digest.");
   }
   const definitionPath = persistApprovedDefinition(repoRoot, options.definition, digest);
@@ -1144,7 +1149,8 @@ function createApprovedRun(options) {
     approval: {
       actor: "operator",
       approvedAt: timestamp,
-      digest,
+      digest: approvalDigest,
+      definitionDigest: digest,
       source: options.source,
     },
     reviewer: {
@@ -1165,6 +1171,7 @@ function createApprovedRun(options) {
     workflowId: options.definition.workflowId,
     revision: options.definition.revision.number,
     digest,
+    approvalDigest,
     actor: "operator",
   })}\n`, { flag: "wx" });
   writeWorkflowProgress(runRoot, run, options.definition, { now });

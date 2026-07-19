@@ -4,6 +4,10 @@ const {
   digestWorkflowDefinition,
   validateWorkflowDefinition,
 } = require("./definition");
+const {
+  createWorkflowCompilerRequest,
+  digestWorkflowCompilerRequest,
+} = require("./compiler");
 const { makeSourceIdentity, readRepoJson } = require("./source");
 const {
   applyLegacyMigration,
@@ -11,6 +15,7 @@ const {
   previewLegacyMigration,
 } = require("./migration");
 const { deriveProgressView } = require("./progress");
+const { digestWorkflowApproval } = require("./proposal");
 const { previewWorkflowRevision } = require("./revision");
 const {
   applyWorkflowRevision,
@@ -36,7 +41,50 @@ function outputJson(command, data) {
   }, null, 2));
 }
 
+function resolveProposalSource(options) {
+  if (!options.compilerDigest) {
+    if (options.goal) throw new Error("--goal proposals require the --compiler-digest shown by workflow compile.");
+    const source = makeSourceIdentity(process.cwd(), options.fromFile, options.sourceKind);
+    return { source, compilerRequestDigest: null };
+  }
+  const request = createWorkflowCompilerRequest({
+    repoRoot: process.cwd(),
+    sourcePath: options.fromFile,
+    sourceKind: options.sourceKind,
+    goal: options.goal,
+  });
+  const compilerRequestDigest = digestWorkflowCompilerRequest(request);
+  if (compilerRequestDigest !== options.compilerDigest) {
+    throw new Error("Workflow source changed since the compiler request. Run `cewp workflow compile` again.");
+  }
+  return { source: request.source, compilerRequestDigest };
+}
+
 function runWorkflow(options = {}) {
+  if (options.subcommand === "compile") {
+    const request = createWorkflowCompilerRequest({
+      repoRoot: process.cwd(),
+      sourcePath: options.fromFile,
+      sourceKind: options.sourceKind,
+      goal: options.goal,
+    });
+    const requestDigest = digestWorkflowCompilerRequest(request);
+    const fromOption = options.fromFile ? ` --from ${options.fromFile}` : "";
+    const goalOption = options.goal ? " --goal <same-direct-goal>" : "";
+    const compilerOption = ` --compiler-digest ${requestDigest}`;
+    const result = {
+      request,
+      requestDigest,
+      nextAction: {
+        kind: "agent-proposal",
+        command: `cewp workflow propose --proposal <compiler-output.json>${fromOption}${goalOption}${compilerOption}`,
+      },
+    };
+    if (options.json) outputJson("workflow.compile", result);
+    else console.log(request.prompt);
+    return;
+  }
+
   if (options.subcommand === "template") {
     if (options.templateName === "list") {
       const result = { templates: listWorkflowTemplates() };
@@ -117,13 +165,18 @@ function runWorkflow(options = {}) {
     }
     const file = readRepoJson(process.cwd(), options.proposalFile, "workflow proposal");
     const definition = validateWorkflowDefinition(file.value);
-    const digest = digestWorkflowDefinition(definition);
-    const source = makeSourceIdentity(process.cwd(), options.fromFile, options.sourceKind);
+    const { source, compilerRequestDigest } = resolveProposalSource(options);
+    const definitionDigest = digestWorkflowDefinition(definition);
+    const digest = digestWorkflowApproval(definitionDigest, source);
     const fromOption = options.fromFile ? ` --from ${options.fromFile}` : "";
+    const goalOption = options.goal ? " --goal <same-direct-goal>" : "";
+    const compilerOption = compilerRequestDigest ? ` --compiler-digest ${compilerRequestDigest}` : "";
     const result = {
       definition,
+      definitionDigest,
       digest,
       source,
+      compilerRequestDigest,
       diff: {
         baseRevision: null,
         proposedRevision: definition.revision.number,
@@ -135,7 +188,7 @@ function runWorkflow(options = {}) {
       },
       approval: {
         required: true,
-        command: `cewp workflow approve --proposal ${options.proposalFile}${fromOption} --digest ${digest} --yes`,
+        command: `cewp workflow approve --proposal ${options.proposalFile}${fromOption}${goalOption}${compilerOption} --digest ${digest} --yes`,
       },
     };
     if (options.json) outputJson("workflow.propose", result);
@@ -201,12 +254,12 @@ function runWorkflow(options = {}) {
     if (!options.digest) throw new Error("workflow approve requires the --digest shown by workflow propose.");
     const file = readRepoJson(process.cwd(), options.proposalFile, "workflow proposal");
     const definition = validateWorkflowDefinition(file.value);
-    const source = makeSourceIdentity(process.cwd(), options.fromFile, options.sourceKind);
+    const { source } = resolveProposalSource(options);
     const result = createApprovedRun({
       repoRoot: process.cwd(),
       definition,
       source,
-      expectedDigest: options.digest,
+      expectedApprovalDigest: options.digest,
     });
     if (options.json) outputJson("workflow.approve", result);
     else {
