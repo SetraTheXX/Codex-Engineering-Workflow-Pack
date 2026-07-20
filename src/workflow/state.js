@@ -15,6 +15,7 @@ const { previewWorkflowRevision } = require("./revision");
 const { validateTaskResult } = require("./result");
 const {
   CHECKPOINT_TRANSITIONS,
+  REVISION_REQUIRED_FAILURES,
   TASK_TRANSITIONS,
   WAIVABLE_FAILURES,
   assertWaivableClassification,
@@ -1131,6 +1132,9 @@ function interveneWorkflow(found, options) {
   } else if (options.event === "retry") {
     if (blocker && blocker.classification === "repeated-failure") {
       throw new Error("Workflow repeated failure requires revise or reassign; ordinary retry is refused.");
+    }
+    if (blocker && REVISION_REQUIRED_FAILURES.has(blocker.classification)) {
+      throw new Error(`Workflow ${blocker.classification} requires workflow revision before another attempt.`);
     }
     if (runtimeTask.attempts > found.run.budget.maxRepairsPerCheckpoint) {
       throw new Error(`Workflow task ${runtimeTask.id} exhausted its repair-attempt budget.`);

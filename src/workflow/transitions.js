@@ -13,6 +13,12 @@ const FAILURE_CLASSIFICATIONS = Object.freeze([
   "non-waivable-gate",
 ]);
 const WAIVABLE_FAILURES = new Set(["pre-existing-failure"]);
+const REVISION_REQUIRED_FAILURES = new Set([
+  "baseline-failure",
+  "invalid-test",
+  "ambiguous-requirement",
+  "non-waivable-gate",
+]);
 
 const FAILURE_EVENTS = Object.freeze(Object.fromEntries(
   FAILURE_CLASSIFICATIONS.map((classification) => [classification, "blocked"]),
@@ -246,6 +252,7 @@ function assertWaivableClassification(classification) {
 module.exports = {
   CHECKPOINT_TRANSITIONS,
   FAILURE_CLASSIFICATIONS,
+  REVISION_REQUIRED_FAILURES,
   RUN_TRANSITIONS,
   TASK_TRANSITIONS,
   WAIVABLE_FAILURES,

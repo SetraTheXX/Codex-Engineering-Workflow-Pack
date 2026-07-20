@@ -1,5 +1,10 @@
 "use strict";
 
+const {
+  REVISION_REQUIRED_FAILURES,
+  WAIVABLE_FAILURES,
+} = require("./transitions");
+
 const PROGRESS_VIEW_SCHEMA_VERSION = "progress-view/v1";
 
 function assertEvidenceGates(run, definition) {
@@ -51,12 +56,23 @@ function nextActionFor(run, definition, schedule) {
   }
   const blocked = run.tasks.find((task) => task.status === "blocked");
   if (blocked) {
-    const repeated = blocked.blocker && blocked.blocker.classification === "repeated-failure";
+    const classification = blocked.blocker && blocked.blocker.classification;
+    if (REVISION_REQUIRED_FAILURES.has(classification)) {
+      return {
+        kind: "revision",
+        command: `cewp workflow revise ${run.runId} --proposal <revision.json>`,
+        reason: blocked.blocker.reason,
+      };
+    }
+    const repeated = classification === "repeated-failure";
+    const waivable = WAIVABLE_FAILURES.has(classification);
     return {
       kind: "intervention",
       command: repeated
         ? `cewp workflow intervene ${run.runId} --task ${blocked.id} --event reassign --worker <worker-id> --reason <text> --yes`
-        : `cewp workflow intervene ${run.runId} --task ${blocked.id} --event retry --reason <text> --yes`,
+        : waivable
+          ? `cewp workflow intervene ${run.runId} --task ${blocked.id} --event waive --reason <text> --yes`
+          : `cewp workflow intervene ${run.runId} --task ${blocked.id} --event retry --reason <text> --yes`,
       reason: blocked.blocker ? blocked.blocker.reason : "task is blocked",
     };
   }
