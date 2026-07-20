@@ -251,6 +251,17 @@ function validateFailureClassification(classification) {
   return classification;
 }
 
+function normalizeFailureSignature(value) {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new Error("Failure signature is required.");
+  }
+  const signature = value.trim().toLowerCase();
+  if (!/^[a-z0-9][a-z0-9:._-]{2,127}$/.test(signature)) {
+    throw new Error("Failure signature must be a normalized lowercase identifier.");
+  }
+  return signature;
+}
+
 function assertWaivableClassification(classification) {
   validateFailureClassification(classification);
   if (!WAIVABLE_FAILURES.has(classification)) {
@@ -267,6 +278,7 @@ module.exports = {
   TASK_TRANSITIONS,
   WAIVABLE_FAILURES,
   assertWaivableClassification,
+  normalizeFailureSignature,
   transitionCheckpoint,
   transitionRun,
   transitionTask,

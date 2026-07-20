@@ -330,11 +330,13 @@ function runWorkflow(options = {}) {
     const result = recordWorkflowResult(found, options.taskId, candidate.value);
     if (options.json) outputJson("workflow.result", result);
     else {
-      console.log("CEWP workflow result verified");
+      console.log("CEWP workflow result recorded");
       console.log(`Run ID: ${result.run.runId}`);
       console.log(`Task: ${result.result.taskId}`);
       console.log(`Result: ${result.result.resultId}`);
+      console.log(`Outcome: ${result.result.outcome}`);
     }
+    if (result.ok === false) process.exitCode = 1;
     return;
   }
 

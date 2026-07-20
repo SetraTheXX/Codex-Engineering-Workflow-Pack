@@ -19,6 +19,7 @@ const {
   TASK_TRANSITIONS,
   WAIVABLE_FAILURES,
   assertWaivableClassification,
+  normalizeFailureSignature,
   transitionCheckpoint,
   transitionRun,
   transitionTask,
@@ -512,6 +513,100 @@ function startWorkflowTask(found, taskId, options = {}) {
   };
 }
 
+function recordWorkflowFailureResult(found, runtimeTask, checkpoint, checkpointPath, result, resultPath, budget) {
+  const previousFailures = Array.isArray(runtimeTask.failureHistory) ? runtimeTask.failureHistory : [];
+  const repeated = previousFailures.some((failure) => failure.signature === result.failure.signature);
+  const classification = repeated ? "repeated-failure" : result.failure.classification;
+  const resultRecordedCheckpointStatus = transitionCheckpoint(checkpoint.status, "result-recorded");
+  const blockedCheckpoint = {
+    ...checkpoint,
+    status: transitionCheckpoint(resultRecordedCheckpointStatus, classification),
+    completedAt: result.completedAt,
+    result: {
+      resultId: result.resultId,
+      path: normalizeSlashPath(path.relative(found.repoRoot, resultPath)),
+    },
+    verification: {
+      ...checkpoint.verification,
+      baseline: result.verification.baseline,
+      latest: {
+        status: "failed",
+        targeted: result.verification.targeted,
+        full: result.verification.full,
+      },
+    },
+    failureClassification: classification,
+    failureSignature: result.failure.signature,
+    interventionState: {
+      event: "task-result-failed",
+      reason: result.failure.summary,
+      recordedAt: result.completedAt,
+    },
+  };
+  writeJsonAtomic(checkpointPath, blockedCheckpoint);
+  const verifyingTaskStatus = transitionTask(runtimeTask.status, "result-recorded");
+  const failureHistory = [...previousFailures, {
+    signature: result.failure.signature,
+    classification,
+    observedClassification: result.failure.classification,
+    reason: result.failure.summary,
+    checkpointId: checkpoint.checkpointId,
+    resultId: result.resultId,
+    observedAt: result.completedAt,
+  }];
+  const tasks = found.run.tasks.map((task) => (task.id === runtimeTask.id ? {
+    ...task,
+    status: transitionTask(verifyingTaskStatus, classification),
+    resultId: result.resultId,
+    verification: {
+      status: "failed",
+      checkpointId: checkpoint.checkpointId,
+      resultId: result.resultId,
+    },
+    blocker: {
+      classification,
+      reason: result.failure.summary,
+      blockedAt: result.completedAt,
+      waivable: WAIVABLE_FAILURES.has(classification),
+      source: "task-result",
+      resultId: result.resultId,
+    },
+    failureHistory,
+  } : task));
+  const run = {
+    ...found.run,
+    status: transitionRun(found.run.status, "block"),
+    updatedAt: result.completedAt,
+    tasks,
+    budget,
+    warnings: [...(found.run.warnings || []), `Task ${runtimeTask.id} failed: ${classification}.`],
+  };
+  writeJsonAtomic(found.runPath, run);
+  const now = new Date(result.completedAt);
+  const progress = writeWorkflowProgress(found.runRoot, run, found.definition, { now });
+  appendWorkflowEvent(found.runRoot, {
+    schemaVersion: "workflow-event/v1",
+    timestamp: result.completedAt,
+    type: "task-failed",
+    runId: run.runId,
+    taskId: runtimeTask.id,
+    checkpointId: checkpoint.checkpointId,
+    resultId: result.resultId,
+    classification,
+    observedClassification: result.failure.classification,
+    signature: result.failure.signature,
+  });
+  return {
+    ok: false,
+    run,
+    checkpoint: blockedCheckpoint,
+    result,
+    resultPath: normalizeSlashPath(path.relative(found.repoRoot, resultPath)),
+    progress,
+    ...deriveSchedule(run, found.definition),
+  };
+}
+
 function recordWorkflowResult(found, taskId, candidate) {
   const runtimeTask = found.run.tasks.find((task) => task.id === taskId);
   const definitionTask = found.definition.tasks.find((task) => task.id === taskId);
@@ -540,7 +635,9 @@ function recordWorkflowResult(found, taskId, candidate) {
     checkpoint,
     definitionTask,
   });
-  const observedOperations = result.usage.managedOperations.value;
+  const observedOperations = result.usage.managedOperations.label === "observed"
+    ? result.usage.managedOperations.value
+    : 0;
   const activeAllocation = checkpoint.budget.activeAllocation || "implementation";
   const consumedOperations = found.run.budget.consumed.modelOperations + observedOperations;
   const consumedAllocation = found.run.budget.consumed.allocations[activeAllocation] + observedOperations;
@@ -607,7 +704,32 @@ function recordWorkflowResult(found, taskId, candidate) {
     taskId,
     `attempt-${String(runtimeTask.attempts).padStart(4, "0")}.json`,
   );
+  const budget = {
+    ...found.run.budget,
+    consumed: {
+      ...found.run.budget.consumed,
+      modelOperations: consumedOperations,
+      targetedVerificationRuns: consumedTargetedRuns,
+      fullVerificationRuns: consumedFullRuns,
+      capturedOutputBytes: consumedOutputBytes,
+      allocations: {
+        ...found.run.budget.consumed.allocations,
+        [activeAllocation]: consumedAllocation,
+      },
+    },
+  };
   writeJsonAtomic(resultPath, result);
+  if (result.outcome === "failed") {
+    return recordWorkflowFailureResult(
+      found,
+      runtimeTask,
+      checkpoint,
+      checkpointPath,
+      result,
+      resultPath,
+      budget,
+    );
+  }
   const resultRecordedCheckpointStatus = transitionCheckpoint(checkpoint.status, "result-recorded");
   const completedCheckpoint = {
     ...checkpoint,
@@ -668,20 +790,7 @@ function recordWorkflowResult(found, taskId, candidate) {
     status: runStatus,
     updatedAt: result.completedAt,
     tasks,
-    budget: {
-      ...found.run.budget,
-      consumed: {
-        ...found.run.budget.consumed,
-        modelOperations: consumedOperations,
-        targetedVerificationRuns: consumedTargetedRuns,
-        fullVerificationRuns: consumedFullRuns,
-        capturedOutputBytes: consumedOutputBytes,
-        allocations: {
-          ...found.run.budget.consumed.allocations,
-          [activeAllocation]: consumedAllocation,
-        },
-      },
-    },
+    budget,
   };
   writeJsonAtomic(found.runPath, run);
   const progress = writeWorkflowProgress(found.runRoot, run, found.definition, { now: new Date(result.completedAt) });
@@ -695,6 +804,7 @@ function recordWorkflowResult(found, taskId, candidate) {
     resultId: result.resultId,
   });
   return {
+    ok: true,
     run,
     checkpoint: completedCheckpoint,
     result,
@@ -1220,15 +1330,6 @@ function interveneWorkflowLifecycle(found, options, timestamp, reason) {
   };
 }
 
-function normalizeFailureSignature(value) {
-  if (value === undefined || value === null || String(value).trim() === "") return null;
-  const signature = String(value).trim().toLowerCase();
-  if (!/^[a-z0-9][a-z0-9:._-]{2,127}$/.test(signature)) {
-    throw new Error("Failure signature must be a normalized lowercase identifier.");
-  }
-  return signature;
-}
-
 function interveneWorkflow(found, options) {
   const timestamp = (options.now || new Date()).toISOString();
   const reason = typeof options.reason === "string" ? options.reason.trim() : "";
@@ -1252,7 +1353,7 @@ function interveneWorkflow(found, options) {
   let assignedWorker = runtimeTask.assignedWorker || null;
 
   if (options.event === "block") {
-    const signature = normalizeFailureSignature(options.signature);
+    const signature = options.signature ? normalizeFailureSignature(options.signature) : null;
     const repeated = signature && failureHistory.some((failure) => failure.signature === signature);
     if (classification === "repeated-failure" && !repeated) {
       throw new Error("repeated-failure is derived only after the same failure signature is observed again.");

@@ -1,6 +1,10 @@
 "use strict";
 
 const { normalizeSlashPath } = require("../lib/paths");
+const {
+  normalizeFailureSignature,
+  validateFailureClassification,
+} = require("./transitions");
 
 const TASK_RESULT_SCHEMA_VERSION = "task-result/v1";
 const VERIFICATION_STATUSES = new Set([
@@ -58,6 +62,17 @@ function normalizeVerificationEntries(value, label) {
   });
 }
 
+function indexApprovedEvidence(schedule, entries, label) {
+  const byCommand = new Map();
+  for (const entry of entries) {
+    if (byCommand.has(entry.command)) throw new Error(`Duplicate ${label} verification evidence: ${entry.command}.`);
+    byCommand.set(entry.command, entry);
+  }
+  const unexpected = [...byCommand.keys()].filter((command) => !schedule.includes(command));
+  if (unexpected.length > 0) throw new Error(`Task result contains unapproved ${label} verification: ${unexpected[0]}.`);
+  return byCommand;
+}
+
 function assertScheduledEvidence(schedule, entries, label) {
   const byCommand = new Map();
   for (const entry of entries) {
@@ -101,8 +116,9 @@ function validateTaskResult(value, context) {
   }
   const resultId = requiredText(value.resultId, "resultId");
   if (!/^[a-z0-9][a-z0-9-]{0,127}$/.test(resultId)) throw new Error("resultId must use lowercase letters, digits, and hyphens.");
-  if (value.outcome !== "succeeded") {
-    throw new Error("Only a succeeded task result can complete a checkpoint; record failures as interventions.");
+  const outcome = requiredText(value.outcome, "outcome");
+  if (!["succeeded", "failed"].includes(outcome)) {
+    throw new Error("Task result outcome must be succeeded or failed.");
   }
   if (Number.isNaN(Date.parse(value.completedAt))) throw new Error("completedAt must be an ISO timestamp.");
   if (!Array.isArray(value.changedFiles)) throw new Error("changedFiles must be an array.");
@@ -119,21 +135,31 @@ function validateTaskResult(value, context) {
   if (!isObject(value.verification) || !isObject(value.verification.baseline)) {
     throw new Error("Task result verification baseline is required.");
   }
-  if (value.verification.baseline.status !== "passed") {
-    throw new Error("Task result baseline must pass before a success result can advance.");
+  const baselineStatus = requiredText(value.verification.baseline.status, "verification.baseline.status");
+  if (!VERIFICATION_STATUSES.has(baselineStatus)) {
+    throw new Error(`verification.baseline.status is unsupported: ${baselineStatus}.`);
   }
   const baselineEvidence = normalizeVerificationEntries(
     value.verification.baseline.evidence,
     "verification.baseline.evidence",
   );
-  if (baselineEvidence.length === 0 || baselineEvidence.some((entry) => entry.status !== "passed")) {
-    throw new Error("Task result baseline requires passing evidence.");
-  }
-  assertScheduledEvidence(context.definitionTask.verification.targeted, baselineEvidence, "baseline");
   const targeted = normalizeVerificationEntries(value.verification.targeted, "verification.targeted");
   const full = normalizeVerificationEntries(value.verification.full, "verification.full");
-  assertScheduledEvidence(context.definitionTask.verification.targeted, targeted, "targeted");
-  assertScheduledEvidence(context.definitionTask.verification.full, full, "full");
+  if (outcome === "succeeded") {
+    if (baselineStatus !== "passed") {
+      throw new Error("Task result baseline must pass before a success result can advance.");
+    }
+    if (baselineEvidence.length === 0 || baselineEvidence.some((entry) => entry.status !== "passed")) {
+      throw new Error("Task result baseline requires passing evidence.");
+    }
+    assertScheduledEvidence(context.definitionTask.verification.targeted, baselineEvidence, "baseline");
+    assertScheduledEvidence(context.definitionTask.verification.targeted, targeted, "targeted");
+    assertScheduledEvidence(context.definitionTask.verification.full, full, "full");
+  } else {
+    indexApprovedEvidence(context.definitionTask.verification.targeted, baselineEvidence, "baseline");
+    indexApprovedEvidence(context.definitionTask.verification.targeted, targeted, "targeted");
+    indexApprovedEvidence(context.definitionTask.verification.full, full, "full");
+  }
   if (!isObject(value.usage)) throw new Error("Task result usage is required.");
   const usage = {
     managedOperations: normalizeTruthValue(value.usage.managedOperations, "usage.managedOperations", { requireSource: true }),
@@ -162,24 +188,45 @@ function validateTaskResult(value, context) {
       path: normalizeEvidencePath(artifact.path, `artifacts[${index}].path`),
     };
   });
-  if (value.failure !== null) throw new Error("A succeeded task result must have a null failure.");
+  let failure = null;
+  if (outcome === "succeeded") {
+    if (value.failure !== null) throw new Error("A succeeded task result must have a null failure.");
+  } else {
+    if (!isObject(value.failure)) throw new Error("A failed task result requires failure details.");
+    const classification = validateFailureClassification(value.failure.classification);
+    if (classification === "repeated-failure") {
+      throw new Error("repeated-failure is derived from canonical failure history and cannot be submitted.");
+    }
+    if (!Array.isArray(value.failure.evidencePaths) || value.failure.evidencePaths.length === 0) {
+      throw new Error("A failed task result requires at least one failure evidence path.");
+    }
+    failure = {
+      classification,
+      signature: normalizeFailureSignature(value.failure.signature),
+      summary: requiredText(value.failure.summary, "failure.summary"),
+      evidencePaths: value.failure.evidencePaths.map((entry, index) => normalizeEvidencePath(
+        entry,
+        `failure.evidencePaths[${index}]`,
+      )),
+    };
+  }
   return {
     schemaVersion: TASK_RESULT_SCHEMA_VERSION,
     resultId,
     runId: value.runId,
     taskId: value.taskId,
     checkpointId: value.checkpointId,
-    outcome: "succeeded",
+    outcome,
     completedAt: new Date(value.completedAt).toISOString(),
     changedFiles,
     verification: {
-      baseline: { status: "passed", evidence: baselineEvidence },
+      baseline: { status: baselineStatus, evidence: baselineEvidence },
       targeted,
       full,
     },
     usage,
     artifacts,
-    failure: null,
+    failure,
   };
 }
 
