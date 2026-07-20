@@ -208,13 +208,17 @@ function runWorkflow(options = {}) {
     const file = readRepoJson(process.cwd(), options.proposalFile, "workflow revision proposal");
     const preview = previewWorkflowRevision(found.run, found.definition, file.value);
     const source = makeSourceIdentity(process.cwd(), options.fromFile, options.sourceKind);
+    const definitionDigest = preview.digest;
+    const digest = digestWorkflowApproval(definitionDigest, source);
     const fromOption = options.fromFile ? ` --from ${options.fromFile}` : "";
     const result = {
       ...preview,
+      definitionDigest,
+      digest,
       source,
       approval: {
         required: true,
-        command: `cewp workflow apply-revision ${found.run.runId} --proposal ${options.proposalFile}${fromOption} --digest ${preview.digest} --yes`,
+        command: `cewp workflow apply-revision ${found.run.runId} --proposal ${options.proposalFile}${fromOption} --digest ${digest} --yes`,
       },
     };
     if (options.json) outputJson("workflow.revise", result);
@@ -236,7 +240,7 @@ function runWorkflow(options = {}) {
     const file = readRepoJson(process.cwd(), options.proposalFile, "workflow revision proposal");
     const source = makeSourceIdentity(process.cwd(), options.fromFile, options.sourceKind);
     const result = applyWorkflowRevision(found, file.value, {
-      expectedDigest: options.digest,
+      expectedApprovalDigest: options.digest,
       source,
     });
     if (options.json) outputJson("workflow.apply-revision", result);

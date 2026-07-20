@@ -142,8 +142,10 @@ function applyWorkflowRevision(found, candidate, options = {}) {
   const now = options.now || new Date();
   const timestamp = now.toISOString();
   const preview = previewWorkflowRevision(found.run, found.definition, candidate);
-  if (options.expectedDigest !== preview.digest) {
-    throw new Error("Workflow revision changed after preview. Run `cewp workflow revise` again and approve its digest.");
+  const definitionDigest = preview.digest;
+  const approvalDigest = digestWorkflowApproval(definitionDigest, options.source);
+  if (options.expectedApprovalDigest !== approvalDigest) {
+    throw new Error("Workflow source or revision changed after preview. Run `cewp workflow revise` again and approve its digest.");
   }
   const revision = preview.definition.revision.number;
   const backupPath = path.join(
@@ -152,7 +154,7 @@ function applyWorkflowRevision(found, candidate, options = {}) {
     `run-before-revision-${String(revision).padStart(6, "0")}.json`,
   );
   if (fs.existsSync(backupPath)) throw new Error(`Workflow revision ${revision} already has a run backup.`);
-  const definitionPath = persistApprovedDefinition(found.repoRoot, preview.definition, preview.digest);
+  const definitionPath = persistApprovedDefinition(found.repoRoot, preview.definition, definitionDigest);
   writeJsonAtomic(backupPath, found.run);
   const previousById = new Map(found.run.tasks.map((task) => [task.id, task]));
   let tasks = preview.definition.tasks.map((definitionTask) => {
@@ -202,7 +204,7 @@ function applyWorkflowRevision(found, candidate, options = {}) {
     workflow: {
       id: preview.definition.workflowId,
       revision,
-      digest: preview.digest,
+      digest: definitionDigest,
       definitionPath: normalizeSlashPath(path.relative(found.repoRoot, definitionPath)),
     },
     status,
@@ -217,7 +219,8 @@ function applyWorkflowRevision(found, candidate, options = {}) {
     approval: {
       actor: "operator",
       approvedAt: timestamp,
-      digest: preview.digest,
+      digest: approvalDigest,
+      definitionDigest,
       source: options.source,
       previousDigest: found.run.workflow.digest,
     },
@@ -245,7 +248,8 @@ function applyWorkflowRevision(found, candidate, options = {}) {
     previousRevision: found.run.workflow.revision,
     revision,
     previousDigest: found.run.workflow.digest,
-    digest: preview.digest,
+    digest: definitionDigest,
+    approvalDigest,
     reason: preview.definition.revision.reason,
     backupPath: normalizeSlashPath(path.relative(found.repoRoot, backupPath)),
     actor: "operator",

@@ -8,6 +8,7 @@ const {
   makeTempRepo,
   readJson,
   runNode,
+  writeFile,
   writeJson,
 } = require("../harness/lib/temp-repo");
 const { validDefinition } = require("./workflow-definition");
@@ -72,10 +73,12 @@ function runWorkflowRevisionContract() {
     const revisionsRoot = path.join(repoRoot, ".cewp", "workflows", run.workflow.id, "definitions");
     const proposal = revisionTwo(run);
     writeJson(path.join(repoRoot, "revision-2.json"), proposal);
+    writeFile(path.join(repoRoot, "revision-plan.md"), "# Revision plan\n\nSplit the remaining release work.\n");
 
     const previewResult = runNode(cewpCli, [
       "workflow", "revise", run.runId,
-      "--proposal", "revision-2.json", "--json",
+      "--proposal", "revision-2.json",
+      "--from", "revision-plan.md", "--json",
     ], repoRoot);
     assert(previewResult.status === 0, `revision preview succeeds: ${previewResult.stderr}`);
     const preview = JSON.parse(previewResult.stdout);
@@ -83,6 +86,7 @@ function runWorkflowRevisionContract() {
     assert(preview.data.diff.baseRevision === 1 && preview.data.diff.proposedRevision === 2, "preview compares adjacent revisions");
     assert(preview.data.diff.addedTasks.includes("release-note"), "preview identifies added work");
     assert(preview.data.diff.changedTasks.includes("document-example"), "preview identifies changed remaining work");
+    assert(preview.data.definitionDigest.startsWith("sha256:"), "revision preview separates immutable definition identity");
     assert(readJson(path.join(runRoot, "run.json")).workflow.revision === 1, "preview never mutates canonical state");
     assert(!fs.existsSync(path.join(revisionsRoot, "revision-000002.json")), "preview does not persist the proposal");
     assert(!fs.existsSync(path.join(runRoot, "backups")), "preview does not create a backup");
@@ -140,9 +144,25 @@ function runWorkflowRevisionContract() {
     assert(staleDigest.status === 1, "changed proposal invalidates preview approval");
     assert(staleDigest.stderr.includes("changed after preview"), "digest refusal requests a fresh preview");
 
+    writeFile(path.join(repoRoot, "revision-plan.md"), "# Changed revision plan\n\nThe revision source drifted after preview.\n");
+    const staleSource = runNode(cewpCli, [
+      "workflow", "apply-revision", run.runId,
+      "--proposal", "revision-2.json",
+      "--from", "revision-plan.md",
+      "--digest", preview.data.digest,
+      "--yes", "--json",
+    ], repoRoot);
+    assert(staleSource.status === 1, "changed revision source invalidates preview approval");
+    assert(staleSource.stderr.includes("source or revision changed after preview"), "revision source refusal requests a fresh preview");
+    assert(readJson(path.join(runRoot, "run.json")).workflow.revision === 1, "stale revision source never mutates canonical run state");
+    assert(!fs.existsSync(path.join(revisionsRoot, "revision-000002.json")), "stale revision source never persists a definition");
+    assert(!fs.existsSync(path.join(runRoot, "backups")), "stale revision source never creates a backup");
+    writeFile(path.join(repoRoot, "revision-plan.md"), "# Revision plan\n\nSplit the remaining release work.\n");
+
     const appliedResult = runNode(cewpCli, [
       "workflow", "apply-revision", run.runId,
       "--proposal", "revision-2.json",
+      "--from", "revision-plan.md",
       "--digest", preview.data.digest,
       "--yes", "--json",
     ], repoRoot);
@@ -150,7 +170,8 @@ function runWorkflowRevisionContract() {
     const applied = JSON.parse(appliedResult.stdout);
     assert(applied.command === "workflow.apply-revision", "revision application identifies the command");
     assert(applied.data.run.workflow.revision === 2, "run points to the approved new revision");
-    assert(applied.data.run.workflow.digest === preview.data.digest, "run pins the previewed digest");
+    assert(applied.data.run.workflow.digest === preview.data.definitionDigest, "run pins the previewed definition digest");
+    assert(applied.data.run.approval.digest === preview.data.digest, "revision approval pins definition and source together");
     const completedAfter = applied.data.run.tasks.find((task) => task.id === "implement-example");
     assert(completedAfter.status === "completed", "completed task remains completed");
     assert(completedAfter.resultId === completedBefore.resultId, "completed result evidence is retained exactly");
