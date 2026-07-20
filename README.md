@@ -81,7 +81,7 @@ Then ask Codex to plan a supervised run, run the current checkpoint, or resume a
 
 ## What CEWP Records
 
-Canonical state lives under `.cewp/supervised-runs/<run-id>/`. Human-readable `progress.md` is generated from that state and cannot silently change it.
+Phase 9 supervised state lives under `.cewp/supervised-runs/<run-id>/`; graph workflow state lives under `.cewp/workflow-runs/<run-id>/`. Human-readable `progress.md` is generated from canonical state and cannot silently change it.
 
 CEWP keeps four truth labels separate:
 
@@ -106,12 +106,13 @@ Budget or host exhaustion produces a resumable pause, not a fake PASS. Partial f
 
 ## Existing Toolkit
 
-CEWP still ships ten reusable engineering skills and the earlier Coordinator Mode runtime for compatibility. The supervised single-active-checkpoint workflow is the primary product direction; a verified run can continue linearly with fresh approval, while legacy Coordinator Mode remains documented for existing users.
+CEWP still ships ten reusable engineering skills and the earlier Coordinator Mode runtime for compatibility. The supervised path remains the managed `codex-exec` golden path. The workflow runtime adds source-bound compiler requests, approved task graphs, variable workers, result intake, recovery, revisions, and migrations without executing arbitrary prose or adding another backend.
 
 ## Documentation
 
 - [Install Guide](docs/install.md)
 - [Supervised Workflow](docs/supervised-workflow.md)
+- [Workflow Runtime](docs/workflow-runtime.md)
 - [Known Limitations](docs/known-limitations.md)
 - [Pilot Kit](docs/pilot-kit.md)
 - [Operator Policy](docs/operator-policy.md)
@@ -122,7 +123,7 @@ CEWP still ships ten reusable engineering skills and the earlier Coordinator Mod
 
 ## Status
 
-CEWP is beta software. The supervised contracts are versioned beta surfaces, manual linear continuation is not a general multi-checkpoint workflow compiler, and external pilot gates are still required before the next release is declared complete. Review the plan, evidence, and receipt before integrating changes.
+CEWP is beta software. The workflow compiler emits a source-bound agent request rather than calling a model, and the graph runtime accepts only validated, explicitly approved definitions and evidence. External pilot gates are still required before a future stable release is declared complete. Review the plan, evidence, and receipt before integrating changes.
 
 ## License
 
