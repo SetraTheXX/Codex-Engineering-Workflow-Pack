@@ -181,6 +181,15 @@ function runWorkflowDefinitionContract() {
     ], repoRoot);
     assert(underfunded.status === 1, "underfunded workflow verification schedule is rejected");
     assert(underfunded.stderr.includes("targeted verification budget"), "verification refusal explains the required capacity");
+
+    const underfundedReviewer = validDefinition();
+    underfundedReviewer.checkpointPolicy.reviewerAfterEachTask = true;
+    writeJson(path.join(repoRoot, "underfunded-reviewer-workflow.json"), underfundedReviewer);
+    const reviewerCapacity = runNode(cewpCli, [
+      "workflow", "validate", "underfunded-reviewer-workflow.json", "--json",
+    ], repoRoot);
+    assert(reviewerCapacity.status === 1, "reviewer allocation must cover checkpoint and final reviews");
+    assert(reviewerCapacity.stderr.includes("reviewer allocation requires 3 operations"), "reviewer capacity refusal explains the required allocation");
   } finally {
     cleanupRepo(repoRoot);
   }

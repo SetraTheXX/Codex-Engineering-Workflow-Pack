@@ -231,6 +231,17 @@ function assertVerificationBudgetFits(tasks, budget) {
   }
 }
 
+function assertReviewerBudgetFits(tasks, budget, checkpointPolicy, reviewerPolicy) {
+  const requiredReviewerOperations =
+    (checkpointPolicy.reviewerAfterEachTask ? tasks.length : 0)
+    + (reviewerPolicy.requiredForFinalize ? 1 : 0);
+  if (requiredReviewerOperations > budget.allocations.reviewer) {
+    throw new Error(
+      `Workflow reviewer allocation requires ${requiredReviewerOperations} operations, but only ${budget.allocations.reviewer} are approved.`,
+    );
+  }
+}
+
 function validateWorkflowDefinition(value) {
   if (!isObject(value) || value.schemaVersion !== WORKFLOW_DEFINITION_SCHEMA_VERSION) {
     throw new Error(`Workflow definition must use ${WORKFLOW_DEFINITION_SCHEMA_VERSION}.`);
@@ -260,8 +271,22 @@ function validateWorkflowDefinition(value) {
   validateTestAuthoring(value.assurance.testAuthoring);
   if (!isObject(value.checkpointPolicy)) throw new Error("checkpointPolicy is required.");
   if (!isObject(value.reviewerPolicy)) throw new Error("reviewerPolicy is required.");
+  const checkpointPolicy = {
+    required: requiredBoolean(value.checkpointPolicy.required, "checkpointPolicy.required"),
+    reviewerAfterEachTask: requiredBoolean(
+      value.checkpointPolicy.reviewerAfterEachTask,
+      "checkpointPolicy.reviewerAfterEachTask",
+    ),
+  };
+  const reviewerPolicy = {
+    requiredForFinalize: requiredBoolean(
+      value.reviewerPolicy.requiredForFinalize,
+      "reviewerPolicy.requiredForFinalize",
+    ),
+  };
   const budget = normalizeBudget(value.budget);
   assertVerificationBudgetFits(tasks, budget);
+  assertReviewerBudgetFits(tasks, budget, checkpointPolicy, reviewerPolicy);
 
   return {
     schemaVersion: WORKFLOW_DEFINITION_SCHEMA_VERSION,
@@ -277,19 +302,8 @@ function validateWorkflowDefinition(value) {
       profile: value.assurance.profile,
       testAuthoring: value.assurance.testAuthoring,
     },
-    checkpointPolicy: {
-      required: requiredBoolean(value.checkpointPolicy.required, "checkpointPolicy.required"),
-      reviewerAfterEachTask: requiredBoolean(
-        value.checkpointPolicy.reviewerAfterEachTask,
-        "checkpointPolicy.reviewerAfterEachTask",
-      ),
-    },
-    reviewerPolicy: {
-      requiredForFinalize: requiredBoolean(
-        value.reviewerPolicy.requiredForFinalize,
-        "reviewerPolicy.requiredForFinalize",
-      ),
-    },
+    checkpointPolicy,
+    reviewerPolicy,
     execution: normalizeExecution(value.execution),
     budget,
   };

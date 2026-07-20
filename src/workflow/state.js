@@ -629,10 +629,14 @@ function recordWorkflowResult(found, taskId, candidate) {
   };
   writeJsonAtomic(checkpointPath, completedCheckpoint);
   const verifyingTaskStatus = transitionTask(runtimeTask.status, "result-recorded");
+  const checkpointReviewRequired = checkpoint.reviewer.required;
   let tasks = found.run.tasks.map((task) => (task.id === taskId ? {
     ...task,
-    status: transitionTask(verifyingTaskStatus, "verification-passed"),
-    activeCheckpointId: null,
+    status: transitionTask(
+      verifyingTaskStatus,
+      checkpointReviewRequired ? "verification-passed-review-required" : "verification-passed",
+    ),
+    activeCheckpointId: checkpointReviewRequired ? checkpoint.checkpointId : null,
     resultId: result.resultId,
     verification: {
       status: "passed",
@@ -700,14 +704,7 @@ function recordWorkflowResult(found, taskId, candidate) {
   };
 }
 
-function recordWorkflowReview(found, candidate) {
-  if (found.run.status !== "review-pending") {
-    throw new Error(`Workflow review requires review-pending; current status is ${found.run.status}.`);
-  }
-  if (!found.run.reviewerPolicy.requiredForFinalize) {
-    throw new Error("Workflow definition does not require an independent final reviewer.");
-  }
-  const review = validateReviewResult(candidate, { run: found.run, definition: found.definition });
+function consumeWorkflowReviewBudget(found, review) {
   const now = new Date(review.completedAt);
   const budgetDecision = evaluateWorkflowOperation(found.run, "reviewer", { now });
   if (!budgetDecision.allowed) {
@@ -746,6 +743,36 @@ function recordWorkflowReview(found, candidate) {
       review.completedAt,
     );
   }
+  return {
+    now,
+    budget: {
+      ...found.run.budget,
+      consumed: {
+        ...found.run.budget.consumed,
+        modelOperations: consumedOperations,
+        capturedOutputBytes: consumedOutputBytes,
+        allocations: {
+          ...found.run.budget.consumed.allocations,
+          reviewer: consumedReviewer,
+        },
+      },
+    },
+  };
+}
+
+function recordWorkflowFinalReview(found, candidate) {
+  if (found.run.status !== "review-pending") {
+    throw new Error(`Workflow review requires review-pending; current status is ${found.run.status}.`);
+  }
+  if (!found.run.reviewerPolicy.requiredForFinalize) {
+    throw new Error("Workflow definition does not require an independent final reviewer.");
+  }
+  const review = validateReviewResult(candidate, {
+    run: found.run,
+    definition: found.definition,
+    expectedScope: { kind: "workflow", taskId: null, checkpointId: null },
+  });
+  const { now, budget } = consumeWorkflowReviewBudget(found, review);
   const reviewPath = path.join(found.runRoot, "reviews", `${review.reviewId}.json`);
   writeJsonAtomic(reviewPath, review);
   const passed = review.decision === "PASS";
@@ -771,18 +798,7 @@ function recordWorkflowReview(found, candidate) {
     status: transitionRun(found.run.status, passed ? "reviewer-pass" : "reviewer-block"),
     updatedAt: review.completedAt,
     tasks,
-    budget: {
-      ...found.run.budget,
-      consumed: {
-        ...found.run.budget.consumed,
-        modelOperations: consumedOperations,
-        capturedOutputBytes: consumedOutputBytes,
-        allocations: {
-          ...found.run.budget.consumed.allocations,
-          reviewer: consumedReviewer,
-        },
-      },
-    },
+    budget,
     reviewer: {
       status: passed
         ? "passed"
@@ -820,6 +836,146 @@ function recordWorkflowReview(found, candidate) {
     progress,
     ...deriveSchedule(run, found.definition),
   };
+}
+
+function recordWorkflowCheckpointReview(found, candidate) {
+  if (found.run.status !== "active") {
+    throw new Error(`Checkpoint review requires an active workflow; current status is ${found.run.status}.`);
+  }
+  const requestedScope = candidate && candidate.scope;
+  if (!requestedScope || requestedScope.kind !== "checkpoint") {
+    throw new Error("Checkpoint review requires checkpoint review scope.");
+  }
+  const runtimeTask = found.run.tasks.find((task) => task.id === requestedScope.taskId);
+  if (!runtimeTask || runtimeTask.status !== "review-pending" || !runtimeTask.activeCheckpointId) {
+    throw new Error(`Workflow task ${requestedScope.taskId || "missing"} has no pending checkpoint review.`);
+  }
+  const active = getActiveCheckpoint(found, runtimeTask);
+  if (
+    active.checkpoint.status !== "verified"
+    || active.checkpoint.reviewer.required !== true
+    || active.checkpoint.reviewer.status !== "pending"
+  ) {
+    throw new Error(`Checkpoint ${active.checkpoint.checkpointId} is not waiting for independent review.`);
+  }
+  const expectedScope = {
+    kind: "checkpoint",
+    taskId: runtimeTask.id,
+    checkpointId: active.checkpoint.checkpointId,
+  };
+  const review = validateReviewResult(candidate, {
+    run: found.run,
+    definition: found.definition,
+    expectedScope,
+  });
+  if (Date.parse(review.completedAt) < Date.parse(active.checkpoint.completedAt)) {
+    throw new Error("Checkpoint review completedAt must be after checkpoint verification.");
+  }
+  const { now, budget } = consumeWorkflowReviewBudget(found, review);
+  const reviewPath = path.join(found.runRoot, "reviews", `${review.reviewId}.json`);
+  writeJsonAtomic(reviewPath, review);
+  const relativeReviewPath = normalizeSlashPath(path.relative(found.repoRoot, reviewPath));
+  const passed = review.decision === "PASS";
+  const finding = passed ? null : review.findings[0];
+  const checkpoint = {
+    ...active.checkpoint,
+    status: passed
+      ? active.checkpoint.status
+      : transitionCheckpoint(active.checkpoint.status, "reviewer-block"),
+    reviewer: {
+      required: true,
+      status: passed
+        ? "passed"
+        : review.decision === "REQUEST_CHANGES" ? "changes-requested" : "blocked",
+      independent: true,
+      decision: review.decision,
+      reviewId: review.reviewId,
+      reviewPath: relativeReviewPath,
+      completedAt: review.completedAt,
+    },
+  };
+  writeJsonAtomic(active.checkpointPath, checkpoint);
+  let tasks = found.run.tasks.map((task) => {
+    if (task.id !== runtimeTask.id) return task;
+    return {
+      ...task,
+      status: transitionTask(task.status, passed ? "reviewer-pass" : "reviewer-block"),
+      activeCheckpointId: passed ? null : task.activeCheckpointId,
+      checkpointReviewId: review.reviewId,
+      blocker: passed ? null : {
+        classification: finding.classification,
+        reason: finding.summary,
+        blockedAt: review.completedAt,
+        waivable: WAIVABLE_FAILURES.has(finding.classification),
+        source: "independent-checkpoint-review",
+        reviewId: review.reviewId,
+      },
+    };
+  });
+  if (passed) {
+    const runtimeById = new Map(tasks.map((task) => [task.id, task]));
+    tasks = tasks.map((task) => {
+      if (task.status !== "pending") return task;
+      const taskDefinition = found.definition.tasks.find((entry) => entry.id === task.id);
+      return taskDefinition.dependsOn.every((dependencyId) => runtimeById.get(dependencyId).status === "completed")
+        ? { ...task, status: "ready" }
+        : task;
+    });
+  }
+  const allComplete = tasks.every((task) => task.status === "completed");
+  const runStatus = passed
+    ? allComplete
+      ? transitionRun(
+          found.run.status,
+          found.run.reviewerPolicy.requiredForFinalize ? "tasks-completed" : "tasks-completed-no-review",
+        )
+      : found.run.status
+    : transitionRun(found.run.status, "block");
+  const run = {
+    ...found.run,
+    status: runStatus,
+    updatedAt: review.completedAt,
+    tasks,
+    budget,
+    checkpointReviews: [...(found.run.checkpointReviews || []), {
+      reviewId: review.reviewId,
+      taskId: runtimeTask.id,
+      checkpointId: active.checkpoint.checkpointId,
+      decision: review.decision,
+      reviewPath: relativeReviewPath,
+      completedAt: review.completedAt,
+    }],
+    warnings: passed
+      ? found.run.warnings
+      : [...(found.run.warnings || []), `Independent checkpoint reviewer decision: ${review.decision}.`],
+  };
+  writeJsonAtomic(found.runPath, run);
+  const progress = writeWorkflowProgress(found.runRoot, run, found.definition, { now });
+  appendWorkflowEvent(found.runRoot, {
+    schemaVersion: "workflow-event/v1",
+    timestamp: review.completedAt,
+    type: passed ? "checkpoint-review-passed" : "checkpoint-review-blocked",
+    runId: run.runId,
+    taskId: runtimeTask.id,
+    checkpointId: active.checkpoint.checkpointId,
+    reviewId: review.reviewId,
+    decision: review.decision,
+  });
+  return {
+    ok: passed,
+    run,
+    checkpoint,
+    review,
+    reviewPath: relativeReviewPath,
+    progress,
+    ...deriveSchedule(run, found.definition),
+  };
+}
+
+function recordWorkflowReview(found, candidate) {
+  return candidate && candidate.scope && candidate.scope.kind === "checkpoint"
+    ? recordWorkflowCheckpointReview(found, candidate)
+    : recordWorkflowFinalReview(found, candidate);
 }
 
 function finalizeWorkflowRun(found, options = {}) {
@@ -1268,6 +1424,7 @@ function createApprovedRun(options) {
       decision: null,
     },
     reviewHistory: [],
+    checkpointReviews: [],
     revisionHistory: [],
     interventions: [],
     warnings: [],

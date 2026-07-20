@@ -56,6 +56,7 @@ function reviewResult(run, decision = "PASS") {
     reviewId: `${run.runId}-${decision.toLowerCase().replace("_", "-")}`,
     runId: run.runId,
     workflowDigest: run.workflow.digest,
+    scope: { kind: "workflow", taskId: null, checkpointId: null },
     completedAt: new Date().toISOString(),
     independent: true,
     decision,

@@ -84,6 +84,14 @@ function nextActionFor(run, definition, schedule) {
       reason: "active checkpoint requires a verified result",
     };
   }
+  const checkpointReview = run.tasks.find((task) => task.status === "review-pending");
+  if (checkpointReview) {
+    return {
+      kind: "checkpoint-review",
+      command: `cewp workflow review ${run.runId} --result <checkpoint-review.json> --yes`,
+      reason: `checkpoint ${checkpointReview.activeCheckpointId} requires independent review`,
+    };
+  }
   if (schedule.readyTasks.length > 0 && ["approved", "active"].includes(run.status)) {
     return {
       kind: "start",

@@ -248,6 +248,7 @@ function projectLegacyRun(found, definition, sourceDigest) {
     },
     reviewer: projectReviewer(found.run),
     reviewHistory: [],
+    checkpointReviews: [],
     revisionHistory: [],
     interventions: [],
     warnings: [

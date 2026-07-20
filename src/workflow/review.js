@@ -19,6 +19,26 @@ function requiredText(value, label) {
   return value.trim();
 }
 
+function normalizeReviewScope(value, context) {
+  if (!isObject(value) || !["workflow", "checkpoint"].includes(value.kind)) {
+    throw new Error("Review result scope must be workflow or checkpoint.");
+  }
+  const scope = value.kind === "workflow"
+    ? { kind: "workflow", taskId: null, checkpointId: null }
+    : {
+        kind: "checkpoint",
+        taskId: requiredText(value.taskId, "scope.taskId"),
+        checkpointId: requiredText(value.checkpointId, "scope.checkpointId"),
+      };
+  if (value.kind === "workflow" && (value.taskId !== null || value.checkpointId !== null)) {
+    throw new Error("Workflow review scope requires null taskId and checkpointId.");
+  }
+  if (context.expectedScope && JSON.stringify(scope) !== JSON.stringify(context.expectedScope)) {
+    throw new Error("Review result scope does not match the pending review gate.");
+  }
+  return scope;
+}
+
 function validateReviewResult(value, context) {
   if (!isObject(value) || value.schemaVersion !== REVIEW_RESULT_SCHEMA_VERSION) {
     throw new Error(`Review result must use ${REVIEW_RESULT_SCHEMA_VERSION}.`);
@@ -27,6 +47,7 @@ function validateReviewResult(value, context) {
   if (value.workflowDigest !== context.run.workflow.digest) {
     throw new Error("Review result workflowDigest does not match the approved workflow.");
   }
+  const scope = normalizeReviewScope(value.scope, context);
   const reviewId = requiredText(value.reviewId, "reviewId");
   if (!/^[a-z0-9][a-z0-9-]{0,191}$/.test(reviewId)) {
     throw new Error("reviewId must use lowercase letters, digits, and hyphens.");
@@ -70,6 +91,9 @@ function validateReviewResult(value, context) {
   if (decision !== "PASS" && findings.some((finding) => finding.taskId === null || finding.classification === null)) {
     throw new Error(`${decision} findings require a taskId and failure classification.`);
   }
+  if (scope.kind === "checkpoint" && findings.some((finding) => finding.taskId !== scope.taskId)) {
+    throw new Error("Checkpoint review findings must reference the scoped task.");
+  }
   if (decision === "PASS" && findings.some((finding) => ["high", "critical"].includes(finding.severity))) {
     throw new Error("PASS cannot include unresolved high or critical findings.");
   }
@@ -108,6 +132,7 @@ function validateReviewResult(value, context) {
     reviewId,
     runId: value.runId,
     workflowDigest: value.workflowDigest,
+    scope,
     completedAt: new Date(value.completedAt).toISOString(),
     independent: true,
     decision,

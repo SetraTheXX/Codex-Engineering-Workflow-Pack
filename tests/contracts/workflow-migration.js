@@ -47,6 +47,7 @@ function runWorkflowMigrationContract() {
     assert(compatible.run.schemaVersion === "run-state/v2", "legacy status uses a v2 compatibility projection");
     assert(compatible.compatibility.sourceSchema === "supervised-run/v1", "projection identifies the source contract");
     assert(compatible.compatibility.readOnly === true, "compatibility projection is explicitly read-only");
+    assert(Array.isArray(compatible.run.checkpointReviews), "legacy projection initializes checkpoint review history");
     assert(compatible.progress.nextAction.kind === "migration", "legacy projection exposes explicit migration as the safe action");
     assert(fs.readFileSync(legacyRunPath).equals(sourceRunBytes), "compatibility status cannot rewrite the legacy run");
     assert(fs.readFileSync(legacyProgressPath).equals(sourceProgressBytes), "compatibility status cannot regenerate legacy presentation files");
@@ -92,6 +93,7 @@ function runWorkflowMigrationContract() {
     assert(applied.run.schemaVersion === "run-state/v2", "migration persists the current run contract");
     assert(applied.run.runId !== legacyRunId, "migration creates a distinct run identity");
     assert(applied.run.status === "approved", "approved legacy checkpoint remains ready, not completed");
+    assert(Array.isArray(applied.run.checkpointReviews), "persisted migration initializes checkpoint review history");
     assert(applied.run.compatibility.migrationRequired === false, "persisted run records migration completion");
     assert(applied.run.compatibility.sourceRunId === legacyRunId, "persisted run links its source history");
     assert(fs.existsSync(path.join(repoRoot, applied.backupPath)), "migration creates a source backup");

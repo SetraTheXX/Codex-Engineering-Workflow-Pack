@@ -52,8 +52,17 @@ const TASK_TRANSITIONS = Object.freeze({
   },
   verifying: {
     "verification-passed": "completed",
+    "verification-passed-review-required": "review-pending",
     ...FAILURE_EVENTS,
     block: "blocked",
+    timeout: "timed-out",
+    cancel: "cancelled",
+    rollback: "rolled-back",
+    abandon: "abandoned",
+  },
+  "review-pending": {
+    "reviewer-pass": "completed",
+    "reviewer-block": "blocked",
     timeout: "timed-out",
     cancel: "cancelled",
     rollback: "rolled-back",
@@ -124,6 +133,7 @@ const CHECKPOINT_TRANSITIONS = Object.freeze({
     abandon: "abandoned",
   },
   verified: {
+    "reviewer-block": "blocked",
     rollback: "rolled-back",
   },
   cancelled: {
