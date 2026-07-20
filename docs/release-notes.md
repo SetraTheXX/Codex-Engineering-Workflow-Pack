@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+No changes yet.
+
+## 0.10.0-beta.0
+
+### Summary
+
+Codex-first supervised execution and the first versioned workflow graph runtime. The Phase 9 supervised golden path provides one managed `codex-exec` checkpoint with verification, recovery, review, receipts, and truthful budgets. Phase 10 adds source-bound agent compiler requests, approved micro-goal graphs, deterministic scheduling, provider-neutral result evidence, revisions, migrations, and derived progress without making arbitrary prose executable.
+
 ### Added
 
 - Added the first managed `codex-exec` supervised checkpoint path: bounded intake, explicit approval, isolated execution, baseline and targeted verification, bounded repair, independent review, receipt preview, and explicit finalize.
@@ -10,12 +18,21 @@
 - Added versioned machine-readable doctor, supervised run, budget, progress, event, and receipt beta surfaces with explicit owner/backend and usage truth labels.
 - Added resumable budget-safe, budget-unverified, and host-limit pauses; protected allocations; operator interventions; rollback; and actionable blocked states.
 - Added public supervised workflow, known-limitations, and external pilot guides.
+- Added `workflow-compiler-request/v1`, `workflow-definition/v1`, `run-state/v2`, `task-checkpoint/v1`, `budget-envelope/v1`, `task-result/v1`, and `progress-view/v1` contract boundaries.
+- Added source-bound compiler requests for direct goals, issues, PRDs, `PLAN.md`, and `progress.md`; structured proposals still require schema validation and explicit approval.
+- Added deterministic DAG scheduling, bounded numeric worker identities, and credential-free one-, two-, and four-worker workflow contracts.
+- Added succeeded and failed task-result intake with scope, verification, usage, output, failure-signature, retry, repeated-failure, and dependency gates.
+- Added checkpoint and final independent reviewer gates, canonical budget accounting, derived JSON/Markdown progress, plan revisions, backed-up v1 migration, and three guarded templates.
+- Added public workflow runtime documentation whose legal task, checkpoint, and run transitions are checked against the canonical machine tables.
 
 ### Changed
 
 - Reframed the public product around long-running goals without blind runs and documented when native Codex goal mode is the simpler choice.
 - Enforced `auto`, `ask`, and `never` test-authoring policies independently from required verification evidence.
 - Kept OpenCode experimental and outside the golden path; no new provider, desktop UI, terminal server, direct native-goal control, automatic model routing, merge, push, publish, tag, or release behavior was added.
+- OpenCode remains experimental and optional; binary/version visibility still does not prove provider, auth, or model readiness.
+- Phase 9 technical gates are complete, but independent external pilot evidence remains Phase 13 validation debt; maintainer dogfood does not count as an external participant.
+- No provider, desktop UI, terminal server, native-goal control, merge, push, publish, tag, or release automation was added.
 
 ## 0.8.0-beta.0
 

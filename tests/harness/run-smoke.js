@@ -2572,13 +2572,14 @@ async function main() {
       const pack = run("npm", ["pack", "--dry-run"], { cwd: cewpRoot, timeout: 120000 });
       const packOutput = `${pack.stdout}\n${pack.stderr}`;
       assertExit(pack, 0, "npm pack --dry-run");
-      assert(packageJson.version === "0.8.0-beta.0", `unexpected package version: ${packageJson.version}`);
+      assert(packageJson.version === "0.10.0-beta.0", `unexpected package version: ${packageJson.version}`);
       assert(packOutput.includes("docs/adapter-contract.md"), "adapter contract doc should be packed");
       assert(packOutput.includes("docs/supervised-workflow.md"), "supervised workflow doc should be packed");
       assert(packOutput.includes("docs/known-limitations.md"), "known limitations should be packed");
       assert(packOutput.includes("docs/pilot-kit.md"), "external pilot kit should be packed");
       assert(packOutput.includes("docs/codex-capability-matrix.md"), "public capability evidence should be packed");
       assert(packOutput.includes("docs/adr/0004-workflow-contract-boundaries.md"), "workflow contract ADR should be packed");
+      assert(packOutput.includes("docs/workflow-runtime.md"), "workflow runtime guide should be packed");
       assert(packOutput.includes(".agents/plugins/marketplace.json"), "plugin marketplace should be packed");
       assert(packOutput.includes("plugins/cewp/.codex-plugin/plugin.json"), "plugin manifest should be packed");
       assert(!packOutput.includes(".cewp/"), ".cewp/ should not be packed");
