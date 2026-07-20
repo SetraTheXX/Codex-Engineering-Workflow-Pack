@@ -154,6 +154,24 @@ function runWorkflowDefinitionContract() {
     assert(broad.stderr.includes("too broad"), "broad-task refusal asks for a smaller checkpoint");
     assert(broad.stderr.includes("implement-example"), "broad-task refusal names the task");
 
+    const repositoryWideDefinition = validDefinition();
+    repositoryWideDefinition.tasks[0].allowedFiles = ["**/*"];
+    writeJson(path.join(repoRoot, "repository-wide-workflow.json"), repositoryWideDefinition);
+    const repositoryWide = runNode(cewpCli, [
+      "workflow", "validate", "repository-wide-workflow.json", "--json",
+    ], repoRoot);
+    assert(repositoryWide.status === 1, "repository-wide wildcard cannot hide an over-broad micro-goal");
+    assert(repositoryWide.stderr.includes("repository-wide scope"), "root wildcard refusal requests bounded write scope");
+
+    const ambiguousScopeDefinition = validDefinition();
+    ambiguousScopeDefinition.tasks[0].allowedFiles = ["src/*/generated.js"];
+    writeJson(path.join(repoRoot, "ambiguous-scope-workflow.json"), ambiguousScopeDefinition);
+    const ambiguousScope = runNode(cewpCli, [
+      "workflow", "validate", "ambiguous-scope-workflow.json", "--json",
+    ], repoRoot);
+    assert(ambiguousScope.status === 1, "unsupported embedded wildcard is rejected");
+    assert(ambiguousScope.stderr.includes("wildcard only at the end"), "wildcard refusal explains the supported scope grammar");
+
     const vagueDefinition = validDefinition();
     vagueDefinition.tasks[0].stoppingConditions = ["done"];
     writeJson(path.join(repoRoot, "vague-workflow.json"), vagueDefinition);

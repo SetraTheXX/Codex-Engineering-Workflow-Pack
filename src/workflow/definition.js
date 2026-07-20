@@ -16,6 +16,7 @@ const ALLOCATION_NAMES = Object.freeze([
 const VAGUE_STOPPING_CONDITIONS = new Set([
   "all good", "complete", "completed", "done", "finished", "it works", "looks good", "task complete", "works",
 ]);
+const REPOSITORY_WIDE_SCOPES = new Set(["*", "**", "**/*"]);
 
 function isObject(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -75,6 +76,13 @@ function normalizeScope(value, label) {
   ) {
     throw new Error(`${label} must be a safe repository-relative path.`);
   }
+  if (
+    scope.includes("*")
+    && !REPOSITORY_WIDE_SCOPES.has(scope)
+    && !/^[^*]+\/(?:\*|\*\*)$/.test(scope)
+  ) {
+    throw new Error(`${label} may use a wildcard only at the end as /* or /**.`);
+  }
   return scope;
 }
 
@@ -109,6 +117,9 @@ function normalizeTask(value, index) {
   if (!isObject(value)) throw new Error(`tasks[${index}] must be an object.`);
   const id = normalizeId(value.id, `tasks[${index}].id`);
   const allowedFiles = normalizeScopeList(value.allowedFiles, `tasks[${index}].allowedFiles`, true);
+  if (allowedFiles.some((scope) => REPOSITORY_WIDE_SCOPES.has(scope))) {
+    throw new Error(`Workflow task ${id} is too broad: repository-wide scope must be split into bounded write scopes.`);
+  }
   if (allowedFiles.length > 8) {
     throw new Error(`Workflow task ${id} is too broad: use at most 8 independent write scopes per micro-goal.`);
   }

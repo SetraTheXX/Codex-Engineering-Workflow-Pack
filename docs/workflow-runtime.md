@@ -28,6 +28,8 @@ The Phase 10 managed owner/backend pair remains `managed` plus `codex-exec`. Ope
 
 Arbitrary Markdown is never canonical execution input. Source drift invalidates compiler and approval digests. Generated `progress.md` is disposable presentation and cannot be submitted as a state update.
 
+Write scopes are repository-relative literal files or directories, optionally ending in `/*` or `/**`. Embedded wildcard syntax is rejected, and `*`, `**`, or `**/*` cannot hide a repository-wide task inside one apparent scope. Split broad work into bounded micro-goals.
+
 ## Results And Recovery
 
 A succeeded `task-result/v1` must include every approved baseline, targeted, and full verification command with passing evidence. Scope or forbidden-file violations fail closed. A configured checkpoint review keeps the task in `review-pending` until a scope-bound independent PASS arrives.
