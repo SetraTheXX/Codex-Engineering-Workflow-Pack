@@ -70,6 +70,7 @@ function reviewResult(run, decision = "PASS") {
     evidence: [{ kind: "review-report", path: "evidence/review.md" }],
     usage: {
       managedOperations: { label: "observed", value: 1, source: "codex-exec-jsonl" },
+      capturedOutputBytes: { label: "observed", value: 128, source: "cewp-bounded-output" },
       managedTokens: { label: "unknown", value: null, reason: "fixture omits token totals" },
       hostInternal: { label: "unknown", value: null, reason: "host usage is unavailable" },
     },
@@ -150,6 +151,7 @@ function runWorkflowReviewContract() {
     assert(passed.data.run.status === "completed", "reviewer PASS opens completion");
     assert(passed.data.run.reviewer.status === "passed", "reviewer PASS is canonical state");
     assert(passed.data.run.budget.consumed.allocations.reviewer === 1, "review usage consumes only the reviewer allocation");
+    assert(passed.data.run.budget.consumed.capturedOutputBytes === 384, "review output adds to the bounded canonical total");
     assert(passed.data.progress.nextAction.kind === "finalize", "progress exposes explicit finalization only after PASS");
     assert(fs.existsSync(path.join(repoRoot, passed.data.reviewPath)), "validated review evidence is persisted under the run");
 
@@ -166,6 +168,24 @@ function runWorkflowReviewContract() {
     assert(finalized.run.reviewer.status === "passed", "finalization retains reviewer evidence");
     assert(finalized.progress.status === "finalized", "derived progress reflects finalization");
     assert(finalized.run.budget.consumed.allocations.finalization === 0, "local finalization does not fabricate a model operation");
+
+    const outputRun = createReviewPendingRun(repoRoot);
+    const oversizedReview = reviewResult(outputRun);
+    oversizedReview.usage.capturedOutputBytes.value = outputRun.budget.maxCapturedOutputBytes + 1;
+    writeJson(path.join(repoRoot, "oversized-review.json"), oversizedReview);
+    const outputRefusal = runNode(cewpCli, [
+      "workflow", "review", outputRun.runId,
+      "--result", "oversized-review.json", "--yes", "--json",
+    ], repoRoot);
+    assert(outputRefusal.status === 1, "review output above the approved ceiling is rejected");
+    assert(outputRefusal.stderr.includes("captured-output ceiling"), "review output refusal names the exhausted resource");
+    const outputPaused = JSON.parse(runNode(cewpCli, [
+      "workflow", "status", outputRun.runId, "--json",
+    ], repoRoot).stdout).data.run;
+    assert(outputPaused.status === "paused-budget-safe", "review output exhaustion pauses after verified checkpoints");
+    assert(outputPaused.budget.pauseReason === "captured-output-budget-exhausted", "review output pause reason is canonical");
+    assert(outputPaused.reviewer.status === "pending", "rejected review never opens the reviewer gate");
+    assert(!fs.existsSync(path.join(repoRoot, ".cewp", "workflow-runs", outputRun.runId, "reviews", `${oversizedReview.reviewId}.json`)), "rejected review result is not persisted");
 
     const changesRun = createReviewPendingRun(repoRoot);
     writeJson(path.join(repoRoot, "changes-review.json"), reviewResult(changesRun, "REQUEST_CHANGES"));

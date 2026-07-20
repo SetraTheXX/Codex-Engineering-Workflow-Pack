@@ -129,6 +129,7 @@ function validateTaskResult(value, context) {
   if (baselineEvidence.length === 0 || baselineEvidence.some((entry) => entry.status !== "passed")) {
     throw new Error("Task result baseline requires passing evidence.");
   }
+  assertScheduledEvidence(context.definitionTask.verification.targeted, baselineEvidence, "baseline");
   const targeted = normalizeVerificationEntries(value.verification.targeted, "verification.targeted");
   const full = normalizeVerificationEntries(value.verification.full, "verification.full");
   assertScheduledEvidence(context.definitionTask.verification.targeted, targeted, "targeted");
@@ -136,9 +137,23 @@ function validateTaskResult(value, context) {
   if (!isObject(value.usage)) throw new Error("Task result usage is required.");
   const usage = {
     managedOperations: normalizeTruthValue(value.usage.managedOperations, "usage.managedOperations", { requireSource: true }),
+    capturedOutputBytes: normalizeTruthValue(
+      value.usage.capturedOutputBytes,
+      "usage.capturedOutputBytes",
+      { requireSource: true },
+    ),
     managedTokens: normalizeTruthValue(value.usage.managedTokens, "usage.managedTokens"),
     hostInternal: normalizeTruthValue(value.usage.hostInternal, "usage.hostInternal"),
   };
+  if (usage.capturedOutputBytes.label !== "observed") {
+    throw new Error("usage.capturedOutputBytes must be observed for bounded result intake.");
+  }
+  if (
+    context.run.execution.owner === "managed"
+    && (usage.managedOperations.label !== "observed" || usage.managedOperations.value < 1)
+  ) {
+    throw new Error("Managed task result requires a positive observed managed operation count.");
+  }
   if (!Array.isArray(value.artifacts)) throw new Error("artifacts must be an array.");
   const artifacts = value.artifacts.map((artifact, index) => {
     if (!isObject(artifact)) throw new Error(`artifacts[${index}] must be an object.`);

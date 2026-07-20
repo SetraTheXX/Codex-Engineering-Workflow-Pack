@@ -46,37 +46,38 @@ function runtimeRun() {
 }
 
 function runWorkflowBudgetContract() {
+  const withinBudget = { now: new Date("2026-07-18T10:10:00.000Z") };
   const run = runtimeRun();
-  assert(evaluateWorkflowOperation(run, "implementation").allowed, "fresh budget permits implementation");
+  assert(evaluateWorkflowOperation(run, "implementation", withinBudget).allowed, "fresh budget permits implementation");
 
   run.budget.consumed.modelOperations = 9;
   run.budget.consumed.allocations.implementation = 5;
-  const warned = evaluateWorkflowOperation(run, "implementation");
+  const warned = evaluateWorkflowOperation(run, "implementation", withinBudget);
   assert(warned.allowed && warned.warning === "budget-early-warning", "70 percent threshold warns without stopping");
 
   run.budget.consumed.modelOperations = 11;
-  const reserved = evaluateWorkflowOperation(run, "implementation");
+  const reserved = evaluateWorkflowOperation(run, "implementation", withinBudget);
   assert(!reserved.allowed && reserved.reason === "completion-reserve-protected", "reserve threshold refuses new implementation");
   assert(reserved.pauseStatus === "paused-budget-safe", "safe checkpoint gets a safe pause");
-  assert(evaluateWorkflowOperation(run, "reviewer").allowed, "protected reviewer allocation remains usable inside reserve");
+  assert(evaluateWorkflowOperation(run, "reviewer", withinBudget).allowed, "protected reviewer allocation remains usable inside reserve");
 
   run.tasks[0].status = "running";
-  const interrupted = evaluateWorkflowOperation(run, "implementation");
+  const interrupted = evaluateWorkflowOperation(run, "implementation", withinBudget);
   assert(interrupted.pauseStatus === "paused-budget-unverified", "active checkpoint gets an unverified pause");
   run.tasks[0].status = "ready";
 
   run.budget.consumed.modelOperations = 12;
-  const absolute = evaluateWorkflowOperation(run, "reviewer");
+  const absolute = evaluateWorkflowOperation(run, "reviewer", withinBudget);
   assert(!absolute.allowed && absolute.reason === "absolute-ceiling-exhausted", "absolute ceiling refuses protected work too");
 
   const allocationRun = runtimeRun();
   allocationRun.budget.consumed.allocations.implementation = 6;
-  const allocation = evaluateWorkflowOperation(allocationRun, "implementation");
+  const allocation = evaluateWorkflowOperation(allocationRun, "implementation", withinBudget);
   assert(!allocation.allowed && allocation.reason === "implementation-allocation-exhausted", "allocation cannot borrow silently");
 
   const hostRun = runtimeRun();
   hostRun.budget.hostLimit = { active: true, observedAt: "2026-07-18T10:05:00.000Z" };
-  const host = evaluateWorkflowOperation(hostRun, "implementation");
+  const host = evaluateWorkflowOperation(hostRun, "implementation", withinBudget);
   assert(!host.allowed && host.pauseStatus === "paused-host-limit", "host limit stays separate from CEWP budget");
 
   const elapsedRun = runtimeRun();

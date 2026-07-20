@@ -95,6 +95,14 @@ function validateReviewResult(value, context) {
   if (managedOperations.label !== "observed" || managedOperations.value < 1) {
     throw new Error("Independent managed review requires a positive observed managed operation count.");
   }
+  const capturedOutputBytes = normalizeTruthValue(
+    value.usage.capturedOutputBytes,
+    "usage.capturedOutputBytes",
+    { requireSource: true },
+  );
+  if (capturedOutputBytes.label !== "observed") {
+    throw new Error("Review usage.capturedOutputBytes must be observed for bounded result intake.");
+  }
   return {
     schemaVersion: REVIEW_RESULT_SCHEMA_VERSION,
     reviewId,
@@ -108,6 +116,7 @@ function validateReviewResult(value, context) {
     evidence,
     usage: {
       managedOperations,
+      capturedOutputBytes,
       managedTokens: normalizeTruthValue(value.usage.managedTokens, "usage.managedTokens"),
       hostInternal: normalizeTruthValue(value.usage.hostInternal, "usage.hostInternal"),
     },

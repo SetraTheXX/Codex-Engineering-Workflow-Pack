@@ -352,6 +352,30 @@ function pauseForWorkflowBudget(found, allocation, decision, timestamp) {
   return run;
 }
 
+function refuseWorkflowResultBudget(found, allocation, reason, warning, message, timestamp) {
+  pauseForWorkflowBudget(found, allocation, {
+    allowed: false,
+    reason,
+    pauseStatus: "paused-budget-unverified",
+    warning,
+    percent: null,
+    protectedAllocation: found.run.budget.protectedAllocations.includes(allocation),
+  }, timestamp);
+  throw new Error(message);
+}
+
+function refuseWorkflowReviewBudget(found, reason, warning, message, timestamp) {
+  pauseForWorkflowBudget(found, "reviewer", {
+    allowed: false,
+    reason,
+    pauseStatus: "paused-budget-safe",
+    warning,
+    percent: null,
+    protectedAllocation: true,
+  }, timestamp);
+  throw new Error(message);
+}
+
 function startWorkflowTask(found, taskId, options = {}) {
   const now = options.now || new Date();
   const timestamp = now.toISOString();
@@ -515,11 +539,62 @@ function recordWorkflowResult(found, taskId, candidate) {
   const activeAllocation = checkpoint.budget.activeAllocation || "implementation";
   const consumedOperations = found.run.budget.consumed.modelOperations + observedOperations;
   const consumedAllocation = found.run.budget.consumed.allocations[activeAllocation] + observedOperations;
+  const consumedTargetedRuns = found.run.budget.consumed.targetedVerificationRuns
+    + result.verification.baseline.evidence.length
+    + result.verification.targeted.length;
+  const consumedFullRuns = found.run.budget.consumed.fullVerificationRuns
+    + result.verification.full.length;
+  const consumedOutputBytes = found.run.budget.consumed.capturedOutputBytes
+    + result.usage.capturedOutputBytes.value;
   if (consumedOperations > found.run.budget.modelOperations) {
-    throw new Error("Task result would exceed the workflow absolute model-operation ceiling.");
+    refuseWorkflowResultBudget(
+      found,
+      activeAllocation,
+      "absolute-ceiling-exhausted",
+      "budget-absolute-ceiling",
+      "Task result would exceed the workflow absolute model-operation ceiling.",
+      result.completedAt,
+    );
   }
   if (consumedAllocation > found.run.budget.allocations[activeAllocation]) {
-    throw new Error(`Task result would exceed the workflow ${activeAllocation} allocation.`);
+    refuseWorkflowResultBudget(
+      found,
+      activeAllocation,
+      `${activeAllocation}-allocation-exhausted`,
+      "budget-allocation-exhausted",
+      `Task result would exceed the workflow ${activeAllocation} allocation.`,
+      result.completedAt,
+    );
+  }
+  if (consumedTargetedRuns > found.run.budget.maxTargetedVerificationRuns) {
+    refuseWorkflowResultBudget(
+      found,
+      activeAllocation,
+      "targeted-verification-budget-exhausted",
+      "budget-targeted-verification-ceiling",
+      "Task result would exceed the workflow targeted verification-run ceiling.",
+      result.completedAt,
+    );
+  }
+  if (consumedFullRuns > found.run.budget.maxFullVerificationRuns) {
+    refuseWorkflowResultBudget(
+      found,
+      activeAllocation,
+      "full-verification-budget-exhausted",
+      "budget-full-verification-ceiling",
+      "Task result would exceed the workflow full verification-run ceiling.",
+      result.completedAt,
+    );
+  }
+  if (consumedOutputBytes > found.run.budget.maxCapturedOutputBytes) {
+    refuseWorkflowResultBudget(
+      found,
+      activeAllocation,
+      "captured-output-budget-exhausted",
+      "budget-captured-output-ceiling",
+      "Task result would exceed the workflow captured-output ceiling.",
+      result.completedAt,
+    );
   }
   const resultPath = path.join(
     found.runRoot,
@@ -589,6 +664,9 @@ function recordWorkflowResult(found, taskId, candidate) {
       consumed: {
         ...found.run.budget.consumed,
         modelOperations: consumedOperations,
+        targetedVerificationRuns: consumedTargetedRuns,
+        fullVerificationRuns: consumedFullRuns,
+        capturedOutputBytes: consumedOutputBytes,
         allocations: {
           ...found.run.budget.consumed.allocations,
           [activeAllocation]: consumedAllocation,
@@ -634,11 +712,34 @@ function recordWorkflowReview(found, candidate) {
   const observedOperations = review.usage.managedOperations.value;
   const consumedOperations = found.run.budget.consumed.modelOperations + observedOperations;
   const consumedReviewer = found.run.budget.consumed.allocations.reviewer + observedOperations;
+  const consumedOutputBytes = found.run.budget.consumed.capturedOutputBytes
+    + review.usage.capturedOutputBytes.value;
   if (consumedOperations > found.run.budget.modelOperations) {
-    throw new Error("Review result would exceed the workflow absolute model-operation ceiling.");
+    refuseWorkflowReviewBudget(
+      found,
+      "absolute-ceiling-exhausted",
+      "budget-absolute-ceiling",
+      "Review result would exceed the workflow absolute model-operation ceiling.",
+      review.completedAt,
+    );
   }
   if (consumedReviewer > found.run.budget.allocations.reviewer) {
-    throw new Error("Review result would exceed the workflow reviewer allocation.");
+    refuseWorkflowReviewBudget(
+      found,
+      "reviewer-allocation-exhausted",
+      "budget-allocation-exhausted",
+      "Review result would exceed the workflow reviewer allocation.",
+      review.completedAt,
+    );
+  }
+  if (consumedOutputBytes > found.run.budget.maxCapturedOutputBytes) {
+    refuseWorkflowReviewBudget(
+      found,
+      "captured-output-budget-exhausted",
+      "budget-captured-output-ceiling",
+      "Review result would exceed the workflow captured-output ceiling.",
+      review.completedAt,
+    );
   }
   const reviewPath = path.join(found.runRoot, "reviews", `${review.reviewId}.json`);
   writeJsonAtomic(reviewPath, review);
@@ -670,6 +771,7 @@ function recordWorkflowReview(found, candidate) {
       consumed: {
         ...found.run.budget.consumed,
         modelOperations: consumedOperations,
+        capturedOutputBytes: consumedOutputBytes,
         allocations: {
           ...found.run.budget.consumed.allocations,
           reviewer: consumedReviewer,
