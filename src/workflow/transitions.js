@@ -158,6 +158,7 @@ const RUN_TRANSITIONS = Object.freeze({
     "pause-budget-safe": "paused-budget-safe",
     "pause-budget-unverified": "paused-budget-unverified",
     "pause-host-limit": "paused-host-limit",
+    interrupt: "interrupted",
     block: "blocked",
     "tasks-completed": "review-pending",
     "tasks-completed-no-review": "completed",
@@ -187,6 +188,14 @@ const RUN_TRANSITIONS = Object.freeze({
     cancel: "cancelled",
     abandon: "abandoned",
   },
+  interrupted: {
+    resume: "active",
+    retry: "active",
+    rollback: "rolled-back",
+    cancel: "cancelled",
+    timeout: "timed-out",
+    abandon: "abandoned",
+  },
   blocked: {
     retry: "active",
     revise: "active",
@@ -206,6 +215,7 @@ const RUN_TRANSITIONS = Object.freeze({
   "review-pending": {
     "pause-budget-safe": "paused-budget-safe",
     "pause-host-limit": "paused-host-limit",
+    interrupt: "interrupted",
     "reviewer-pass": "completed",
     "reviewer-block": "blocked",
     cancel: "cancelled",
