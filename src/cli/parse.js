@@ -53,9 +53,27 @@ function parseArgs(argv) {
     goal: undefined,
     scopes: [],
     verificationCommands: [],
+    fullVerificationCommands: [],
     stoppingConditions: [],
-    assurance: "standard",
-    testAuthoring: "auto",
+    assurance: undefined,
+    testAuthoring: undefined,
+    proposalFile: undefined,
+    sourceKind: undefined,
+    reason: undefined,
+    note: undefined,
+    operations: undefined,
+    allocation: undefined,
+    definitionFile: undefined,
+    digest: undefined,
+    workflowRunId: undefined,
+    taskId: undefined,
+    resultFile: undefined,
+    event: undefined,
+    classification: undefined,
+    signature: undefined,
+    workerId: undefined,
+    templateName: undefined,
+    compilerDigest: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -75,7 +93,7 @@ function parseArgs(argv) {
     return args;
   }
 
-  const optionStart = ["run", "supervise"].includes(args.command) ? 2 : 1;
+  const optionStart = ["run", "supervise", "workflow", "demo"].includes(args.command) ? 2 : 1;
 
   for (let index = optionStart; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -110,6 +128,73 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (args.command === "workflow" && args.subcommand === "validate" && index === 2 && !arg.startsWith("--")) {
+      args.definitionFile = arg;
+      continue;
+    }
+
+    if (args.command === "workflow" && args.subcommand === "template" && index === 2 && !arg.startsWith("--")) {
+      args.templateName = arg;
+      continue;
+    }
+
+    if (args.command === "workflow" && ["status", "start", "result", "review", "finalize", "intervene", "revise", "apply-revision", "migrate"].includes(args.subcommand) && index === 2 && !arg.startsWith("--")) {
+      args.workflowRunId = arg;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--task") {
+      const value = argv[index + 1];
+      if (!value || !/^[a-z][a-z0-9-]{0,63}$/.test(value)) {
+        throw new Error("--task requires a workflow task id.");
+      }
+      args.taskId = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--result") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--result requires a repository-relative JSON file.");
+      args.resultFile = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--event") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--event requires an intervention event.");
+      args.event = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--classification") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--classification requires a failure classification.");
+      args.classification = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--signature") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--signature requires a normalized failure signature.");
+      args.signature = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--worker") {
+      const value = argv[index + 1];
+      if (!value || !/^[a-z][a-z0-9-]{0,63}$/.test(value)) {
+        throw new Error("--worker requires a lowercase workflow worker id.");
+      }
+      args.workerId = value;
+      index += 1;
+      continue;
+    }
+
     if (args.command === "policy" && args.subcommand === "set" && index === 2) {
       args.policyMode = arg;
       continue;
@@ -117,7 +202,10 @@ function parseArgs(argv) {
 
     if (
       args.command === "supervise"
-      && ["approve", "status", "execute"].includes(args.subcommand)
+      && [
+        "approve", "status", "execute", "verify", "retry", "review", "receipt", "finalize",
+        "revise", "pause", "resume", "add-budget", "rollback", "cancel", "abandon", "block", "continue", "reassign",
+      ].includes(args.subcommand)
       && index === 2
       && !arg.startsWith("--")
     ) {
@@ -125,12 +213,98 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "supervise" && arg === "--goal") {
+    if (
+      (
+        args.command === "supervise"
+        || (args.command === "workflow" && ["compile", "propose", "approve"].includes(args.subcommand))
+      )
+      && arg === "--goal"
+    ) {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
         throw new Error("--goal requires text.");
       }
       args.goal = value;
+      index += 1;
+      continue;
+    }
+
+    if (["supervise", "workflow"].includes(args.command) && arg === "--proposal") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--proposal requires a repository-relative JSON file.");
+      }
+      args.proposalFile = value;
+      index += 1;
+      continue;
+    }
+
+    if (["supervise", "workflow"].includes(args.command) && arg === "--source-kind") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--source-kind requires issue, prd, plan, progress, or direct-goal.");
+      }
+      args.sourceKind = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--digest") {
+      const value = argv[index + 1];
+      if (!value || !/^sha256:[a-f0-9]{64}$/.test(value)) {
+        throw new Error("--digest requires a sha256:<64 lowercase hex> workflow digest.");
+      }
+      args.digest = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--compiler-digest") {
+      const value = argv[index + 1];
+      if (!value || !/^sha256:[a-f0-9]{64}$/.test(value)) {
+        throw new Error("--compiler-digest requires a sha256:<64 lowercase hex> compiler request digest.");
+      }
+      args.compilerDigest = value;
+      index += 1;
+      continue;
+    }
+
+    if (["supervise", "workflow"].includes(args.command) && arg === "--reason") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--reason requires text.");
+      }
+      args.reason = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--note") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--note requires text.");
+      }
+      args.note = value;
+      index += 1;
+      continue;
+    }
+
+    if (["supervise", "workflow"].includes(args.command) && arg === "--operations") {
+      const value = argv[index + 1];
+      if (!value || !/^\d+$/.test(value)) {
+        throw new Error("--operations requires a positive integer.");
+      }
+      args.operations = Number.parseInt(value, 10);
+      index += 1;
+      continue;
+    }
+
+    if (["supervise", "workflow"].includes(args.command) && arg === "--allocation") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--allocation requires an allocation name.");
+      }
+      args.allocation = value;
       index += 1;
       continue;
     }
@@ -151,6 +325,16 @@ function parseArgs(argv) {
         throw new Error("--verify requires a command.");
       }
       args.verificationCommands.push(value);
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--full-verify") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--full-verify requires a command.");
+      }
+      args.fullVerificationCommands.push(value);
       index += 1;
       continue;
     }
@@ -226,13 +410,23 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (["run", "supervise"].includes(args.command) && arg === "--json") {
+    if (["doctor", "run", "supervise", "workflow", "demo"].includes(args.command) && arg === "--json") {
       args.json = true;
       continue;
     }
 
     if (args.command === "supervise" && arg === "--yes") {
       args.yes = true;
+      continue;
+    }
+
+    if (args.command === "workflow" && arg === "--yes") {
+      args.yes = true;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--allow-test-authoring") {
+      args.allowTestAuthoring = true;
       continue;
     }
 
@@ -284,7 +478,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "run" && arg === "--from") {
+    if (["run", "supervise", "workflow"].includes(args.command) && arg === "--from") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
         throw new Error("--from requires a file path.");

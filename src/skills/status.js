@@ -1,12 +1,9 @@
 "use strict";
 
 const fs = require("node:fs");
-const path = require("node:path");
 const { resolveTarget, getSkillStatus } = require("./paths");
-const { MANUAL_ADAPTER, OPENCODE_ADAPTER, getAdapterAvailability, getAdapterCapabilities, getSupportedAdapterNames } = require("../run/adapters/registry");
-const { ADAPTER_CONFIG_FILE, ADAPTER_CONFIG_ROLES, loadResolvedAdapterConfig } = require("../run/adapters/config");
-const { buildProviderProfile } = require("../run/adapters/profile");
-const { resolveOpenCodeModel } = require("../run/adapters/model");
+const { MANUAL_ADAPTER, OPENCODE_ADAPTER } = require("../run/adapters/registry");
+const { ADAPTER_CONFIG_ROLES } = require("../run/adapters/config");
 
 function list(options) {
   const targetRoot = resolveTarget(options);
@@ -78,8 +75,24 @@ function formatAdapterProbe(probe) {
 }
 
 function doctor(options) {
-  const targetRoot = resolveTarget(options);
-  const statuses = getSkillStatus(targetRoot);
+  const { buildDoctorFailureReport, buildDoctorReport } = require("./doctor-report");
+  let report;
+  try {
+    report = buildDoctorReport(options);
+  } catch (error) {
+    if (!options.json) throw error;
+    console.log(JSON.stringify(buildDoctorFailureReport(options, error), null, 2));
+    process.exitCode = 1;
+    return;
+  }
+  if (options.json) {
+    console.log(JSON.stringify(report, null, 2));
+    if (report.status !== "pass") process.exitCode = 1;
+    return;
+  }
+
+  const targetRoot = report.target;
+  const statuses = report.skills.items;
   const missing = statuses.filter((status) => !status.hasDirectory || !status.hasSkillFile);
 
   console.log("Codex Engineering Workflow Pack doctor");
@@ -103,11 +116,13 @@ function doctor(options) {
 
   console.log("");
   console.log("Adapter availability:");
-  const adapterSnapshots = [];
-  for (const adapterName of getSupportedAdapterNames()) {
-    const availability = getAdapterAvailability(adapterName, { commandName: "doctor" });
-    const capabilities = getAdapterCapabilities(adapterName, { commandName: "doctor" });
-    adapterSnapshots.push({ adapterName, availability, capabilities });
+  const adapterSnapshots = report.adapters.providers.map((provider) => ({
+    adapterName: provider.id,
+    availability: provider.availability,
+    capabilities: provider.capabilities,
+    profile: provider.providerProfile,
+  }));
+  for (const { adapterName, availability, capabilities } of adapterSnapshots) {
     const readinessLabel = adapterName === OPENCODE_ADAPTER
       ? `${adapterName} binary`
       : adapterName === MANUAL_ADAPTER
@@ -142,28 +157,9 @@ function doctor(options) {
     console.log(`  ${adapterName}: ${formatAdapterCapabilities(capabilities)}`);
   }
 
-  const adapterConfig = loadResolvedAdapterConfig(process.cwd());
-  const configuredOpenCodeModels = Array.from(new Set(
-    ADAPTER_CONFIG_ROLES
-      .map((role) => adapterConfig[role])
-      .filter((roleConfig) => roleConfig.provider === OPENCODE_ADAPTER && roleConfig.model)
-      .map((roleConfig) => roleConfig.model),
-  ));
-  const openCodeProfileModel = configuredOpenCodeModels.length === 1
-    ? configuredOpenCodeModels[0]
-    : configuredOpenCodeModels.length === 0
-      ? resolveOpenCodeModel({ env: process.env })
-      : null;
-
   console.log("");
   console.log("Provider profiles:");
-  for (const { adapterName, capabilities, availability } of adapterSnapshots) {
-    const profile = buildProviderProfile({
-      provider: adapterName,
-      capabilities,
-      availability,
-      model: adapterName === OPENCODE_ADAPTER ? openCodeProfileModel : null,
-    });
+  for (const { profile } of adapterSnapshots) {
     console.log(`  ${profile.id}: ${profile.mode}, ${profile.experimental ? "experimental" : "stable"}`);
     console.log(`    Command: ${profile.command || "none"}`);
     console.log(`    Model: ${profile.model || "not set"}`);
@@ -175,12 +171,11 @@ function doctor(options) {
     console.log("    Safety: CEWP guardrails, worker scope, reviewer PASS");
   }
 
-  const adapterConfigSource = fs.existsSync(path.join(process.cwd(), ADAPTER_CONFIG_FILE)) ? ADAPTER_CONFIG_FILE : "default";
   console.log("");
   console.log("Adapter config:");
-  console.log(`  Source: ${adapterConfigSource}`);
+  console.log(`  Source: ${report.adapters.config.source}`);
   for (const role of ADAPTER_CONFIG_ROLES) {
-    const roleConfig = adapterConfig[role];
+    const roleConfig = report.adapters.config.roles[role];
     console.log(`  ${role}: ${roleConfig.provider}${roleConfig.model ? ` (model: ${roleConfig.model})` : ""}`);
   }
 

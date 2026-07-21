@@ -1,7 +1,7 @@
 {
   "name": "cewp",
-  "version": "0.8.0-beta.0",
-  "description": "Codex-first supervised engineering checkpoints backed by the local CEWP runtime.",
+  "version": "0.10.0-beta.0",
+  "description": "Plan, run, recover, and review bounded engineering checkpoints through the local CEWP runtime.",
   "author": {
     "name": "SetraTheXX",
     "url": "https://github.com/SetraTheXX"
@@ -18,12 +18,13 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "CEWP",
-    "shortDescription": "Inspect supervised engineering runs",
-    "longDescription": "Inspect CEWP readiness, run state, progress, and safe next actions through the existing local runtime.",
+    "shortDescription": "Long-running goals without blind runs",
+    "longDescription": "Plan one bounded checkpoint, execute it in an isolated CEWP worktree, recover from failures or limits, and require verification plus independent review before finalization.",
     "developerName": "SetraTheXX",
     "category": "Productivity",
     "capabilities": [
-      "Read-only run inspection",
+      "Supervised run planning",
+      "Checkpoint controls",
       "Local evidence"
     ],
     "websiteURL": "https://github.com/SetraTheXX/Codex-Engineering-Workflow-Pack",
@@ -31,7 +32,9 @@
     "composerIcon": "./assets/cewp.svg",
     "logo": "./assets/cewp.svg",
     "defaultPrompt": [
-      "Inspect this repository's CEWP readiness and safe next action."
+      "Plan this goal as one supervised CEWP checkpoint.",
+      "Run or continue the current CEWP checkpoint.",
+      "Inspect and resume the latest CEWP run."
     ]
   }
 }

@@ -1,15 +1,16 @@
 # Install Guide
 
-This guide covers installing Codex Engineering Workflow Pack (CEWP) in a repo or global Codex skills folder.
+This guide covers the CEWP CLI, reusable engineering skills, and the thin Codex plugin.
 
-CEWP has two surfaces:
+CEWP has three public surfaces:
 
 - reusable workflow skills under `.agents/skills/`
-- a local Coordinator Mode runtime under `.cewp/`
+- a local CLI/runtime under `.cewp/`
+- a thin Codex plugin that delegates supervised work to the CLI/runtime
 
 ## Requirements
 
-- Node.js 18 or newer
+- Node.js 22 or newer on a maintained release line
 - Git
 - Codex CLI, required only for guarded `codex-exec` dispatch
 
@@ -57,6 +58,34 @@ cewp doctor
 cewp list
 ```
 
+## Codex Plugin Install
+
+The current beta plugin is installed from a CEWP source checkout through Codex's marketplace commands. The npm package remains the supported CLI distribution.
+
+```bash
+codex plugin marketplace add /path/to/Codex-Engineering-Workflow-Pack
+codex plugin add cewp@cewp-local
+codex plugin list
+```
+
+Remove it without deleting CEWP run evidence:
+
+```bash
+codex plugin remove cewp@cewp-local
+```
+
+The plugin installs three skills and does not copy authentication state. It does not attach to an existing ChatGPT desktop thread or add persistent UI.
+
+## Supervised Golden Path
+
+Validate the no-credentials fixture from a CEWP checkout:
+
+```bash
+cewp demo supervised
+```
+
+Then see [Supervised Workflow](supervised-workflow.md) for plan, approve, execute, verify, review, receipt, finalize, pause, and recovery commands.
+
 ## Repo Install Options
 
 ```bash
@@ -72,13 +101,13 @@ Use `--with-config` to create a starter root-level `cewp.config.json` adapter co
 
 ## Codex-Led Operation
 
-Users do not need to memorize every CEWP command. In a CEWP-enabled repo, ask Codex to run Coordinator Mode:
+Users do not need to memorize every CEWP command. With the plugin installed, ask Codex to plan a supervised run, execute the current checkpoint, or resume a run. Core still validates every command and gate.
 
 ```txt
-Use CEWP Coordinator Mode to implement this change with two workers and a reviewer. Show me the plan before dispatch.
+Use CEWP to plan one supervised checkpoint for this bounded change. Show the scope, verification, budget, owner/backend, and stopping condition before approval.
 ```
 
-Codex should use the CEWP CLI as the local safety and runtime engine, show plans before dispatch, and ask for approval at the relevant gates.
+For simple low-risk work, native Codex goal mode alone can be the better choice. CEWP is for work where scope, recovery, verification, independent review, and receipts justify extra operations.
 
 ## Operator Policy
 
@@ -102,9 +131,9 @@ cewp policy reset
 
 See [Operator Policy](operator-policy.md).
 
-## Coordinator Mode
+## Coordinator Mode Compatibility
 
-Coordinator Mode creates local runtime state for multi-agent engineering workflows:
+The earlier Coordinator Mode remains available for compatibility. The supervised single-checkpoint workflow is the primary product direction.
 
 ```bash
 cewp run init --workers 2 --reviewer
@@ -129,6 +158,8 @@ The following are local runtime artifacts and should not be committed:
 ```
 
 `.cewp/runs/<run-id>/` contains generated board, task, prompt, report, review, event, adapter-output, and review-packet files.
+
+`.cewp/supervised-runs/<run-id>/` contains canonical supervised state, append-only events, generated progress, adapter output, verification evidence, ownership, and receipt files.
 
 `cewp run cleanup` removes registered worker worktrees and is dry-run by default. `cewp run prune` removes old run history and is also dry-run by default. `run prune` does not remove `.cewp-worktrees/`.
 
@@ -194,6 +225,8 @@ node tests/harness/run-smoke.js
 ```
 
 The harness uses temporary repos, exercises Coordinator Mode runtime helpers, and does not run `codex exec`, publish, push, merge, or change package version.
+
+The supervised demo uses a deterministic fake Codex process in a temporary repository. It does not use credentials or start a real provider.
 
 If Codex does not show installed skills, restart or reload Codex and confirm that each skill has:
 

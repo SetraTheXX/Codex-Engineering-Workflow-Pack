@@ -98,6 +98,45 @@ function runSupervisedIntakeContract() {
     assert(status.data.run.status === "approved", "Markdown edits do not mutate canonical state");
     assert(status.data.nextAction.command.includes("supervise execute"), "status shows the next safe action");
     assert(!fs.readFileSync(path.join(runRoot, "progress.md"), "utf8").includes("forged completion"), "status regenerates progress from canonical state");
+
+    const runCountBeforeUnsafePlan = fs.readdirSync(path.dirname(runRoot)).length;
+    const unsafePlan = runNode(cewpCli, [
+      "supervise", "plan",
+      "--goal", "Unsafe plan must be rejected",
+      "--scope", "README.md",
+      "--verify", "git reset --hard",
+      "--stop", "Never reached",
+      "--json",
+    ], repoRoot);
+    assert(unsafePlan.status === 1, "destructive verification command is rejected");
+    assert(unsafePlan.stderr.includes("Unsafe Git verification command"), "unsafe command refusal is actionable");
+    assert(fs.readdirSync(path.dirname(runRoot)).length === runCountBeforeUnsafePlan, "unsafe plan creates no canonical run");
+
+    const underfundedPlan = runNode(cewpCli, [
+      "supervise", "plan",
+      "--goal", "Reject an underfunded verification schedule",
+      "--scope", "README.md",
+      "--verify", "git diff --check",
+      "--verify", "git status --short",
+      "--stop", "Both checks pass",
+      "--json",
+    ], repoRoot);
+    assert(underfundedPlan.status === 1, "standard plan reserves targeted checks for every bounded repair");
+    assert(underfundedPlan.stderr.includes("repair envelope"), "underfunded plan explains the verification budget conflict");
+    assert(fs.readdirSync(path.dirname(runRoot)).length === runCountBeforeUnsafePlan, "underfunded plan creates no canonical run");
+
+    const prototypePlan = runNode(cewpCli, [
+      "supervise", "plan",
+      "--goal", "Keep prototype repair verifiable",
+      "--scope", "README.md",
+      "--verify", "git diff --check",
+      "--stop", "The check passes",
+      "--assurance", "prototype",
+      "--json",
+    ], repoRoot);
+    assert(prototypePlan.status === 0, `prototype plan reserves baseline, first check, and one repair: ${prototypePlan.stderr}`);
+    const prototype = readJsonOutput(prototypePlan, "prototype supervise plan");
+    assert(prototype.data.run.budget.maxTargetedVerificationRuns.value === 3, "prototype verification budget covers its one repair attempt");
   } finally {
     cleanupRepo(repoRoot);
   }

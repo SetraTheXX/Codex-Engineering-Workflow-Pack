@@ -1,7 +1,7 @@
 # Codex Capability Matrix
 
-Status: accepted Phase 8 evidence
-Observed: 2026-07-16
+Status: accepted Phase 11 decision
+Observed: 2026-07-18
 
 ## Purpose
 
@@ -26,7 +26,6 @@ Schema presence does not prove that a plugin can attach to the desktop app's exi
 - Host: ChatGPT desktop, Codex task, Windows.
 - Host build identifier: unavailable through a documented agent API.
 - Codex CLI: `codex-cli 0.137.0`.
-- Current official CLI at observation time: `0.144.5`.
 - Node.js: `24.6.0`.
 - App Server transport: local stdio.
 - App Server auth boundary: isolated temporary `CODEX_HOME` with no copied credentials.
@@ -39,11 +38,11 @@ Schema presence does not prove that a plugin can attach to the desktop app's exi
 | --- | --- | --- |
 | Structured conversation warning | supported | The current task can render explicit checkpoint, budget, and blocked-state text. This is the minimum presentation path. |
 | Plugin discovery and CLI management | supported | `codex plugin list` and marketplace commands are present in CLI 0.137.0. |
-| CEWP plugin install and invocation | unknown | The CEWP plugin skeleton is not yet installed. Phase 9 must test clean install, disable, upgrade, and uninstall. |
+| CEWP plugin install and invocation | supported | The credential-free capability test covers plugin install, disable, upgrade, and uninstall in an isolated `CODEX_HOME`. A user must still install the plugin on each supported host surface. |
 | Plugin access to the existing desktop thread | unavailable | No documented plugin API attaches arbitrary plugin code to the host-owned internal session or event stream. |
 | Goal tools in the current task | host-specific | The agent can call host-provided goal tools and observe goal fields. This does not grant direct access to plugin code. |
 | Plugin direct goal lifecycle control | unavailable | App Server goal methods belong to a separately connected App Server client; schema presence is not plugin access. |
-| Apps SDK or MCP Apps card | unknown | Embedded ChatGPT UI is documented, but no CEWP app/server pair was built for this spike. It is progressive enhancement, not a Phase 9 enforcement dependency. |
+| Apps SDK or MCP Apps card | unknown | Embedded ChatGPT UI is documented, but CEWP does not yet ship an app UI. It remains progressive enhancement rather than an enforcement dependency. |
 | Persistent sidebar, title-bar meter, or goal-panel injection | unavailable | No documented extension point was found. CEWP will not patch or automate native chrome. |
 | Desktop notifications | host-specific | The host owns documented notification behavior and settings. CEWP has no arbitrary notification category. |
 | Hook `statusMessage` | supported | Official hook configuration exposes it as transient handler status. |
@@ -51,7 +50,7 @@ Schema presence does not prove that a plugin can attach to the desktop app's exi
 | `PreToolUse` deny output | supported | The deterministic fixture emits the documented `permissionDecision: deny` shape and is covered by `npm run test:hook-output`. |
 | `PreToolUse` as complete enforcement | unavailable | Official docs exclude or limit richer shell and non-MCP paths. A real CLI 0.137.0 Windows probe executed the requested PowerShell command despite the Bash deny hook. Core policy remains authoritative. |
 | Hook-based instant turn cancellation | unknown | Stop semantics do not establish instantaneous cancellation of an in-flight model or external process. |
-| Local MCP to CEWP Core | unknown | MCP is supported by the host, but the CEWP MCP server is a later vertical slice. Conversation/CLI fallback remains required. |
+| Local MCP to CEWP Core | unknown | MCP is supported by the host. Phase 11 implements a small Core-backed tool surface while conversation and CLI fallbacks remain required. |
 
 ## App Server Boundary
 
@@ -89,9 +88,9 @@ A single real `codex exec --json` probe was run from the ChatGPT Codex task agai
 
 This one observation is accounting evidence, not a cost estimate. It also demonstrates why capability probes that require model turns must not run in normal CI.
 
-## Phase 9 Decision
+## Phase 11 Decision
 
-Phase 9 will use exactly one supervised execution pair:
+CEWP retains exactly one supported managed execution pair:
 
 - execution owner: `managed`
 - backend: `codex-exec`
@@ -103,7 +102,7 @@ Reasons:
 - App Server adds useful goal metadata and lifecycle methods, but remains a separately owned experimental process with version drift and unresolved authenticated usage/cancellation behavior.
 - The spike did not demonstrate enough recovery or accounting advantage to justify shipping two incomplete managed backends.
 
-The native fallback is a bounded generated goal brief plus supported host goal tools or explicit result intake. `audit-only` remains available for evidence supplied by another owner. Hooks and Apps SDK UI remain optional projections; their absence never weakens CEWP Core.
+The native fallback is a bounded generated goal brief plus supported host goal tools or explicit result intake. `audit-only` remains available for evidence supplied by another owner. The local MCP bridge is the next supported integration surface. Hooks and Apps SDK UI remain optional projections; their absence never weakens CEWP Core. See [ADR 0005](adr/0005-codex-integration-backend.md).
 
 ## Reproduction
 
@@ -113,7 +112,9 @@ codex features list
 codex app-server generate-json-schema --out <stable-output>
 codex app-server generate-json-schema --experimental --out <experimental-output>
 npm run probe:codex-app-server
+npm run test:plugin-lifecycle
 npm run test:hook-output
+npm run test:integration-capabilities
 ```
 
 The nested model probe is intentionally excluded from automated tests because it consumes account usage. Raw account values, credentials, thread ids, and machine-specific paths are not part of this document.

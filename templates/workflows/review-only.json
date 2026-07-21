@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "workflow-definition/v1",
+  "workflowId": "review-only-template",
+  "revision": {
+    "number": 1,
+    "parent": null,
+    "reason": "Initial review-only template"
+  },
+  "goal": "Audit one bounded change without claiming execution ownership",
+  "tasks": [
+    {
+      "id": "audit-change",
+      "title": "Inspect the bounded change and produce evidence-linked findings",
+      "dependsOn": [],
+      "allowedFiles": ["src/**", "tests/**"],
+      "forbiddenFiles": ["package.json", "package-lock.json"],
+      "stoppingConditions": ["The independent report links every blocking finding to review evidence"],
+      "verification": {
+        "targeted": ["git diff --check"],
+        "full": []
+      },
+      "risk": "medium"
+    }
+  ],
+  "assurance": {
+    "profile": "standard",
+    "testAuthoring": "never"
+  },
+  "checkpointPolicy": {
+    "required": true,
+    "reviewerAfterEachTask": false
+  },
+  "reviewerPolicy": {
+    "requiredForFinalize": true
+  },
+  "execution": {
+    "owner": "audit-only",
+    "backend": null,
+    "allowedModes": ["audit-only"]
+  },
+  "budget": {
+    "schemaVersion": "budget-envelope/v1",
+    "modelOperations": 5,
+    "allocations": {
+      "implementation": 1,
+      "repair": 1,
+      "completion": 1,
+      "reviewer": 1,
+      "finalization": 1
+    },
+    "protectedAllocations": ["completion", "reviewer", "finalization"],
+    "maxRepairsPerCheckpoint": 1,
+    "maxElapsedMinutes": 30,
+    "maxConcurrentWorkers": 1,
+    "maxCapturedOutputBytes": 524288,
+    "maxTargetedVerificationRuns": 3,
+    "maxFullVerificationRuns": 0,
+    "thresholds": {
+      "earlyWarningPercent": 70,
+      "reservePercent": 90,
+      "absoluteCeilingPercent": 100
+    }
+  }
+}

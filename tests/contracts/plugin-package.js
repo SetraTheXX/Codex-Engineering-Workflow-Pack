@@ -32,9 +32,29 @@ function runPluginPackageContract() {
 
   const skillsRoot = path.join(repoRoot, "plugins", "cewp", "skills");
   const skills = fs.readdirSync(skillsRoot, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
+    .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(skillsRoot, entry.name, "SKILL.md")))
     .map((entry) => validateSkillDirectory(path.join(skillsRoot, entry.name)));
-  assert(skills.length === 1 && skills[0].name === "inspect-cewp-run", "thin plugin skill surface");
+  const skillNames = skills.map((skill) => skill.name).sort();
+  assert(
+    JSON.stringify(skillNames) === JSON.stringify([
+      "plan-supervised-run",
+      "resume-supervised-run",
+      "run-supervised-checkpoint",
+    ]),
+    "plugin ships exactly three focused supervised workflows",
+  );
+  for (const skill of skills) {
+    const content = fs.readFileSync(skill.skillFile, "utf8");
+    assert(content.includes("cewp supervise"), `${skill.name} delegates canonical state to CEWP Core`);
+    assert(!content.includes("control the native goal"), `${skill.name} does not claim native goal control`);
+    assert(!content.includes("run OpenCode"), `${skill.name} does not reopen provider expansion`);
+  }
+  assert(
+    !fs.existsSync(path.join(skillsRoot, "inspect-cewp-run", "SKILL.md")),
+    "Phase 8 inspection skeleton is replaced",
+  );
+  assert(manifest.interface.capabilities.includes("Supervised run planning"), "manifest advertises implemented planning workflow");
+  assert(manifest.interface.capabilities.includes("Checkpoint controls"), "manifest advertises implemented checkpoint controls");
 
   assert(marketplace.name === "cewp-local", "repo marketplace name");
   assert(marketplace.plugins.length === 1, "repo marketplace contains one plugin");
