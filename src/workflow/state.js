@@ -1214,7 +1214,7 @@ function interveneWorkflowRun(found, options, timestamp, reason) {
       hostLimit: {
         active: true,
         observedAt: timestamp,
-        source: "operator",
+        source: options.source || "operator",
         reason,
       },
       pauseReason: "host-limit-active",
@@ -1326,7 +1326,7 @@ function interveneWorkflowLifecycle(found, options, timestamp, reason) {
     checkpointId: null,
     classification: null,
     reason,
-    actor: "operator",
+    actor: options.actor || "operator",
     recordedAt: timestamp,
   };
   const run = {
