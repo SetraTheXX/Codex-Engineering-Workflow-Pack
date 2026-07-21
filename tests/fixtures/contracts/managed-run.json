@@ -1,0 +1,9 @@
+{
+  "schemaVersion": "run-fixture/v1",
+  "runId": "20260716-120000",
+  "taskId": "task-001",
+  "checkpointId": "checkpoint-001",
+  "status": "approved",
+  "owner": "managed",
+  "backend": "codex-exec"
+}

@@ -32,6 +32,7 @@ const { parseArgs } = require("../src/cli/parse");
 const { printCliError } = require("../src/cli/errors");
 const { init } = require("../src/skills/install");
 const { list, doctor } = require("../src/skills/status");
+const { runSupervise } = require("../src/supervise/cli");
 
 async function runCommand(options) {
   if (options.help || !options.subcommand) {
@@ -187,7 +188,12 @@ async function main() {
       return;
     }
 
-    if (!["init", "list", "doctor", "policy", "run"].includes(args.command)) {
+    if (args.command === "supervise") {
+      runSupervise(args);
+      return;
+    }
+
+    if (!["init", "list", "doctor", "policy", "run", "supervise"].includes(args.command)) {
       throw new Error(`Unsupported command: ${args.command}`);
     }
   } catch (error) {

@@ -5,17 +5,33 @@ const path = require("node:path");
 const { SKILLS, resolveTarget } = require("./paths");
 const { ADAPTER_CONFIG_FILE, defaultAdapterConfig } = require("../run/adapters/config");
 
+function copyDirectory(sourceDirectory, targetDirectory) {
+  fs.mkdirSync(targetDirectory, { recursive: true });
+
+  for (const entry of fs.readdirSync(sourceDirectory, { withFileTypes: true })) {
+    const sourcePath = path.join(sourceDirectory, entry.name);
+    const targetPath = path.join(targetDirectory, entry.name);
+
+    if (entry.isDirectory()) {
+      copyDirectory(sourcePath, targetPath);
+      continue;
+    }
+
+    if (!entry.isFile()) {
+      throw new Error(`Unsupported skill entry: ${sourcePath}`);
+    }
+
+    fs.copyFileSync(sourcePath, targetPath);
+    fs.chmodSync(targetPath, fs.statSync(sourcePath).mode);
+  }
+}
+
 function copySkill(sourceSkill, targetSkill, force) {
   if (fs.existsSync(targetSkill) && !force) {
     return "skipped";
   }
 
-  fs.mkdirSync(targetSkill, { recursive: true });
-  fs.cpSync(sourceSkill, targetSkill, {
-    recursive: true,
-    force: true,
-    errorOnExist: false,
-  });
+  copyDirectory(sourceSkill, targetSkill);
 
   return "copied";
 }

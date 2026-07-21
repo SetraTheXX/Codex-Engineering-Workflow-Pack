@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "filesystem-fixture/v1",
+  "sourceRoot": "Güncel paket",
+  "files": [
+    ".agents/skills/example/SKILL.md",
+    ".agents/skills/example/scripts/check.js",
+    ".agents/skills/example/assets/template.md",
+    ".agents/skills/example/agents/openai.yaml"
+  ]
+}

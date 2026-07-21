@@ -1,6 +1,6 @@
 {
   "name": "@setrathex/codex-engineering-workflow-pack",
-  "version": "0.7.0-beta.0",
+  "version": "0.8.0-beta.0",
   "description": "Local-first engineering workflow toolkit for Codex: skills, Coordinator Mode, guarded dispatch, and parallel agent workflows.",
   "license": "MIT",
   "repository": {
@@ -17,6 +17,8 @@
   },
   "files": [
     ".agents/skills",
+    ".agents/plugins/marketplace.json",
+    "plugins/cewp",
     "bin",
     "src",
     "README.md",
@@ -26,19 +28,34 @@
     "docs/provider-profiles-and-terminal-ui.md",
     "docs/operator-policy.md",
     "docs/security-model.md",
+    "docs/skill-plugin-compatibility.md",
     "docs/release-notes.md",
     "install.ps1",
     "install.sh",
     "LICENSE"
   ],
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   },
   "scripts": {
-    "test": "node tests/harness/run-smoke.js",
+    "test": "npm run test:contracts && npm run smoke",
+    "test:contracts": "npm run test:init-install && npm run test:adapter-profile && npm run test:operator-json && npm run test:hook-output && npm run test:skill-format && npm run test:ownership-gates && npm run test:fixtures && npm run test:plugin-package && npm run test:supervised-intake && npm run test:supervised-execution",
+    "test:init-install": "node tests/contracts/init-install.js",
+    "test:adapter-profile": "node tests/contracts/adapter-profile.js",
+    "test:operator-json": "node tests/contracts/operator-json.js",
+    "test:hook-output": "node tests/contracts/hook-output.js",
+    "test:skill-format": "node tests/contracts/skill-format.js",
+    "test:ownership-gates": "node tests/contracts/ownership-gates.js",
+    "test:fixtures": "node tests/contracts/deterministic-fixtures.js",
+    "test:plugin-package": "node tests/contracts/plugin-package.js",
+    "test:supervised-intake": "node tests/contracts/supervised-intake.js",
+    "test:supervised-execution": "node tests/contracts/supervised-execution.js",
+    "test:plugin-lifecycle": "node tests/capabilities/plugin-lifecycle.js",
+    "probe:codex-app-server": "node tests/capabilities/codex-app-server.js",
     "smoke": "node tests/harness/run-smoke.js",
     "check:cli": "node ./bin/cewp.js --help",
-    "check": "node --check ./bin/cewp.js && node tests/harness/run-smoke.js",
+    "check:syntax": "node --check ./bin/cewp.js && node --check ./src/skills/install.js && node --check ./src/skills/format.js && node --check ./src/run/ownership.js && node --check ./src/run/control-gates.js && node --check ./src/supervise/cli.js && node --check ./src/supervise/execution.js && node --check ./src/supervise/profiles.js && node --check ./src/supervise/state.js && node --check ./tests/contracts/init-install.js && node --check ./tests/contracts/adapter-profile.js && node --check ./tests/contracts/operator-json.js && node --check ./tests/contracts/hook-output.js && node --check ./tests/contracts/skill-format.js && node --check ./tests/contracts/ownership-gates.js && node --check ./tests/contracts/deterministic-fixtures.js && node --check ./tests/contracts/plugin-package.js && node --check ./tests/contracts/supervised-intake.js && node --check ./tests/contracts/supervised-execution.js && node --check ./tests/capabilities/plugin-lifecycle.js && node --check ./tests/capabilities/codex-app-server.js && node --check ./tests/capabilities/fixtures/deny-shell-hook.js",
+    "check": "npm run check:syntax && npm test",
     "pack:dry-run": "npm pack --dry-run"
   },
   "keywords": [

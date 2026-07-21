@@ -50,6 +50,12 @@ function parseArgs(argv) {
     fromFile: undefined,
     limit: undefined,
     json: false,
+    goal: undefined,
+    scopes: [],
+    verificationCommands: [],
+    stoppingConditions: [],
+    assurance: "standard",
+    testAuthoring: "auto",
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -69,7 +75,7 @@ function parseArgs(argv) {
     return args;
   }
 
-  const optionStart = args.command === "run" ? 2 : 1;
+  const optionStart = ["run", "supervise"].includes(args.command) ? 2 : 1;
 
   for (let index = optionStart; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -106,6 +112,76 @@ function parseArgs(argv) {
 
     if (args.command === "policy" && args.subcommand === "set" && index === 2) {
       args.policyMode = arg;
+      continue;
+    }
+
+    if (
+      args.command === "supervise"
+      && ["approve", "status", "execute"].includes(args.subcommand)
+      && index === 2
+      && !arg.startsWith("--")
+    ) {
+      args.runId = arg;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--goal") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--goal requires text.");
+      }
+      args.goal = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--scope") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--scope requires a repository-relative path.");
+      }
+      args.scopes.push(value);
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--verify") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--verify requires a command.");
+      }
+      args.verificationCommands.push(value);
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--stop") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--stop requires a stopping condition.");
+      }
+      args.stoppingConditions.push(value);
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--assurance") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--assurance requires prototype, standard, or critical.");
+      }
+      args.assurance = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--test-authoring") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) {
+        throw new Error("--test-authoring requires auto, ask, or never.");
+      }
+      args.testAuthoring = value;
+      index += 1;
       continue;
     }
 
@@ -150,8 +226,13 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "run" && arg === "--json") {
+    if (["run", "supervise"].includes(args.command) && arg === "--json") {
       args.json = true;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--yes") {
+      args.yes = true;
       continue;
     }
 
@@ -213,7 +294,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "run" && arg === "--timeout") {
+    if (["run", "supervise"].includes(args.command) && arg === "--timeout") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--") || !/^\d+$/.test(value)) {
         throw new Error("--timeout requires a positive number of seconds.");

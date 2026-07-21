@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "process-result-fixture/v1",
+  "ordinaryFailure": {
+    "status": 1,
+    "signal": null,
+    "crashed": false
+  },
+  "windowsNativeCrash": {
+    "status": 3221226505,
+    "signal": null,
+    "crashed": true
+  }
+}

@@ -1,0 +1,2 @@
+{"timestamp":"2026-07-16T12:00:00.000Z","role":"worker-a","event":"checkpoint_started","checkpointId":"checkpoint-001"}
+{"timestamp":"2026-07-16T12:01:00.000Z","role":"worker-a","event":"checkpoint_paused","checkpointId":"checkpoint-001","status":"paused-budget-safe"}

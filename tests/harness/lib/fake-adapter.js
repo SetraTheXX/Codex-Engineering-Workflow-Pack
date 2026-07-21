@@ -103,7 +103,22 @@ if (lastMessage) {
   fs.writeFileSync(lastMessage, \`Fake codex completed \${role} for \${task}.\\n\`);
 }
 
-console.log(\`fake codex stdout: \${role} \${task}\`);
+if (args.includes("--json")) {
+  console.log(JSON.stringify({ type: "turn.started", role, task }));
+  console.log(JSON.stringify({
+    type: "turn.completed",
+    role,
+    task,
+    usage: {
+      input_tokens: 100,
+      cached_input_tokens: 80,
+      output_tokens: 20,
+      reasoning_output_tokens: 5,
+    },
+  }));
+} else {
+  console.log(\`fake codex stdout: \${role} \${task}\`);
+}
 console.error(\`fake codex stderr: \${role} \${task}\`);
 if (shouldExitNonZero) {
   process.exit(7);

@@ -1,0 +1,37 @@
+{
+  "name": "cewp",
+  "version": "0.8.0-beta.0",
+  "description": "Codex-first supervised engineering checkpoints backed by the local CEWP runtime.",
+  "author": {
+    "name": "SetraTheXX",
+    "url": "https://github.com/SetraTheXX"
+  },
+  "homepage": "https://github.com/SetraTheXX/Codex-Engineering-Workflow-Pack",
+  "repository": "https://github.com/SetraTheXX/Codex-Engineering-Workflow-Pack",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "engineering",
+    "checkpoints",
+    "evidence"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "CEWP",
+    "shortDescription": "Inspect supervised engineering runs",
+    "longDescription": "Inspect CEWP readiness, run state, progress, and safe next actions through the existing local runtime.",
+    "developerName": "SetraTheXX",
+    "category": "Productivity",
+    "capabilities": [
+      "Read-only run inspection",
+      "Local evidence"
+    ],
+    "websiteURL": "https://github.com/SetraTheXX/Codex-Engineering-Workflow-Pack",
+    "brandColor": "#2F6FEB",
+    "composerIcon": "./assets/cewp.svg",
+    "logo": "./assets/cewp.svg",
+    "defaultPrompt": [
+      "Inspect this repository's CEWP readiness and safe next action."
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "execution-ownership/v1",
+  "runId": "20260716-120000",
+  "taskId": "task-001",
+  "checkpointId": "checkpoint-001",
+  "owner": "managed",
+  "backend": "codex-exec",
+  "status": "active",
+  "worktree": {
+    "id": "worktree-task-001",
+    "path": ".cewp-worktrees/run/task-001"
+  }
+}
