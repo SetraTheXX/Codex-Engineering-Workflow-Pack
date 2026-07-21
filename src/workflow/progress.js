@@ -54,6 +54,13 @@ function nextActionFor(run, definition, schedule) {
       reason: "host availability must be restored explicitly",
     };
   }
+  if (run.status === "interrupted") {
+    return {
+      kind: "host-resume",
+      command: `cewp workflow intervene ${run.runId} --event resume --reason <text> --yes`,
+      reason: run.interruption ? run.interruption.reason : "workflow execution was interrupted",
+    };
+  }
   const blocked = run.tasks.find((task) => task.status === "blocked");
   if (blocked) {
     const classification = blocked.blocker && blocked.blocker.classification;
@@ -181,6 +188,7 @@ function deriveProgressView(run, definition, schedule, options = {}) {
     },
     reviewer: run.reviewer,
     compatibility: run.compatibility || null,
+    interruption: run.interruption || null,
     interventions: run.interventions,
     warnings: run.warnings || [],
     nextAction: nextActionFor(run, definition, schedule),

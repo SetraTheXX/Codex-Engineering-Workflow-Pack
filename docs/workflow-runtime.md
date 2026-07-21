@@ -180,6 +180,7 @@ Existing `supervised-run/v1` runs remain readable through a read-only `run-state
 - `active + pause-budget-safe -> paused-budget-safe`
 - `active + pause-budget-unverified -> paused-budget-unverified`
 - `active + pause-host-limit -> paused-host-limit`
+- `active + interrupt -> interrupted`
 - `active + block -> blocked`
 - `active + tasks-completed -> review-pending`
 - `active + tasks-completed-no-review -> completed`
@@ -202,6 +203,12 @@ Existing `supervised-run/v1` runs remain readable through a read-only `run-state
 - `paused-host-limit + rollback -> rolled-back`
 - `paused-host-limit + cancel -> cancelled`
 - `paused-host-limit + abandon -> abandoned`
+- `interrupted + resume -> active`
+- `interrupted + retry -> active`
+- `interrupted + rollback -> rolled-back`
+- `interrupted + cancel -> cancelled`
+- `interrupted + timeout -> timed-out`
+- `interrupted + abandon -> abandoned`
 - `blocked + retry -> active`
 - `blocked + revise -> active`
 - `blocked + reassign -> active`
@@ -216,6 +223,7 @@ Existing `supervised-run/v1` runs remain readable through a read-only `run-state
 - `timed-out + abandon -> abandoned`
 - `review-pending + pause-budget-safe -> paused-budget-safe`
 - `review-pending + pause-host-limit -> paused-host-limit`
+- `review-pending + interrupt -> interrupted`
 - `review-pending + reviewer-pass -> completed`
 - `review-pending + reviewer-block -> blocked`
 - `review-pending + cancel -> cancelled`

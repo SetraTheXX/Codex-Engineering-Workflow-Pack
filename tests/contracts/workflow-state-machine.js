@@ -50,6 +50,8 @@ function runWorkflowStateMachineContract() {
   run = transitionRun(run, "resume");
   assert(run === "active", "paused run resumes through an explicit event");
   assert(transitionRun("active", "pause-host-limit") === "paused-host-limit", "host limit has its own pause state");
+  assert(transitionRun("active", "interrupt") === "interrupted", "interruption is distinct from failure and cancellation");
+  assert(transitionRun("interrupted", "resume") === "active", "interrupted run has an explicit resume path");
   assert(transitionRun("active", "timeout") === "timed-out", "run timeout is not generic failure");
 
   assertWaivableClassification("pre-existing-failure");

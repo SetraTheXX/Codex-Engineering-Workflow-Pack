@@ -142,6 +142,26 @@ function runWorkflowLifecycleContract() {
     assert(finalAbandon.status === 0, `rolled-back workflow can be abandoned: ${finalAbandon.stderr}`);
     assert(JSON.parse(finalAbandon.stdout).data.run.status === "abandoned", "rollback never becomes completion during abandon");
 
+    const interruptedRun = approveWorkflow(repoRoot, validDefinition());
+    assert(start(repoRoot, interruptedRun.runId).status === 0, "interrupted workflow starts a checkpoint");
+    const interruptedResult = intervene(repoRoot, interruptedRun.runId, "interrupt", {
+      reason: "Host turn stopped before checkpoint evidence was returned",
+    });
+    assert(interruptedResult.status === 0, `workflow records interruption: ${interruptedResult.stderr}`);
+    const interrupted = JSON.parse(interruptedResult.stdout).data;
+    assert(interrupted.run.status === "interrupted", "interruption has a distinct run state");
+    assert(interrupted.run.tasks[0].status === "running", "interruption preserves the incomplete task state");
+    assert(interrupted.run.interruption.resumeStatus === "active", "interruption remembers the deterministic resume state");
+    assert(interrupted.progress.nextAction.kind === "host-resume", "interrupted progress exposes explicit resume");
+    const resumedResult = intervene(repoRoot, interruptedRun.runId, "resume", {
+      reason: "Host is available and the same checkpoint can continue",
+    });
+    assert(resumedResult.status === 0, `interrupted workflow resumes: ${resumedResult.stderr}`);
+    const resumed = JSON.parse(resumedResult.stdout).data.run;
+    assert(resumed.status === "active", "resume restores the prior active run state");
+    assert(resumed.tasks[0].status === "running", "resume does not fabricate a fresh checkpoint or evidence");
+    assert(resumed.interruption === null, "resume clears the active interruption marker");
+
     const eventsPath = path.join(repoRoot, ".cewp", "workflow-runs", repeatedRun.runId, "events.jsonl");
     const events = fs.readFileSync(eventsPath, "utf8");
     assert(events.includes("workflow-lifecycle"), "lifecycle decisions are append-only evidence");

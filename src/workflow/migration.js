@@ -251,6 +251,7 @@ function projectLegacyRun(found, definition, sourceDigest) {
     checkpointReviews: [],
     revisionHistory: [],
     interventions: [],
+    interruption: null,
     warnings: [
       ...(found.run.warnings || []),
       "Read-only compatibility projection; explicit backed-up migration is required before workflow execution.",

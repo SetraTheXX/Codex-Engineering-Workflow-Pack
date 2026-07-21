@@ -1141,6 +1141,7 @@ const RUN_INTERVENTION_EVENTS = new Set([
   "pause-budget-safe",
   "pause-budget-unverified",
   "pause-host-limit",
+  "interrupt",
   "resume",
 ]);
 const RUN_LIFECYCLE_EVENTS = new Set(["continue", "cancel", "timeout", "rollback", "abandon"]);
@@ -1154,11 +1155,30 @@ function workflowResumeStatus(budget, fallback) {
   return budget.resumeStatus;
 }
 
+function interruptionResumeStatus(interruption, fallback) {
+  if (!interruption || interruption.resumeStatus === null || interruption.resumeStatus === undefined) {
+    return fallback;
+  }
+  if (!RESUMABLE_RUN_STATUSES.has(interruption.resumeStatus)) {
+    throw new Error(`Invalid workflow interruption resume status: ${interruption.resumeStatus}.`);
+  }
+  return interruption.resumeStatus;
+}
+
 function interveneWorkflowRun(found, options, timestamp, reason) {
   let budget = found.run.budget;
+  let interruption = found.run.interruption || null;
   const previousStatus = found.run.status;
   let nextStatus = transitionRun(previousStatus, options.event);
-  if (options.event === "add-budget") {
+  if (options.event === "interrupt") {
+    interruption = {
+      active: true,
+      observedAt: timestamp,
+      source: options.source || "operator",
+      reason,
+      resumeStatus: previousStatus,
+    };
+  } else if (options.event === "add-budget") {
     if (!Number.isInteger(options.operations) || options.operations < 1) {
       throw new Error("add-budget requires --operations with a positive integer.");
     }
@@ -1201,13 +1221,16 @@ function interveneWorkflowRun(found, options, timestamp, reason) {
       resumeStatus: previousStatus,
     };
   } else if (options.event === "resume") {
-    nextStatus = workflowResumeStatus(budget, nextStatus);
+    nextStatus = previousStatus === "interrupted"
+      ? interruptionResumeStatus(interruption, nextStatus)
+      : workflowResumeStatus(budget, nextStatus);
     budget = {
       ...budget,
       hostLimit: previousStatus === "paused-host-limit" ? null : budget.hostLimit,
       pauseReason: null,
       resumeStatus: null,
     };
+    if (previousStatus === "interrupted") interruption = null;
   } else {
     budget = {
       ...budget,
@@ -1221,7 +1244,7 @@ function interveneWorkflowRun(found, options, timestamp, reason) {
     checkpointId: null,
     classification: null,
     reason,
-    actor: "operator",
+    actor: options.actor || "operator",
     recordedAt: timestamp,
     allocation: options.allocation || null,
     operations: options.operations || null,
@@ -1231,6 +1254,7 @@ function interveneWorkflowRun(found, options, timestamp, reason) {
     status: nextStatus,
     updatedAt: timestamp,
     budget,
+    interruption,
     interventions: [...found.run.interventions, intervention],
   };
   writeJsonAtomic(found.runPath, run);
@@ -1528,6 +1552,7 @@ function createApprovedRun(options) {
     checkpointReviews: [],
     revisionHistory: [],
     interventions: [],
+    interruption: null,
     warnings: [],
   };
   writeJsonAtomic(runPath, run);
