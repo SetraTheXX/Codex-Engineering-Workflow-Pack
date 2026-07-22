@@ -47,6 +47,8 @@ Schema presence does not prove that a plugin can attach to the desktop app's exi
 | Desktop notifications | host-specific | The host owns documented notification behavior and settings. CEWP has no arbitrary notification category. |
 | Hook `statusMessage` | supported | Official hook configuration exposes it as transient handler status. |
 | Hook `systemMessage` | supported | Official hook output exposes it as a UI or event-stream warning. |
+| `SubagentStart`/`SubagentStop` evidence | supported, opt-in | The plugin records only documented parent session/turn, agent id/type, permission/model context, and bounded stop summary after separate CEWP approval and host `/hooks` trust. The documented input exposes no subagent thread id, so CEWP preserves it as `unknown`. |
+| Hook trust and version drift | supported | `npm run test:integration-hook-evidence` binds the exact bundle, Codex version, CEWP runtime, hook contract, and workflow revision. Drift or malformed input emits a warning, appends no trusted evidence, and leaves Core gates unchanged. |
 | `PreToolUse` deny output | supported | The deterministic fixture emits the documented `permissionDecision: deny` shape and is covered by `npm run test:hook-output`. |
 | `PreToolUse` as complete enforcement | unavailable | Official docs exclude or limit richer shell and non-MCP paths. A real CLI 0.137.0 Windows probe executed the requested PowerShell command despite the Bash deny hook. Core policy remains authoritative. |
 | Hook-based instant turn cancellation | unknown | Stop semantics do not establish instantaneous cancellation of an in-flight model or external process. |
@@ -115,6 +117,7 @@ npm run probe:codex-app-server
 npm run test:plugin-lifecycle
 npm run test:hook-output
 npm run test:integration-capabilities
+npm run test:integration-hook-evidence
 ```
 
 The nested model probe is intentionally excluded from automated tests because it consumes account usage. Raw account values, credentials, thread ids, and machine-specific paths are not part of this document.

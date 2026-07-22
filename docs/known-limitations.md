@@ -10,7 +10,7 @@ CEWP is beta software. These limits are product boundaries, not hidden roadmap p
 - ChatGPT subscription credit impact and host-internal retries or compaction remain `unknown` without a supported machine-readable contract.
 - Numeric usage estimates stay unavailable until enough comparable local runs exist. When available, they are ranges with confidence and sample basis, never point promises.
 - File-level test-authoring enforcement recognizes common test directories and filename conventions. It cannot prove whether production code contains test-like logic.
-- The plugin contributes skills only. It does not provide MCP tools, hooks, an Apps SDK card, or an App Server client.
+- The plugin contributes skills and an optional review-required `SubagentStart`/`SubagentStop` evidence hook. The hook cannot expose a subagent thread id, does not read transcripts, and is never a Core enforcement boundary. Local MCP, an Apps SDK card, and an App Server client are not yet shipped.
 - Experimental OpenCode execution remains optional and outside the supervised golden path. Binary/version availability does not prove authentication or model readiness.
 - Manual is a non-executing handoff adapter. Claude, Gemini, Hermes, and other providers are not implemented.
 - Supervised worktree cleanup automation is not shipped; rollback is available for owned unverified work, and terminal evidence is retained for deliberate inspection/removal.

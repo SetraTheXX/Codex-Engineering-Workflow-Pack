@@ -1,6 +1,6 @@
 # Skill And Plugin Compatibility
 
-Observed: 2026-07-16
+Observed: 2026-07-22
 
 CEWP's ten bundled skills use the current Codex skill shape: a required `SKILL.md` with `name` and `description`, plus optional `scripts/`, `references/`, `assets/`, and `agents/`. `agents/openai.yaml` is accepted as optional UI, invocation-policy, and dependency metadata. CEWP no longer treats these official components as forbidden.
 
@@ -23,7 +23,7 @@ The Phase 9 plugin follows the official boundary:
 
 - `.codex-plugin/plugin.json` is the required manifest and the only file under `.codex-plugin/`.
 - `skills/`, `hooks/`, `.mcp.json`, `.app.json`, and `assets/` live at the plugin root and use `./`-prefixed contained paths.
-- Installing or enabling a plugin does not trust its bundled hooks. CEWP hooks remain optional until the user reviews and trusts the current definition.
+- Installing or enabling a plugin does not trust its bundled hooks. CEWP declares one contained subagent-evidence bundle, requires a run-bound operator approval, and still directs the user to `/hooks` to review and trust the exact current host definition. Bundle, Codex, CEWP runtime, hook-contract, or workflow-revision drift disables trusted evidence and falls back to Core plus conversation output.
 - A repo marketplace lives at `.agents/plugins/marketplace.json`; npm remains the source of the CEWP Core CLI/runtime.
 - MCP and Apps SDK components are optional projections. The plugin skeleton and golden path cannot depend on them until their versioned capability tests pass.
 
