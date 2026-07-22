@@ -10,6 +10,7 @@ const { verifySupervisedCheckpoint } = require("./verification");
 const { reviewSupervisedCheckpoint } = require("./review");
 const { finalizeSupervisedRun, previewSupervisedReceipt } = require("./receipt");
 const { runSupervisedControl } = require("./controls");
+const { approveCodexEffortPolicy } = require("../integration/effort-policy");
 
 const CONTROL_COMMANDS = new Set([
   "revise", "pause", "resume", "add-budget", "rollback", "cancel", "abandon", "block", "continue", "reassign",
@@ -95,6 +96,19 @@ function runSupervise(options = {}) {
       outputJson("supervise.status", result);
     } else {
       printStatus("CEWP supervised run status", result);
+    }
+    return;
+  }
+
+  if (options.subcommand === "effort") {
+    const result = approveCodexEffortPolicy({
+      ...options,
+      repoRoot: process.cwd(),
+    });
+    if (options.json) {
+      outputJson("supervise.effort", result);
+    } else {
+      printStatus("CEWP Codex effort policy approved", result);
     }
     return;
   }

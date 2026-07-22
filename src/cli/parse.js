@@ -74,6 +74,10 @@ function parseArgs(argv) {
     workerId: undefined,
     templateName: undefined,
     compilerDigest: undefined,
+    operation: undefined,
+    taskClass: undefined,
+    model: undefined,
+    effort: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -203,13 +207,45 @@ function parseArgs(argv) {
     if (
       args.command === "supervise"
       && [
-        "approve", "status", "execute", "verify", "retry", "review", "receipt", "finalize",
+        "approve", "status", "execute", "verify", "retry", "review", "receipt", "finalize", "effort",
         "revise", "pause", "resume", "add-budget", "rollback", "cancel", "abandon", "block", "continue", "reassign",
       ].includes(args.subcommand)
       && index === 2
       && !arg.startsWith("--")
     ) {
       args.runId = arg;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--operation") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--operation requires an effort-policy operation.");
+      args.operation = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--task-class") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--task-class requires a Codex task class.");
+      args.taskClass = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--model") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--model requires an explicit Codex model.");
+      args.model = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--effort") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--effort requires a supported Codex reasoning effort.");
+      args.effort = value;
+      index += 1;
       continue;
     }
 

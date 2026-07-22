@@ -31,6 +31,7 @@ Usage:
   cewp supervise plan --proposal <file> [--from <issue|PRD|PLAN.md|progress.md>] [--source-kind <kind>] [--json]
   cewp supervise approve [run-id] [--allow-test-authoring] --yes [--json]
   cewp supervise status [run-id] [--json]
+  cewp supervise effort [run-id] --operation <implementation|repair|reviewer> --task-class <class> [--model <model>] [--effort <minimal|low|medium|high|xhigh>] --yes [--json]
   cewp supervise execute [run-id] --yes [--timeout <seconds>] [--json]
   cewp supervise verify [run-id] [--timeout <seconds>] [--json]
   cewp supervise retry [run-id] --yes [--timeout <seconds>] [--json]

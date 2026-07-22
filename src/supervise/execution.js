@@ -27,6 +27,10 @@ const {
   validateOwnershipRecord,
 } = require("../run/ownership");
 const {
+  confirmCodexEffortEvidence,
+  resolveCodexEffortForDispatch,
+} = require("../integration/effort-policy");
+const {
   appendEvent,
   findSupervisedRun,
   getNextAction,
@@ -303,6 +307,7 @@ function executeSupervisedCheckpoint(options = {}) {
   assertPolicyAllows(found.repoRoot, "runWorkers");
   assertPolicyAllows(found.repoRoot, "runCommands");
   enforceOperationBudget(found, "implementation");
+  const codexSelection = resolveCodexEffortForDispatch(found, "implementation");
 
   const startedAt = new Date().toISOString();
   const owned = createOwnedWorktree(found, startedAt);
@@ -332,6 +337,7 @@ function executeSupervisedCheckpoint(options = {}) {
     scope: { status: "pending", warnings: [] },
     testAuthoring: { policy: found.run.assurance.testAuthoring, status: "pending", violations: [] },
     usage: { label: "unknown", value: null },
+    codex: codexSelection.evidence,
   };
   let startedRun = {
     ...found.run,
@@ -398,6 +404,8 @@ function executeSupervisedCheckpoint(options = {}) {
     timeoutSeconds: options.timeoutSeconds,
     sandbox: "workspace-write",
     structuredJson: true,
+    model: codexSelection.model,
+    effort: codexSelection.effort,
   });
   const remainingOutput = Math.max(
     0,
@@ -441,6 +449,7 @@ function executeSupervisedCheckpoint(options = {}) {
     },
     testAuthoring,
     usage,
+    codex: confirmCodexEffortEvidence(attempt.codex, usage),
     logs: {
       stdout: path.relative(found.runRoot, stdoutPath).replace(/\\/g, "/"),
       stderr: path.relative(found.runRoot, stderrPath).replace(/\\/g, "/"),
@@ -551,6 +560,7 @@ function retrySupervisedCheckpoint(options = {}) {
   }
   assertPolicyAllows(found.repoRoot, "runWorkers");
   enforceOperationBudget(found, "repair");
+  const codexSelection = resolveCodexEffortForDispatch(found, "repair");
   const repairCount = task.attempts.filter((attempt) => attempt.kind === "repair").length;
   if (repairCount >= found.run.budget.maxRepairsPerCheckpoint.value) {
     throw new Error("Checkpoint repair limit is exhausted; explicit budget revision is required.");
@@ -594,6 +604,7 @@ function retrySupervisedCheckpoint(options = {}) {
     scope: { status: "pending", warnings: [] },
     testAuthoring: { policy: found.run.assurance.testAuthoring, status: "pending", violations: [] },
     usage: { label: "unknown", value: null },
+    codex: codexSelection.evidence,
   };
   let startedRun = {
     ...found.run,
@@ -640,6 +651,8 @@ function retrySupervisedCheckpoint(options = {}) {
     timeoutSeconds: options.timeoutSeconds,
     sandbox: "workspace-write",
     structuredJson: true,
+    model: codexSelection.model,
+    effort: codexSelection.effort,
   });
   const remainingOutput = Math.max(
     0,
@@ -681,6 +694,7 @@ function retrySupervisedCheckpoint(options = {}) {
     },
     testAuthoring,
     usage,
+    codex: confirmCodexEffortEvidence(attempt.codex, usage),
     logs: {
       stdout: path.relative(found.runRoot, stdoutPath).replace(/\\/g, "/"),
       stderr: path.relative(found.runRoot, stderrPath).replace(/\\/g, "/"),

@@ -10,6 +10,10 @@ const {
   runCodexExecAdapter,
 } = require("../run/adapters/codex-exec");
 const { validateOwnershipRecord } = require("../run/ownership");
+const {
+  confirmCodexEffortEvidence,
+  resolveCodexEffortForDispatch,
+} = require("../integration/effort-policy");
 const { applyThresholdObservation, enforceOperationBudget } = require("./budget");
 const {
   mergeManagedUsage,
@@ -80,6 +84,7 @@ function reviewSupervisedCheckpoint(options = {}) {
   }
   assertPolicyAllows(found.repoRoot, "runReviewer");
   enforceOperationBudget(found, "reviewer");
+  const codexSelection = resolveCodexEffortForDispatch(found, "reviewer");
   const ownership = validateOwnershipRecord(
     readJsonFile(path.join(found.runRoot, "ownership.json"), "execution ownership"),
   );
@@ -114,6 +119,7 @@ function reviewSupervisedCheckpoint(options = {}) {
       independent: true,
       status: "executing",
       startedAt,
+      codex: codexSelection.evidence,
     },
   };
   startedRun.budget.consumed.modelOperations += 1;
@@ -147,6 +153,8 @@ function reviewSupervisedCheckpoint(options = {}) {
     timeoutSeconds: options.timeoutSeconds,
     sandbox: "read-only",
     structuredJson: true,
+    model: codexSelection.model,
+    effort: codexSelection.effort,
   });
   const remainingOutput = Math.max(
     0,
@@ -188,6 +196,7 @@ function reviewSupervisedCheckpoint(options = {}) {
       timedOut,
       reportPath: path.relative(found.runRoot, reportPath).replace(/\\/g, "/"),
       usage,
+      codex: confirmCodexEffortEvidence(startedRun.reviewer.codex, usage),
       reason: decision
         ? null
         : "Reviewer output did not contain a supported Decision line.",
