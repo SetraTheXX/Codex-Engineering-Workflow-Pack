@@ -12,7 +12,7 @@ const {
   createHostBinding,
   loadHostBinding,
 } = require("../../src/integration/binding");
-const { loadWorkflowRun } = require("../../src/workflow/state");
+const { loadWorkflowRun, startWorkflowTask } = require("../../src/workflow/state");
 
 function assertThrows(action, expected, label) {
   let error;
@@ -127,6 +127,56 @@ function main() {
       );
     } finally {
       cleanupRepo(managedRepo);
+    }
+
+    const conflictRepo = makeTempRepo("cewp-integration-ownership-conflict-");
+    try {
+      const native = approveWorkflow(conflictRepo, nativeDefinition());
+      let nativeFound = loadWorkflowRun(conflictRepo, native.runId);
+      const started = startWorkflowTask(nativeFound, "implement-example", {
+        now: new Date("2026-07-18T12:01:00.000Z"),
+      });
+      nativeFound = loadWorkflowRun(conflictRepo, native.runId);
+      const sharedWorktree = path.join(conflictRepo, "..", ".cewp-worktrees", "shared-task");
+      const managedOwnershipPath = path.join(
+        conflictRepo,
+        ".cewp",
+        "supervised-runs",
+        "managed-conflict",
+        "ownership.json",
+      );
+      fs.mkdirSync(path.dirname(managedOwnershipPath), { recursive: true });
+      fs.writeFileSync(managedOwnershipPath, `${JSON.stringify({
+        schemaVersion: "execution-ownership/v1",
+        runId: "managed-conflict",
+        taskId: "implement-example",
+        checkpointId: "implement-example",
+        owner: "managed",
+        backend: "codex-exec",
+        status: "active",
+        createdAt: "2026-07-18T12:00:00.000Z",
+        cleanupAuthority: "cewp-core",
+        worktree: { id: "shared-task", path: sharedWorktree },
+      }, null, 2)}\n`);
+
+      const conflictingBinding = explicitBinding(native.runId);
+      conflictingBinding.workflow = {
+        runId: native.runId,
+        taskId: "implement-example",
+        checkpointId: started.checkpoint.checkpointId,
+      };
+      conflictingBinding.references.worktree = { id: "shared-task", path: sharedWorktree };
+      assertThrows(
+        () => createHostBinding(nativeFound, conflictingBinding, { capabilities: supportedSnapshot() }),
+        /execution ownership conflict/,
+        "native host binding cannot claim an active managed task worktree",
+      );
+      assert(
+        !fs.existsSync(path.join(nativeFound.runRoot, "integration", "host-binding.json")),
+        "conflicting native binding is not persisted",
+      );
+    } finally {
+      cleanupRepo(conflictRepo);
     }
 
     const coreRun = JSON.parse(fs.readFileSync(found.runPath, "utf8"));
