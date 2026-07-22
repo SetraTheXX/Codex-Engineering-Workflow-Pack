@@ -23,6 +23,7 @@ const {
 } = require("../run/adapters/codex-exec");
 const {
   OWNERSHIP_SCHEMA_VERSION,
+  loadOwnershipRecords,
   validateOwnershipRecord,
 } = require("../run/ownership");
 const {
@@ -210,27 +211,7 @@ function createOwnedWorktree(found, startedAt) {
   if (continued) return continued;
 
   const paths = getWorktreePaths(found);
-  if (fs.existsSync(paths.worktreePath)) {
-    throw new Error(`Managed checkpoint worktree already exists: ${paths.worktreePath}`);
-  }
-  const branchProbe = getGitOutput(["show-ref", "--verify", "--quiet", `refs/heads/${paths.branch}`], found.repoRoot);
-  if (branchProbe.status === 0) {
-    throw new Error(`Managed checkpoint branch already exists: ${paths.branch}`);
-  }
-
-  fs.mkdirSync(path.dirname(paths.worktreePath), { recursive: true });
-  const created = getGitOutput([
-    "worktree",
-    "add",
-    paths.worktreePath,
-    "-b",
-    paths.branch,
-    checkpointBaseCommit(found.run, found.run.tasks[0]),
-  ], found.repoRoot);
-  if (created.status !== 0) {
-    throw new Error(`Failed to create managed checkpoint worktree: ${(created.stderr || created.stdout || "").trim()}`);
-  }
-
+  const ownershipPath = path.join(found.runRoot, "ownership.json");
   const ownership = validateOwnershipRecord({
     schemaVersion: OWNERSHIP_SCHEMA_VERSION,
     runId: found.runId,
@@ -254,13 +235,34 @@ function createOwnedWorktree(found, startedAt) {
       app: false,
       notification: false,
     },
-    ownershipRecords: [],
+    ownershipRecords: loadOwnershipRecords(found.repoRoot, { excludePath: ownershipPath }),
     requestedOwnership: ownership,
   }, { repoRoot: found.repoRoot });
   if (!gate.allowed) {
     throw new Error(`Controlled operation blocked: ${gate.reason}`);
   }
-  writeJsonAtomic(path.join(found.runRoot, "ownership.json"), ownership);
+  if (fs.existsSync(paths.worktreePath)) {
+    throw new Error(`Managed checkpoint worktree already exists: ${paths.worktreePath}`);
+  }
+  const branchProbe = getGitOutput(["show-ref", "--verify", "--quiet", `refs/heads/${paths.branch}`], found.repoRoot);
+  if (branchProbe.status === 0) {
+    throw new Error(`Managed checkpoint branch already exists: ${paths.branch}`);
+  }
+
+  fs.mkdirSync(path.dirname(paths.worktreePath), { recursive: true });
+  const created = getGitOutput([
+    "worktree",
+    "add",
+    paths.worktreePath,
+    "-b",
+    paths.branch,
+    checkpointBaseCommit(found.run, found.run.tasks[0]),
+  ], found.repoRoot);
+  if (created.status !== 0) {
+    throw new Error(`Failed to create managed checkpoint worktree: ${(created.stderr || created.stdout || "").trim()}`);
+  }
+
+  writeJsonAtomic(ownershipPath, ownership);
   return { ...paths, ownership };
 }
 

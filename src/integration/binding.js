@@ -7,6 +7,12 @@ const {
   selectManagedBackend,
   validateCodexCapabilitySnapshot,
 } = require("./capabilities");
+const {
+  OWNERSHIP_SCHEMA_VERSION,
+  findOwnershipConflict,
+  loadOwnershipRecords,
+  validateOwnershipRecord,
+} = require("../run/ownership");
 const { writeJsonAtomic } = require("../workflow/state");
 
 const HOST_BINDING_SCHEMA_VERSION = "host-binding/v1";
@@ -255,6 +261,39 @@ function bindingPath(found) {
   return path.join(found.runRoot, "integration", "host-binding.json");
 }
 
+function bindingOwnershipPath(found) {
+  return path.join(found.runRoot, "integration", "ownership.json");
+}
+
+function claimBindingWorktree(found, binding) {
+  if (!binding.references.worktree) return null;
+  if (!binding.workflow.taskId || !binding.workflow.checkpointId) {
+    throw new Error("Host binding worktree ownership requires a task and active checkpoint identity.");
+  }
+  const filePath = bindingOwnershipPath(found);
+  const requested = validateOwnershipRecord({
+    schemaVersion: OWNERSHIP_SCHEMA_VERSION,
+    runId: binding.workflow.runId,
+    taskId: binding.workflow.taskId,
+    checkpointId: binding.workflow.checkpointId,
+    owner: binding.execution.owner,
+    backend: binding.execution.backend,
+    status: "active",
+    createdAt: binding.provenance.recordedAt,
+    cleanupAuthority: binding.execution.owner === "managed" ? "cewp-core" : "host-owner",
+    worktree: binding.references.worktree,
+  });
+  const existing = loadOwnershipRecords(found.repoRoot, { excludePath: filePath });
+  const conflict = findOwnershipConflict(existing, requested, { repoRoot: found.repoRoot });
+  if (conflict) {
+    throw new Error(
+      `Host binding execution ownership conflict with ${conflict.owner} run ${conflict.runId} task ${conflict.taskId}.`,
+    );
+  }
+  writeJsonAtomic(filePath, requested);
+  return requested;
+}
+
 function createHostBinding(found, candidate, options = {}) {
   const binding = validateHostBinding(candidate, found);
   if (!options.capabilities) throw new Error("Host binding requires a versioned capability snapshot.");
@@ -264,6 +303,7 @@ function createHostBinding(found, candidate, options = {}) {
     throw new Error(`Host binding already exists for workflow run ${found.run.runId}.`);
   }
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  claimBindingWorktree(found, binding);
   writeJsonAtomic(filePath, binding);
   return binding;
 }
