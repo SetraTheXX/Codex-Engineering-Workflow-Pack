@@ -97,7 +97,7 @@ function parseArgs(argv) {
     return args;
   }
 
-  const optionStart = ["run", "supervise", "workflow", "demo"].includes(args.command) ? 2 : 1;
+  const optionStart = ["run", "supervise", "workflow", "integration", "demo"].includes(args.command) ? 2 : 1;
 
   for (let index = optionStart; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -129,6 +129,16 @@ function parseArgs(argv) {
 
     if (args.command === "policy" && index === 1) {
       args.subcommand = arg;
+      continue;
+    }
+
+    if (args.command === "integration" && args.subcommand === "hooks" && index === 2) {
+      args.action = arg;
+      continue;
+    }
+
+    if (args.command === "integration" && args.subcommand === "hooks" && index === 3 && !arg.startsWith("--")) {
+      args.workflowRunId = arg;
       continue;
     }
 
@@ -446,7 +456,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (["doctor", "run", "supervise", "workflow", "demo"].includes(args.command) && arg === "--json") {
+    if (["doctor", "run", "supervise", "workflow", "integration", "demo"].includes(args.command) && arg === "--json") {
       args.json = true;
       continue;
     }
@@ -457,6 +467,12 @@ function parseArgs(argv) {
     }
 
     if (args.command === "workflow" && arg === "--yes") {
+      args.yes = true;
+      continue;
+    }
+
+
+    if (args.command === "integration" && arg === "--yes") {
       args.yes = true;
       continue;
     }
