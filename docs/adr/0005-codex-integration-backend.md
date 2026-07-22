@@ -39,6 +39,7 @@ The Phase 11 review used the current Codex manual and a controlled local probe a
 - Existing `codex-exec` users keep a stable fallback and one backend per managed checkpoint.
 - Native goals remain useful without CEWP pretending to control or inspect a private host session.
 - External agent interfaces can use MCP and `operator-json/v1` without CEWP building a competing terminal or desktop UI.
+- The shipped MCP transport is local stdio only, fixes repository scope to process `cwd`, and delegates all eight operations directly to CEWP Core. It is a control surface, not an execution owner or reviewer.
 - Capability or schema drift produces an explicit compatibility warning and returns to generated-goal or explicit intake.
 - App Server can be reconsidered later without changing CEWP's provider-neutral workflow and evidence schemas.
 

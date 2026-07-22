@@ -10,6 +10,14 @@ It ships exactly three entry skills:
 
 The plugin does not attach to the ChatGPT desktop app's private thread, automate native goals, inject persistent UI, expose hidden host usage, execute the optional OpenCode adapter, or add another provider. The managed path uses one selected pair: `managed` owner with the `codex-exec` backend.
 
+## Local MCP Tools
+
+The plugin declares one local stdio server backed by the npm package's `cewp-mcp` command. It exposes
+create, inspect, approve, continue, retry, revise, verify, and finalize as structured tools. The server fixes
+repository scope to its working directory and imports the same CEWP Core services as the CLI. MCP host
+consent never replaces Core approval, ownership, policy, effort, scope, budget, verification, receipt, or
+independent-review gates.
+
 ## Optional Subagent Evidence
 
 The plugin declares one `SubagentStart`/`SubagentStop` hook bundle. Installation or enablement does not trust it. For a selected workflow run, first inspect the bundle and activate the CEWP-side binding:
