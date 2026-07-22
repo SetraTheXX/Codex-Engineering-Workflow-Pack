@@ -56,6 +56,26 @@ Changing the goal, scope, checks, or stopping conditions creates a new plan revi
 
 ## 3. Execute And Verify
 
+An optional Codex-specific sidecar can assign an explicit task class without changing the
+provider-neutral workflow or run schemas:
+
+```bash
+cewp supervise effort <run-id> \
+  --operation implementation \
+  --task-class demanding-implementation \
+  --model <explicit-codex-model> \
+  --effort high \
+  --yes
+```
+
+Supported operations are `implementation`, `repair`, and `reviewer`. Supported task classes are
+`fast-exploration`, `demanding-implementation`, and `high-effort-independent-review`. A task class
+never selects a model or reasoning effort automatically. Every initial selection or change requires
+`--yes`, creates a revision with an operator-approval digest, and fails closed when the sidecar's
+approved selection digest no longer matches. Model and effort remain `unknown` when omitted. Explicit selections become known
+effective evidence only after supported structured turn-completion usage is received; an early CLI,
+model, or host rejection leaves them unknown.
+
 Managed execution is an advanced local action:
 
 ```bash
