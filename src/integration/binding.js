@@ -17,6 +17,7 @@ const { writeJsonAtomic } = require("../workflow/state");
 
 const HOST_BINDING_SCHEMA_VERSION = "host-binding/v1";
 const GENERATED_GOAL_BRIEF_SCHEMA_VERSION = "generated-goal-brief/v1";
+const INTEGRATION_CONTROL_RECEIPT_SCHEMA_VERSION = "integration-control-receipt/v1";
 const HOST_SURFACES = Object.freeze([
   "chatgpt-desktop",
   "codex-cli",
@@ -209,6 +210,13 @@ function validateHostBinding(value, found) {
   const controls = Object.fromEntries(
     CONTROL_CLASSES.map((name) => [name, normalizeStringList(value.controls[name], `controls.${name}`)]),
   );
+  const classifiedControls = CONTROL_CLASSES.flatMap((name) => controls[name]);
+  if (new Set(classifiedControls).size !== classifiedControls.length) {
+    throw new Error("Invalid host binding: a control cannot appear in more than one control class.");
+  }
+  if (execution.owner === "audit-only" && controls.preventive.length > 0) {
+    throw new Error("Invalid host binding: audit-only execution cannot claim preventive enforcement.");
+  }
 
   return {
     schemaVersion: HOST_BINDING_SCHEMA_VERSION,
@@ -265,6 +273,58 @@ function bindingOwnershipPath(found) {
   return path.join(found.runRoot, "integration", "ownership.json");
 }
 
+function controlReceiptPath(found) {
+  return path.join(found.runRoot, "integration", "control-receipt.json");
+}
+
+function buildIntegrationControlReceipt(binding) {
+  const classifications = {
+    preventive: "preventive",
+    postExecution: "post-execution",
+    imported: "imported",
+    unavailable: "unavailable",
+  };
+  const effects = {
+    preventive: "prevented-before-execution",
+    postExecution: "checked-after-execution",
+    imported: "observed-not-enforced",
+    unavailable: "unavailable",
+  };
+  const controls = CONTROL_CLASSES.flatMap((classification) => (
+    binding.controls[classification].map((name) => ({
+      name,
+      classification: classifications[classification],
+      effect: effects[classification],
+    }))
+  ));
+  return {
+    schemaVersion: INTEGRATION_CONTROL_RECEIPT_SCHEMA_VERSION,
+    generatedAt: binding.provenance.recordedAt,
+    workflow: binding.workflow,
+    execution: binding.execution,
+    provenance: {
+      kind: binding.provenance.kind,
+      authenticationBoundary: binding.provenance.authenticationBoundary,
+    },
+    controls,
+    summary: {
+      preventiveEnforced: binding.controls.preventive.length,
+      postExecutionChecked: binding.controls.postExecution.length,
+      importedObserved: binding.controls.imported.length,
+      unavailable: binding.controls.unavailable.length,
+    },
+    claims: {
+      observedEvidenceIsPreventiveEnforcement: false,
+      providerExecutionSuppliesEnforcement: false,
+      preventiveControlAuthority: binding.controls.preventive.length > 0 ? "cewp-core" : "none",
+      guardrailAuthority: "cewp-core-outside-provider-execution",
+    },
+    warnings: binding.execution.owner === "audit-only"
+      ? ["Audit-only evidence can be imported or checked after execution; it is not preventive enforcement."]
+      : [],
+  };
+}
+
 function claimBindingWorktree(found, binding) {
   if (!binding.references.worktree) return null;
   if (!binding.workflow.taskId || !binding.workflow.checkpointId) {
@@ -305,6 +365,7 @@ function createHostBinding(found, candidate, options = {}) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   claimBindingWorktree(found, binding);
   writeJsonAtomic(filePath, binding);
+  writeJsonAtomic(controlReceiptPath(found), buildIntegrationControlReceipt(binding));
   return binding;
 }
 
@@ -312,6 +373,20 @@ function loadHostBinding(found) {
   const filePath = bindingPath(found);
   if (!fs.existsSync(filePath)) return null;
   return validateHostBinding(JSON.parse(fs.readFileSync(filePath, "utf8")), found);
+}
+
+function loadIntegrationControlReceipt(found) {
+  const filePath = controlReceiptPath(found);
+  if (!fs.existsSync(filePath)) return null;
+  const receipt = JSON.parse(fs.readFileSync(filePath, "utf8"));
+  if (receipt.schemaVersion !== INTEGRATION_CONTROL_RECEIPT_SCHEMA_VERSION) {
+    throw new Error(`Invalid integration control receipt: expected ${INTEGRATION_CONTROL_RECEIPT_SCHEMA_VERSION}.`);
+  }
+  const binding = loadHostBinding(found);
+  if (!binding || JSON.stringify(receipt) !== JSON.stringify(buildIntegrationControlReceipt(binding))) {
+    throw new Error("Invalid integration control receipt: receipt does not match the validated host binding.");
+  }
+  return receipt;
 }
 
 function createGeneratedGoalBrief(found, taskId) {
@@ -354,8 +429,11 @@ module.exports = {
   GENERATED_GOAL_BRIEF_SCHEMA_VERSION,
   HOST_BINDING_SCHEMA_VERSION,
   HOST_SURFACES,
+  INTEGRATION_CONTROL_RECEIPT_SCHEMA_VERSION,
+  buildIntegrationControlReceipt,
   createGeneratedGoalBrief,
   createHostBinding,
+  loadIntegrationControlReceipt,
   loadHostBinding,
   validateHostBinding,
 };

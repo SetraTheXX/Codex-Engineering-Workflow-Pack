@@ -142,6 +142,11 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (args.command === "integration" && args.subcommand === "controls" && index === 2 && !arg.startsWith("--")) {
+      args.workflowRunId = arg;
+      continue;
+    }
+
     if (args.command === "workflow" && args.subcommand === "validate" && index === 2 && !arg.startsWith("--")) {
       args.definitionFile = arg;
       continue;

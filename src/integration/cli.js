@@ -6,6 +6,8 @@ const {
   inspectCodexHookTrust,
   recordSubagentHookEvent,
 } = require("./hook-evidence");
+const { loadIntegrationControlReceipt } = require("./binding");
+const { loadWorkflowRun } = require("../workflow/state");
 
 function outputJson(command, data) {
   console.log(JSON.stringify({
@@ -18,6 +20,23 @@ function outputJson(command, data) {
 }
 
 function runIntegration(options = {}) {
+  if (options.subcommand === "controls") {
+    if (!options.workflowRunId) throw new Error("integration controls requires a workflow run id.");
+    const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
+    const result = loadIntegrationControlReceipt(found);
+    if (!result) throw new Error(`Integration control receipt not found for workflow run ${options.workflowRunId}.`);
+    if (options.json) outputJson("integration.controls", result);
+    else {
+      console.log("CEWP integration control receipt");
+      console.log(`Run ID: ${result.workflow.runId}`);
+      console.log(`Owner: ${result.execution.owner}`);
+      console.log(`Preventive: ${result.summary.preventiveEnforced}`);
+      console.log(`Post-execution: ${result.summary.postExecutionChecked}`);
+      console.log(`Imported observations: ${result.summary.importedObserved}`);
+      console.log(`Unavailable: ${result.summary.unavailable}`);
+    }
+    return;
+  }
   if (options.subcommand === "hooks" && options.action === "ingest") {
     const raw = fs.readFileSync(0, "utf8");
     if (Buffer.byteLength(raw, "utf8") > 64 * 1024) {
