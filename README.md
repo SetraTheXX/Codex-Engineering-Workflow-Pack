@@ -121,6 +121,7 @@ CEWP still ships ten reusable engineering skills and the earlier Coordinator Mod
 
 - [Install Guide](docs/install.md)
 - [Supervised Workflow](docs/supervised-workflow.md)
+- [External Integration Boundary](docs/external-integration-boundary.md)
 - [Workflow Runtime](docs/workflow-runtime.md)
 - [Known Limitations](docs/known-limitations.md)
 - [Pilot Kit](docs/pilot-kit.md)
