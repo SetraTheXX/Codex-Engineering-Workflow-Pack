@@ -131,6 +131,23 @@ function main() {
   assert(capabilityMatrix.includes("plugin install, disable, upgrade, and uninstall"), "plugin lifecycle evidence is current");
   assert(!capabilityMatrix.includes("Phase 9 must test"), "capability matrix has no stale Phase 9 promise");
 
+  const externalBoundary = fs.readFileSync(
+    path.join(repoRoot, "docs", "external-integration-boundary.md"),
+    "utf8",
+  );
+  for (const required of [
+    "operator-json/v1",
+    "cewp-mcp",
+    "current working directory",
+    "must not become the execution owner",
+    "Codex App Server",
+    "codex-exec",
+    "does not attach to the ChatGPT desktop app's existing internal session",
+    "no custom terminal-session protocol",
+  ]) {
+    assert(externalBoundary.includes(required), `external integration boundary documents ${required}`);
+  }
+
   console.log("[PASS] Codex integration capability drift and backend decision stay truthful");
 }
 
