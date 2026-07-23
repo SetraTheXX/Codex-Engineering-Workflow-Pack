@@ -60,3 +60,14 @@ opened directly from disk on Windows or Linux.
 The report separates observed, estimated, budgeted, and unknown values; shows task progress, revisions,
 checkpoint verification, interventions and recovery state, protected reserves, preventive versus observed
 controls, and final review. Repository metadata is HTML-escaped, and raw prompts/logs remain excluded.
+
+## Run Comparison
+
+`cewp workflow compare <left-run-id> <right-run-id>` derives `run-comparison/v1` from two receipts. It
+compares outcome, bounded duration, execution owner/backend, observed usage categories, estimates and API
+cost when valid, attempts, interventions, failures, scope, commands, and verification evidence. Model time,
+CEWP overhead, estimate accuracy, billing cost, or usage that was not observed remains `unknown` and is
+excluded from numeric deltas.
+
+A native-owned workflow is labeled as a native-goal baseline only when a validated host binding includes a
+native goal reference. Native ownership alone is insufficient, and unavailable native usage is never zero.

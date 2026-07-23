@@ -5,7 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { getGitHeadCommit } = require("../lib/git");
 const { normalizeSlashPath } = require("../lib/paths");
-const { loadIntegrationControlReceipt } = require("../integration/binding");
+const { loadHostBinding, loadIntegrationControlReceipt } = require("../integration/binding");
 const { parseLifecycleEvents } = require("./events");
 const { writeJsonAtomic } = require("../workflow/state");
 
@@ -230,6 +230,7 @@ function buildEvidenceReceipt(found, options = {}) {
   }
   const headCommit = getGitHeadCommit(found.repoRoot);
   const baseCommit = found.run.git && found.run.git.baseCommit;
+  const hostBinding = loadHostBinding(found);
 
   return {
     schemaVersion: EVIDENCE_RECEIPT_SCHEMA_VERSION,
@@ -280,6 +281,16 @@ function buildEvidenceReceipt(found, options = {}) {
       approval: found.run.approval,
       assurance: found.run.assurance,
       controls: loadIntegrationControlReceipt(found),
+    },
+    integration: {
+      nativeGoal: hostBinding && hostBinding.execution.owner === "native" && hostBinding.references.goalId
+        ? {
+          status: "known",
+          goalId: hostBinding.references.goalId,
+          surface: hostBinding.host.surface,
+          authenticationBoundary: hostBinding.provenance.authenticationBoundary,
+        }
+        : { status: "unknown", goalId: null, reason: "no supported native goal binding" },
     },
     integrity: {
       algorithm: "sha256",

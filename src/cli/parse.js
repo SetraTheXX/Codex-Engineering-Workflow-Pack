@@ -78,6 +78,7 @@ function parseArgs(argv) {
     taskClass: undefined,
     model: undefined,
     effort: undefined,
+    comparisonRunId: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -154,6 +155,16 @@ function parseArgs(argv) {
 
     if (args.command === "workflow" && args.subcommand === "template" && index === 2 && !arg.startsWith("--")) {
       args.templateName = arg;
+      continue;
+    }
+
+    if (args.command === "workflow" && args.subcommand === "compare" && index === 2 && !arg.startsWith("--")) {
+      args.workflowRunId = arg;
+      continue;
+    }
+
+    if (args.command === "workflow" && args.subcommand === "compare" && index === 3 && !arg.startsWith("--")) {
+      args.comparisonRunId = arg;
       continue;
     }
 

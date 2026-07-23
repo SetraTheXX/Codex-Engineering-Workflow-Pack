@@ -30,8 +30,9 @@ const {
 } = require("./state");
 const { deriveSchedule } = require("./scheduler");
 const { listWorkflowTemplates, loadWorkflowTemplate } = require("./templates");
-const { writeEvidenceReceipt } = require("../evidence/receipt");
+const { buildEvidenceReceipt, writeEvidenceReceipt } = require("../evidence/receipt");
 const { writeOperatorReport } = require("../evidence/report");
+const { compareEvidenceReceipts } = require("../evidence/compare");
 
 function outputJson(command, data) {
   console.log(JSON.stringify({
@@ -63,6 +64,22 @@ function resolveProposalSource(options) {
 }
 
 function runWorkflow(options = {}) {
+  if (options.subcommand === "compare") {
+    if (!options.workflowRunId || !options.comparisonRunId) throw new Error("workflow compare requires two run ids.");
+    const generatedAt = new Date().toISOString();
+    const left = buildEvidenceReceipt(loadWorkflowRun(process.cwd(), options.workflowRunId), { generatedAt });
+    const right = buildEvidenceReceipt(loadWorkflowRun(process.cwd(), options.comparisonRunId), { generatedAt });
+    const comparison = compareEvidenceReceipts(left, right);
+    if (options.json) outputJson("workflow.compare", comparison);
+    else {
+      console.log("CEWP workflow comparison");
+      console.log(`Left: ${comparison.runs.left.runId} (${comparison.runs.left.execution.owner})`);
+      console.log(`Right: ${comparison.runs.right.runId} (${comparison.runs.right.execution.owner})`);
+      console.log(`Equivalence: ${comparison.equivalence.status}`);
+      console.log(`Unavailable: ${comparison.equivalence.unavailable.join(", ") || "none"}`);
+    }
+    return;
+  }
   if (options.subcommand === "report") {
     if (!options.workflowRunId) throw new Error("workflow report requires a run id.");
     const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
