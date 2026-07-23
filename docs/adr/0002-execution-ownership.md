@@ -42,6 +42,11 @@ Receipts label each control as one of:
 
 Native and audit-only runs must not inherit managed claims. A hook or conversation warning may project a decision but never becomes the ownership or enforcement source.
 
+The runtime materializes these classifications as `integration-control-receipt/v1` and exposes the receipt
+through `cewp integration controls <workflow-run-id> --json`. Audit-only bindings with preventive entries or
+controls assigned to multiple classes are invalid. Imported entries explicitly render as observed, not
+enforced, and receipt inspection verifies the artifact still matches its validated host binding.
+
 ## Consequences
 
 The runtime needs a deterministic ownership registry and conflict fixtures before the supervised golden path ships. Recovery can safely resume only after worktree, plan, policy, owner, backend, and process state are compatible. App Server may later replace `codex-exec` for a managed checkpoint only through a new capability and migration decision; it cannot run beside it for the same checkpoint.

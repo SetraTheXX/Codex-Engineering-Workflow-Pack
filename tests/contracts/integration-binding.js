@@ -3,16 +3,19 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { assert } = require("../harness/lib/assertions");
-const { cleanupRepo, makeTempRepo } = require("../harness/lib/temp-repo");
+const { cleanupRepo, makeTempRepo, runNode } = require("../harness/lib/temp-repo");
 const { supportedSnapshot } = require("./integration-capabilities");
 const { validDefinition } = require("./workflow-definition");
 const { approveWorkflow } = require("./workflow-scheduler");
 const {
   createGeneratedGoalBrief,
   createHostBinding,
+  loadIntegrationControlReceipt,
   loadHostBinding,
 } = require("../../src/integration/binding");
 const { loadWorkflowRun, startWorkflowTask } = require("../../src/workflow/state");
+
+const cewpCli = path.join(__dirname, "..", "..", "bin", "cewp.js");
 
 function assertThrows(action, expected, label) {
   let error;
@@ -32,6 +35,17 @@ function nativeDefinition() {
     owner: "native",
     backend: null,
     allowedModes: ["supervised"],
+  };
+  return definition;
+}
+
+function auditDefinition() {
+  const definition = validDefinition();
+  definition.workflowId = "audit-integration";
+  definition.execution = {
+    owner: "audit-only",
+    backend: null,
+    allowedModes: ["audit-only"],
   };
   return definition;
 }
@@ -127,6 +141,78 @@ function main() {
       );
     } finally {
       cleanupRepo(managedRepo);
+    }
+
+    const auditRepo = makeTempRepo("cewp-integration-audit-binding-");
+    try {
+      const audit = approveWorkflow(auditRepo, auditDefinition());
+      const auditFound = loadWorkflowRun(auditRepo, audit.runId);
+      const auditBinding = explicitBinding(audit.runId);
+      auditBinding.execution = { owner: "audit-only", backend: null };
+      auditBinding.host.surface = "external-client";
+      auditBinding.mode = "audit-import";
+      auditBinding.provenance.kind = "imported-audit";
+      auditBinding.references.goalId = null;
+      auditBinding.references.threadId = "external-thread-1";
+      auditBinding.controls = {
+        preventive: ["scope-policy"],
+        postExecution: ["receipt-schema"],
+        imported: ["external-scope-observation"],
+        unavailable: ["provider-tool-prevention"],
+      };
+      assertThrows(
+        () => createHostBinding(auditFound, auditBinding, { capabilities: supportedSnapshot() }),
+        /audit-only.*preventive/i,
+        "audit-only binding cannot claim preventive enforcement",
+      );
+
+      auditBinding.controls.preventive = [];
+      createHostBinding(auditFound, auditBinding, { capabilities: supportedSnapshot() });
+      const controlReceipt = loadIntegrationControlReceipt(auditFound);
+      assert(controlReceipt.schemaVersion === "integration-control-receipt/v1", "control receipt is versioned");
+      assert(controlReceipt.execution.owner === "audit-only", "receipt retains audit-only ownership");
+      assert(controlReceipt.summary.preventiveEnforced === 0, "audit-only receipt claims no preventive enforcement");
+      assert(controlReceipt.summary.postExecutionChecked === 1, "post-execution checks stay distinct");
+      assert(
+        controlReceipt.controls.find((entry) => entry.name === "receipt-schema").classification === "post-execution",
+        "public receipt uses the documented post-execution classification",
+      );
+      assert(controlReceipt.summary.importedObserved === 1, "imported observations stay distinct");
+      assert(
+        controlReceipt.controls.find((entry) => entry.name === "external-scope-observation").effect === "observed-not-enforced",
+        "imported audit evidence is labeled observed rather than enforced",
+      );
+      assert(
+        controlReceipt.claims.providerExecutionSuppliesEnforcement === false,
+        "audit receipt never treats provider-controlled execution as the enforcement source",
+      );
+      const shown = runNode(cewpCli, ["integration", "controls", audit.runId, "--json"], auditRepo);
+      assert(shown.status === 0, `control receipt is available through operator JSON: ${shown.stderr}`);
+      const shownReceipt = JSON.parse(shown.stdout);
+      assert(shownReceipt.command === "integration.controls", "operator JSON identifies control inspection");
+      assert(shownReceipt.data.summary.importedObserved === 1, "operator JSON preserves observed audit evidence");
+
+      const duplicate = { ...auditBinding, controls: {
+        ...auditBinding.controls,
+        imported: ["receipt-schema"],
+      } };
+      assertThrows(
+        () => createHostBinding(auditFound, duplicate, { capabilities: supportedSnapshot(), replace: true }),
+        /more than one control class/,
+        "one control cannot receive conflicting enforcement classifications",
+      );
+
+      const receiptPath = path.join(auditFound.runRoot, "integration", "control-receipt.json");
+      const tampered = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
+      tampered.controls.find((entry) => entry.classification === "imported").effect = "prevented-before-execution";
+      fs.writeFileSync(receiptPath, `${JSON.stringify(tampered, null, 2)}\n`);
+      assertThrows(
+        () => loadIntegrationControlReceipt(auditFound),
+        /does not match the validated host binding/,
+        "edited receipt cannot promote observed audit evidence to enforcement",
+      );
+    } finally {
+      cleanupRepo(auditRepo);
     }
 
     const conflictRepo = makeTempRepo("cewp-integration-ownership-conflict-");

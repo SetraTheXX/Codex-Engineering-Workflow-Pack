@@ -36,6 +36,22 @@ A succeeded `task-result/v1` must include every approved baseline, targeted, and
 
 A failed `task-result/v1` is still evidence. CEWP validates its scope, approved verification commands, failure classification and signature, bounded output, and usage truth. It persists the result, accounts observed CEWP-controlled operations, and moves the checkpoint, task, and run to `blocked`. An identical canonical signature is derived as `repeated-failure`; a provider cannot self-declare it. Unknown host-internal work remains unknown and is not fabricated as observed usage.
 
+## Integration Control Claims
+
+A validated host binding writes `integration/control-receipt.json` beside the provider-specific binding,
+outside provider-neutral workflow state. Inspect it with:
+
+```bash
+cewp integration controls <workflow-run-id> --json
+```
+
+`integration-control-receipt/v1` classifies each named check as `preventive`, `postExecution`, `imported`,
+or `unavailable`. One check cannot occupy multiple classes. Audit-only ownership cannot claim any preventive
+control: imported evidence is rendered as `observed-not-enforced`, while a CEWP check performed after import
+remains post-execution rather than preventive. The receipt is derived from and checked against the validated
+host binding, so editing the artifact cannot promote an observation into enforcement. Guardrail authority
+remains CEWP Core outside provider-controlled execution.
+
 Recovery is explicit: retry, revise, reassign, a permitted pre-existing-failure waiver, rollback, cancel, or abandon. New regressions, repeated failures, scope gates, destructive-operation policy, and required reviewer PASS are non-waivable. A failed or unverified checkpoint never counts as completed.
 
 ## Budgets

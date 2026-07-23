@@ -11,6 +11,7 @@ CEWP is beta software. These limits are product boundaries, not hidden roadmap p
 - Numeric usage estimates stay unavailable until enough comparable local runs exist. When available, they are ranges with confidence and sample basis, never point promises.
 - File-level test-authoring enforcement recognizes common test directories and filename conventions. It cannot prove whether production code contains test-like logic.
 - The plugin contributes skills, a local stdio MCP bridge, and an optional review-required `SubagentStart`/`SubagentStop` evidence hook. The hook cannot expose a subagent thread id, does not read transcripts, and is never a Core enforcement boundary. MCP exposes only CEWP Core operations and does not attach to native host sessions. An Apps SDK card and App Server client are not shipped.
+- Audit-only integration can validate imported evidence and record post-execution checks, but it cannot claim that CEWP prevented actions performed by the external owner. Its integration control receipt therefore permits no preventive entries.
 - Experimental OpenCode execution remains optional and outside the supervised golden path. Binary/version availability does not prove authentication or model readiness.
 - Manual is a non-executing handoff adapter. Claude, Gemini, Hermes, and other providers are not implemented.
 - Supervised worktree cleanup automation is not shipped; rollback is available for owned unverified work, and terminal evidence is retained for deliberate inspection/removal.

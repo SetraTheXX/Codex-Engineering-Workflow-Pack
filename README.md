@@ -84,6 +84,10 @@ can expose `cewp_create`, `cewp_inspect`, `cewp_approve`, `cewp_continue`, `cewp
 `cewp_verify`, and `cewp_finalize` when the package-provided `cewp-mcp` command is on `PATH`. It does not
 gain direct access to the host's private thread, native goal lifecycle, billing data, or persistent UI.
 
+For a workflow with a validated host binding, `cewp integration controls <workflow-run-id> --json` shows
+preventive, post-execution, imported-observation, and unavailable control classes without promoting
+audit-only evidence into enforcement.
+
 ## What CEWP Records
 
 Phase 9 supervised state lives under `.cewp/supervised-runs/<run-id>/`; graph workflow state lives under `.cewp/workflow-runs/<run-id>/`. Human-readable `progress.md` is generated from canonical state and cannot silently change it.
