@@ -31,6 +31,7 @@ const {
 const { deriveSchedule } = require("./scheduler");
 const { listWorkflowTemplates, loadWorkflowTemplate } = require("./templates");
 const { writeEvidenceReceipt } = require("../evidence/receipt");
+const { writeOperatorReport } = require("../evidence/report");
 
 function outputJson(command, data) {
   console.log(JSON.stringify({
@@ -62,6 +63,20 @@ function resolveProposalSource(options) {
 }
 
 function runWorkflow(options = {}) {
+  if (options.subcommand === "report") {
+    if (!options.workflowRunId) throw new Error("workflow report requires a run id.");
+    const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
+    const result = writeOperatorReport(found);
+    if (options.json) outputJson("workflow.report", result);
+    else {
+      console.log("CEWP offline operator report written");
+      console.log(`Run ID: ${result.report.runId}`);
+      console.log(`Status: ${result.report.completeness.status}`);
+      console.log(`JSON: ${result.paths.json}`);
+      console.log(`HTML: ${result.paths.html}`);
+    }
+    return;
+  }
   if (options.subcommand === "receipt") {
     if (!options.workflowRunId) throw new Error("workflow receipt requires a run id.");
     const found = loadWorkflowRun(process.cwd(), options.workflowRunId);

@@ -179,6 +179,7 @@ function checkpointReceipt(entry) {
     interventionState: entry.value.interventionState,
     reviewer: entry.value.reviewer,
     result: entry.value.result,
+    verification: entry.value.verification,
   };
 }
 

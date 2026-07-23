@@ -8,6 +8,7 @@
 - Added `cewp workflow receipt <run-id>` without executing agents or verification commands. Raw prompts, transcripts, adapter output, and raw log contents remain excluded by default.
 - Added the closed `event/v1` lifecycle vocabulary with read-only normalization of historical `workflow-event/v1` records.
 - Added read-only `cewp run verify <workflow-run-id>` checks for state, schemas, events, required artifacts, worktree liveness, and receipt integrity.
+- Added portable `operator-report/v1` JSON and standalone offline HTML generation from the normalized receipt model.
 
 ## 0.11.0-beta.0
 

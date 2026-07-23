@@ -49,3 +49,14 @@ read-only legacy input and normalized in receipts; CEWP does not rewrite histori
 required result/checkpoint artifacts, bound-worktree liveness, and every receipt integrity hash. It executes
 no agent and no approved verification command. A failed check returns a nonzero exit code while `--json`
 still emits the complete `run-verification/v1` diagnostic model.
+
+## Offline Operator Report
+
+`cewp workflow report <run-id>` writes `operator-report.json` and a standalone `operator-report.html` in
+the workflow run directory. Both are derived from the same normalized receipt model. The HTML uses no
+JavaScript, remote fonts, external stylesheets, network requests, server, or control process, so it can be
+opened directly from disk on Windows or Linux.
+
+The report separates observed, estimated, budgeted, and unknown values; shows task progress, revisions,
+checkpoint verification, interventions and recovery state, protected reserves, preventive versus observed
+controls, and final review. Repository metadata is HTML-escaped, and raw prompts/logs remain excluded.
