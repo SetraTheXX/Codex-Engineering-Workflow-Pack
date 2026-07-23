@@ -46,6 +46,7 @@ function runContract() {
 
     assert(responses.length === 3, "notifications do not receive responses");
     assert(responses[0].result.protocolVersion === "2025-11-25", "supported protocol is negotiated");
+    assert(responses[0].result.compatibility.compatible === true, "matching MCP protocol is compatible");
     assert(responses[0].result.capabilities.tools, "server advertises tools capability");
     const names = responses[1].result.tools.map((tool) => tool.name);
     assert(JSON.stringify(names) === JSON.stringify([
@@ -88,6 +89,18 @@ function runContract() {
     assert(gates[8].result.isError === true && gates[8].result.content[0].text.includes("explicit confirmation"), "finalize requires MCP confirmation");
     assert(gates[9].error.code === -32602 && gates[9].error.message.includes("Unknown tool"), "unknown tools are protocol errors");
     assert(gates[10].error.code === -32602 && gates[10].error.message.includes("input schema"), "malformed tool arguments are protocol errors");
+
+    const drift = runMcp(repoRoot, [
+      request(1, "initialize", {
+        protocolVersion: "2099-01-01",
+        capabilities: {},
+        clientInfo: { name: "future-client", version: "1.0.0" },
+      }),
+    ])[0].result;
+    assert(drift.protocolVersion === "2025-11-25", "unsupported MCP version negotiates a supported version");
+    assert(drift.compatibility.compatible === false, "MCP protocol drift is explicit");
+    assert(drift.compatibility.warning.code === "mcp-protocol-version-drift", "MCP drift has a stable warning code");
+    assert(drift.compatibility.fallback === "cewp-cli-operator-json", "MCP drift names the CLI fallback");
   } finally {
     cleanupRepo(repoRoot);
   }

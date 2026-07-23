@@ -49,7 +49,8 @@ function createMcpSession(options = {}) {
     }
     if (message.method === "initialize") {
       const requested = message.params && message.params.protocolVersion;
-      const protocolVersion = PROTOCOL_VERSIONS.has(requested) ? requested : "2025-11-25";
+      const compatible = PROTOCOL_VERSIONS.has(requested);
+      const protocolVersion = compatible ? requested : "2025-11-25";
       initialized = true;
       return response(message.id, {
         protocolVersion,
@@ -60,6 +61,17 @@ function createMcpSession(options = {}) {
           description: "Local CEWP Core tools with supervised approval and evidence gates.",
         },
         instructions: "Inspect before mutating. Explicit confirmation does not bypass CEWP Core state, ownership, scope, policy, budget, verification, or reviewer gates.",
+        compatibility: compatible
+          ? { compatible: true, requestedProtocolVersion: requested, fallback: null, warning: null }
+          : {
+            compatible: false,
+            requestedProtocolVersion: requested || null,
+            fallback: "cewp-cli-operator-json",
+            warning: {
+              code: "mcp-protocol-version-drift",
+              message: `Requested MCP protocol ${requested || "unknown"} is unsupported; negotiated ${protocolVersion}. Disconnect or use the CEWP CLI operator JSON fallback.`,
+            },
+          },
       });
     }
     if (!initialized) return rpcError(message.id, -32002, "MCP session is not initialized.");

@@ -1,6 +1,6 @@
 {
   "name": "@setrathex/codex-engineering-workflow-pack",
-  "version": "0.10.0-beta.0",
+  "version": "0.11.0-beta.0",
   "description": "Long-running Codex goals without blind runs: local-first supervision, verification, recovery, review, and evidence.",
   "license": "MIT",
   "repository": {

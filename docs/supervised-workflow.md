@@ -170,6 +170,11 @@ and independent-review checks remain in Core. MCP host approval is an additional
 never substitutes for those checks. Business-rule failures return structured tool errors; malformed calls
 and unknown tools return JSON-RPC protocol errors.
 
+During initialization, a supported MCP protocol version is echoed with `compatibility.compatible: true`.
+An unsupported version negotiates the current supported version but also returns the stable
+`mcp-protocol-version-drift` warning and `cewp-cli-operator-json` fallback; clients should disconnect or
+use that fallback rather than assuming newer semantics.
+
 The plugin MCP entry expects the package-provided `cewp-mcp` binary to be on `PATH`. If a third-party MCP
 client cannot discover the plugin manifest, configure a local stdio server with command `cewp-mcp` and set
 its working directory to the intended repository. Do not point one server process at multiple repositories.

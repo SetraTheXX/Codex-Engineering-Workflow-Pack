@@ -52,7 +52,7 @@ Schema presence does not prove that a plugin can attach to the desktop app's exi
 | `PreToolUse` deny output | supported | The deterministic fixture emits the documented `permissionDecision: deny` shape and is covered by `npm run test:hook-output`. |
 | `PreToolUse` as complete enforcement | unavailable | Official docs exclude or limit richer shell and non-MCP paths. A real CLI 0.137.0 Windows probe executed the requested PowerShell command despite the Bash deny hook. Core policy remains authoritative. |
 | Hook-based instant turn cancellation | unknown | Stop semantics do not establish instantaneous cancellation of an in-flight model or external process. |
-| Local MCP to CEWP Core | supported | `cewp-mcp` implements the documented local stdio JSON-RPC lifecycle and exactly eight Core-backed tools. `npm run test:integration-mcp` proves schema validation, current-directory repository scope, Core state transitions, confirmation gates, business errors, and protocol errors without credentials. |
+| Local MCP to CEWP Core | supported | `cewp-mcp` implements the documented local stdio JSON-RPC lifecycle and exactly eight Core-backed tools. `npm run test:integration-mcp` proves schema validation, current-directory repository scope, Core state transitions, confirmation gates, business errors, protocol errors, and explicit protocol-version drift fallback without credentials. |
 
 ## App Server Boundary
 

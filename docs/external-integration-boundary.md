@@ -18,6 +18,8 @@ intended repository. It exposes create, inspect, approve, continue, retry, revis
 tools import the same CEWP Core services as the CLI. An MCP client may add its own confirmation UI, but
 cannot bypass Core approval, ownership, policy, effort, scope, budget, verification, receipt, or reviewer
 gates. The server opens no network listener and provides no host account, billing, or private-session data.
+Unsupported MCP protocol versions return an explicit `mcp-protocol-version-drift` compatibility warning
+and name `cewp-cli-operator-json` as the safe fallback.
 
 Hooks and conversation messages are optional projections. Hook evidence is separately trusted and
 version-bound; a missing, disabled, stale, or malformed hook never changes Core enforcement.

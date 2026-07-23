@@ -13,36 +13,38 @@ const plugin = JSON.parse(fs.readFileSync(
 const releaseNotes = fs.readFileSync(path.join(repoRoot, "docs", "release-notes.md"), "utf8");
 
 function runWorkflowReleaseContract() {
-  assert(packageJson.version === "0.10.0-beta.0", "Phase 10 package version is exact");
+  assert(packageJson.version === "0.11.0-beta.0", "Phase 11 package version is exact");
   assert(plugin.version === packageJson.version, "plugin version follows the package version");
 
   const unreleasedIndex = releaseNotes.indexOf("## Unreleased");
-  const releaseIndex = releaseNotes.indexOf("## 0.10.0-beta.0");
-  const previousIndex = releaseNotes.indexOf("## 0.8.0-beta.0");
-  assert(unreleasedIndex >= 0 && releaseIndex > unreleasedIndex, "fresh Unreleased precedes the Phase 10 release");
-  assert(previousIndex > releaseIndex, "Phase 10 release precedes earlier release history");
+  const releaseIndex = releaseNotes.indexOf("## 0.11.0-beta.0");
+  const previousIndex = releaseNotes.indexOf("## 0.10.0-beta.0");
+  assert(unreleasedIndex >= 0 && releaseIndex > unreleasedIndex, "fresh Unreleased precedes the Phase 11 release");
+  assert(previousIndex > releaseIndex, "Phase 11 release precedes earlier release history");
   const unreleased = releaseNotes.slice(unreleasedIndex, releaseIndex);
   assert(unreleased.includes("No changes yet."), "fresh Unreleased is explicitly empty");
   for (const claim of [
-    "supervised golden path",
-    "workflow-compiler-request/v1",
-    "workflow-definition/v1",
-    "run-state/v2",
-    "one-, two-, and four-worker",
-    "OpenCode remains experimental",
-    "independent external pilot evidence remains Phase 13 validation debt",
-    "No provider, desktop UI, terminal server, native-goal control, merge, push, publish, tag, or release automation",
+    "native and managed ownership",
+    "no automatic model routing",
+    "SubagentStart",
+    "eight Core-backed MCP tools",
+    "observed, imported, stale, malformed, unavailable, and unknown",
+    "audit-only",
+    "App Server remains ungraduated",
+    "`codex-exec` fallback",
+    "external pilot evidence remains Phase 13 validation debt",
+    "No provider, desktop UI, terminal server, merge, push, publish, tag, or release automation",
   ]) {
-    assert(releaseNotes.slice(releaseIndex, previousIndex).includes(claim), `Phase 10 notes include honest claim: ${claim}`);
+    assert(releaseNotes.slice(releaseIndex, previousIndex).includes(claim), `Phase 11 notes include honest claim: ${claim}`);
   }
-  assert(packageJson.files.includes("docs/workflow-runtime.md"), "Phase 10 runtime guide is in the package surface");
+  assert(packageJson.files.includes("docs/external-integration-boundary.md"), "Phase 11 boundary guide is in the package surface");
 }
 
 try {
   runWorkflowReleaseContract();
-  console.log("[PASS] Phase 10 version and release surface are aligned");
+  console.log("[PASS] Phase 11 version and release surface are aligned");
 } catch (error) {
-  console.error("[FAIL] Phase 10 release surface contract");
+  console.error("[FAIL] Phase 11 release surface contract");
   console.error(error && error.stack ? error.stack : error);
   process.exitCode = 1;
 }
