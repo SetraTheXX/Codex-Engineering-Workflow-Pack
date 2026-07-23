@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { ensureDir } = require("../lib/fs");
 const { getGitHeadCommit } = require("../lib/git");
+const { appendLifecycleEvent } = require("../evidence/events");
 const { normalizeSlashPath } = require("../lib/paths");
 const { digestWorkflowDefinition, validateWorkflowDefinition } = require("./definition");
 const { readRepoJson } = require("./source");
@@ -320,7 +321,7 @@ function loadWorkflowRun(repoRoot, runId) {
 }
 
 function appendWorkflowEvent(runRoot, event) {
-  fs.appendFileSync(path.join(runRoot, "events.jsonl"), `${JSON.stringify(event)}\n`);
+  appendLifecycleEvent(runRoot, event);
 }
 
 function pauseForWorkflowBudget(found, allocation, decision, timestamp) {
@@ -1560,7 +1561,8 @@ function createApprovedRun(options) {
     warnings: [],
   };
   writeJsonAtomic(runPath, run);
-  fs.writeFileSync(path.join(runRoot, "events.jsonl"), `${JSON.stringify({
+  fs.writeFileSync(path.join(runRoot, "events.jsonl"), "", { flag: "wx" });
+  appendWorkflowEvent(runRoot, {
     schemaVersion: "workflow-event/v1",
     timestamp,
     type: "workflow-approved",
@@ -1570,7 +1572,7 @@ function createApprovedRun(options) {
     digest,
     approvalDigest,
     actor: "operator",
-  })}\n`, { flag: "wx" });
+  });
   writeWorkflowProgress(runRoot, run, options.definition, { now });
   return {
     run,

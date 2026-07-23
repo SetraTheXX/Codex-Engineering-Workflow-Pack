@@ -107,7 +107,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "run" && ["status", "next", "resume"].includes(args.subcommand) && index === 2 && !arg.startsWith("--")) {
+    if (args.command === "run" && ["status", "next", "resume", "verify"].includes(args.subcommand) && index === 2 && !arg.startsWith("--")) {
       args.runId = arg;
       continue;
     }

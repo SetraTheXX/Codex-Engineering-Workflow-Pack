@@ -6,6 +6,8 @@
 
 - Added deterministic `evidence-receipt/v1` JSON/Markdown generation for workflow runs with complete-versus-partial truth, task/checkpoint/review evidence, usage unknowns, budget compliance, git identities, and local SHA-256 integrity metadata.
 - Added `cewp workflow receipt <run-id>` without executing agents or verification commands. Raw prompts, transcripts, adapter output, and raw log contents remain excluded by default.
+- Added the closed `event/v1` lifecycle vocabulary with read-only normalization of historical `workflow-event/v1` records.
+- Added read-only `cewp run verify <workflow-run-id>` checks for state, schemas, events, required artifacts, worktree liveness, and receipt integrity.
 
 ## 0.11.0-beta.0
 

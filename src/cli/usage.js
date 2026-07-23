@@ -57,6 +57,7 @@ Usage:
   cewp run status [run-id] [--json]
   cewp run next [run-id] [--json]
   cewp run resume [run-id] [--json]
+  cewp run verify <workflow-run-id> [--json]
   cewp run prompts
   cewp run prompt <manager|worker-a|worker-b|reviewer>
   cewp run worktrees plan

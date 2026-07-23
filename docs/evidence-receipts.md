@@ -37,3 +37,15 @@ Raw prompts, adapter output, transcripts, and raw log contents are excluded by d
 contain repository-relative paths, changed filenames, approved commands, bounded failure/review summaries,
 and artifact names. Inspect these fields before sharing. Phase 12 privacy work will add export redaction;
 until then, keep the receipt local if those metadata fields are sensitive.
+
+## Event Ledger And Run Health
+
+New workflow lifecycle records use `event/v1`, with a closed type-to-category vocabulary covering run,
+revision, task, checkpoint, dispatch, intervention, verification, usage, estimates, budgets, warnings,
+pauses, scope, review, cancellation, and finalization. Existing `workflow-event/v1` records are accepted as
+read-only legacy input and normalized in receipts; CEWP does not rewrite historical ledgers implicitly.
+
+`cewp run verify <workflow-run-id>` checks canonical state/definition consistency, event syntax and schemas,
+required result/checkpoint artifacts, bound-worktree liveness, and every receipt integrity hash. It executes
+no agent and no approved verification command. A failed check returns a nonzero exit code while `--json`
+still emits the complete `run-verification/v1` diagnostic model.

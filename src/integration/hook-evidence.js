@@ -4,6 +4,7 @@ const childProcess = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const path = require("node:path");
+const { appendLifecycleEvent } = require("../evidence/events");
 const { loadWorkflowRun } = require("../workflow/state");
 const { writeJsonAtomic } = require("../workflow/state");
 
@@ -293,15 +294,14 @@ function approveCodexHookTrust(options = {}) {
     trustDigest: trust.approval.digest,
     activatedAt: approvedAt,
   });
-  fs.appendFileSync(path.join(found.runRoot, "events.jsonl"), `${JSON.stringify({
-    schemaVersion: "workflow-event/v1",
+  appendLifecycleEvent(found.runRoot, {
     timestamp: approvedAt,
     type: "hook-evidence-approved",
     runId: found.run.runId,
     revision: found.run.workflow.revision,
     actor: "operator",
     approvalDigest: trust.approval.digest,
-  })}\n`);
+  });
   return {
     trust,
     nextAction: {

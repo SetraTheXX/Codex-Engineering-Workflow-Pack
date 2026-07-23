@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { ensureDir } = require("../lib/fs");
 const { normalizeSlashPath } = require("../lib/paths");
+const { appendLifecycleEvent } = require("../evidence/events");
 const { findSupervisedRun } = require("../supervise/state");
 const {
   digestWorkflowDefinition,
@@ -366,8 +367,7 @@ function applyLegacyMigration(repoRoot, runId, options = {}) {
   };
   writeJsonAtomic(runPath, run);
   const progress = writeWorkflowProgress(runRoot, run, preview.definition, { now: new Date(timestamp) });
-  fs.appendFileSync(path.join(runRoot, "events.jsonl"), `${JSON.stringify({
-    schemaVersion: "workflow-event/v1",
+  appendLifecycleEvent(runRoot, {
     timestamp,
     type: "workflow-migrated",
     runId: run.runId,
@@ -378,7 +378,7 @@ function applyLegacyMigration(repoRoot, runId, options = {}) {
     migrationDigest: preview.migrationDigest,
     backupPath: normalizeSlashPath(path.relative(preview.found.repoRoot, backupPath)),
     actor: "operator",
-  })}\n`);
+  });
   const record = {
     schemaVersion: "workflow-migration/v1",
     projectionVersion: MIGRATION_PROJECTION_VERSION,

@@ -6,6 +6,7 @@ const path = require("node:path");
 const { getGitHeadCommit } = require("../lib/git");
 const { normalizeSlashPath } = require("../lib/paths");
 const { loadIntegrationControlReceipt } = require("../integration/binding");
+const { parseLifecycleEvents } = require("./events");
 const { writeJsonAtomic } = require("../workflow/state");
 
 const EVIDENCE_RECEIPT_SCHEMA_VERSION = "evidence-receipt/v1";
@@ -66,14 +67,9 @@ function readEvents(found, warnings) {
     warnings.push({ code: "missing-events", message: "Workflow event ledger is missing." });
     return [];
   }
-  return fs.readFileSync(eventPath, "utf8").split(/\r?\n/).filter(Boolean).map((line, index) => {
-    try {
-      return JSON.parse(line);
-    } catch {
-      warnings.push({ code: "malformed-event", line: index + 1, message: "Workflow event is not valid JSON." });
-      return { schemaVersion: "event/v1", type: "malformed", line: index + 1 };
-    }
-  });
+  const parsed = parseLifecycleEvents(fs.readFileSync(eventPath, "utf8"), { runId: found.run.runId });
+  warnings.push(...parsed.issues);
+  return parsed.events;
 }
 
 function truthAggregate(values, reason) {
@@ -228,7 +224,7 @@ function buildEvidenceReceipt(found, options = {}) {
     && (!found.run.reviewerPolicy.requiredForFinalize || found.run.reviewer.status === "passed");
   if (!complete) warnings.push({ code: "run-not-finalized", message: `Run status ${found.run.status} produces a partial receipt.` });
   const integrityFiles = integrityInventory(found, results, reviews, warnings);
-  if (warnings.some((warning) => ["missing-referenced-evidence", "malformed-evidence-file", "malformed-event", "missing-events"].includes(warning.code))) {
+  if (warnings.some((warning) => ["missing-referenced-evidence", "malformed-evidence-file", "malformed-event", "incompatible-event-schema", "invalid-event", "missing-events"].includes(warning.code))) {
     complete = false;
   }
   const headCommit = getGitHeadCommit(found.repoRoot);
