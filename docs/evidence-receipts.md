@@ -1,0 +1,39 @@
+# Evidence Receipts
+
+`cewp workflow receipt <run-id>` writes `evidence-receipt.json` and `evidence-receipt.md` under the local
+workflow run directory. `--json` wraps the same receipt and paths in `operator-json/v1` for external tools.
+Receipt generation does not execute an agent, verification command, or control process.
+
+`evidence-receipt/v1` is a normalized read model over the approved workflow definition, canonical run
+state, checkpoints, validated task results, interventions, events, independent reviews, integration control
+receipt, and referenced evidence files. It includes:
+
+- goal and source-plan identity;
+- workflow digest and revision history;
+- operating modes, execution owner, and backend;
+- tasks, attempts, changed files, scope verdicts, commands, and verification evidence;
+- failure and recovery fields, interventions, review decision, and timestamps;
+- observed usage where supported and explicit unknown values otherwise;
+- the full approved and consumed budget envelope;
+- git base/head identities for new runs;
+- warnings and a sorted integrity inventory.
+
+The JSON model is deterministic for unchanged inputs when `generatedAt` is fixed. The CLI timestamp is the
+documented variable. Historical runs that predate a field retain an explicit unknown. Runs that are not
+finalized, have malformed event/evidence data, or are missing referenced evidence produce a partial receipt
+with warnings rather than a complete claim.
+
+## Integrity Boundary
+
+Integrity entries contain byte length and `sha256` for canonical run evidence, the approved definition,
+and referenced evidence files. Source identities include workflow/source hashes when available plus git
+base and receipt-time head commits. This is `tamper-evident-local-metadata`, not tamper-proof storage: an
+attacker who can rewrite both evidence and metadata can replace both. Durable signing or remote attestation
+is not implied.
+
+## Privacy Boundary
+
+Raw prompts, adapter output, transcripts, and raw log contents are excluded by default. The receipt may
+contain repository-relative paths, changed filenames, approved commands, bounded failure/review summaries,
+and artifact names. Inspect these fields before sharing. Phase 12 privacy work will add export redaction;
+until then, keep the receipt local if those metadata fields are sensitive.

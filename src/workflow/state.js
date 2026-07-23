@@ -3,6 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { ensureDir } = require("../lib/fs");
+const { getGitHeadCommit } = require("../lib/git");
 const { normalizeSlashPath } = require("../lib/paths");
 const { digestWorkflowDefinition, validateWorkflowDefinition } = require("./definition");
 const { readRepoJson } = require("./source");
@@ -1519,6 +1520,9 @@ function createApprovedRun(options) {
     status: "approved",
     createdAt: timestamp,
     updatedAt: timestamp,
+    git: {
+      baseCommit: getGitHeadCommit(repoRoot),
+    },
     goal: options.definition.goal,
     execution: options.definition.execution,
     assurance: options.definition.assurance,

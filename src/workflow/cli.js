@@ -30,6 +30,7 @@ const {
 } = require("./state");
 const { deriveSchedule } = require("./scheduler");
 const { listWorkflowTemplates, loadWorkflowTemplate } = require("./templates");
+const { writeEvidenceReceipt } = require("../evidence/receipt");
 
 function outputJson(command, data) {
   console.log(JSON.stringify({
@@ -61,6 +62,20 @@ function resolveProposalSource(options) {
 }
 
 function runWorkflow(options = {}) {
+  if (options.subcommand === "receipt") {
+    if (!options.workflowRunId) throw new Error("workflow receipt requires a run id.");
+    const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
+    const result = writeEvidenceReceipt(found);
+    if (options.json) outputJson("workflow.receipt", result);
+    else {
+      console.log("CEWP evidence receipt written");
+      console.log(`Run ID: ${result.receipt.runId}`);
+      console.log(`Completeness: ${result.receipt.completeness.status}`);
+      console.log(`JSON: ${result.paths.json}`);
+      console.log(`Markdown: ${result.paths.markdown}`);
+    }
+    return;
+  }
   if (options.subcommand === "compile") {
     const request = createWorkflowCompilerRequest({
       repoRoot: process.cwd(),

@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-No changes yet.
+### Phase 12 development
+
+- Added deterministic `evidence-receipt/v1` JSON/Markdown generation for workflow runs with complete-versus-partial truth, task/checkpoint/review evidence, usage unknowns, budget compliance, git identities, and local SHA-256 integrity metadata.
+- Added `cewp workflow receipt <run-id>` without executing agents or verification commands. Raw prompts, transcripts, adapter output, and raw log contents remain excluded by default.
 
 ## 0.11.0-beta.0
 

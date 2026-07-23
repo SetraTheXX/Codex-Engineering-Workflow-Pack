@@ -157,7 +157,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "workflow" && ["status", "start", "result", "review", "finalize", "intervene", "revise", "apply-revision", "migrate"].includes(args.subcommand) && index === 2 && !arg.startsWith("--")) {
+    if (args.command === "workflow" && ["status", "start", "result", "review", "finalize", "receipt", "intervene", "revise", "apply-revision", "migrate"].includes(args.subcommand) && index === 2 && !arg.startsWith("--")) {
       args.workflowRunId = arg;
       continue;
     }
