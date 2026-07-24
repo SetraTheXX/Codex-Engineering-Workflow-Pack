@@ -106,6 +106,11 @@ function parseArgs(argv) {
   for (let index = optionStart; index < argv.length; index += 1) {
     const arg = argv[index];
 
+    if (args.command === "pilot" && args.subcommand === "record" && index === 2 && !arg.startsWith("--")) {
+      args.pilotId = arg;
+      continue;
+    }
+
     if (args.command === "pilot" && arg === "--pilot-id") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) throw new Error("--pilot-id requires an id.");
@@ -514,6 +519,11 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (args.command === "pilot" && arg === "--yes") {
+      args.yes = true;
+      continue;
+    }
+
 
     if (args.command === "integration" && arg === "--yes") {
       args.yes = true;
@@ -573,7 +583,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (["run", "supervise", "workflow"].includes(args.command) && arg === "--from") {
+    if (["run", "supervise", "workflow", "pilot"].includes(args.command) && arg === "--from") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
         throw new Error("--from requires a file path.");

@@ -2,6 +2,7 @@
 
 const { createPilotRecord } = require("./record");
 const { derivePilotStatus } = require("./status");
+const { recordPilotObservation } = require("./observation");
 
 function outputJson(command, data) {
   console.log(JSON.stringify({
@@ -14,6 +15,22 @@ function outputJson(command, data) {
 }
 
 function runPilot(options = {}) {
+  if (options.subcommand === "record") {
+    if (!options.yes) throw new Error("pilot record requires --yes confirmation.");
+    const result = recordPilotObservation({
+      repoRoot: process.cwd(),
+      pilotId: options.pilotId,
+      fromFile: options.fromFile,
+    });
+    if (options.json) outputJson("pilot.record", result);
+    else {
+      console.log("CEWP pilot observation recorded");
+      console.log(`Pilot ID: ${result.record.pilotId}`);
+      console.log(`Observation: ${result.observation.id} (${result.observation.type})`);
+      console.log(`Independent evidence eligible: ${result.observation.qualification.eligible ? "yes" : "no"}`);
+    }
+    return;
+  }
   if (options.subcommand === "status") {
     const status = derivePilotStatus(process.cwd());
     if (options.json) outputJson("pilot.status", status);

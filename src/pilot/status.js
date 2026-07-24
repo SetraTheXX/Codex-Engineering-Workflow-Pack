@@ -44,11 +44,15 @@ function loadPilotRecords(repoRoot) {
 function derivePilotStatus(repoRoot) {
   const records = loadPilotRecords(repoRoot);
   const externalRecords = records.filter((record) => record.participant.classification === "independent-external");
-  const externalParticipantIds = new Set(externalRecords.map((record) => record.participant.id));
+  const externalParticipantIds = new Set(externalRecords
+    .filter((record) => (record.observations || []).some((observation) => (
+      observation.type === "golden-path-complete" && observation.qualification?.eligible === true
+    )))
+    .map((record) => record.participant.id));
   const evidenceByType = new Map();
   for (const record of externalRecords) {
     for (const observation of record.observations || []) {
-      if (!observation || observation.qualifies !== true || typeof observation.type !== "string") continue;
+      if (!observation || observation.qualification?.eligible !== true || typeof observation.type !== "string") continue;
       if (!evidenceByType.has(observation.type)) evidenceByType.set(observation.type, []);
       evidenceByType.get(observation.type).push(`${record.pilotId}:${observation.id || observation.type}`);
     }

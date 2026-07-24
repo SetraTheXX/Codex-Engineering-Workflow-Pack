@@ -8,6 +8,7 @@ Usage:
   cewp list [--mode repo|global] [--target <path>]
   cewp doctor [--mode repo|global] [--target <path>] [--json]
   cewp pilot create --pilot-id <id> --participant <maintainer-dogfood|independent-external> --participant-id <id> [--json]
+  cewp pilot record <pilot-id> --from <observation.json> --yes [--json]
   cewp pilot status [--json]
   cewp workflow validate <definition.json> [--json]
   cewp workflow compile (--goal <text> | --from <issue|PRD|PLAN.md|progress.md>) [--source-kind <kind>] [--json]
