@@ -7,6 +7,8 @@ Usage:
   cewp init [--mode repo|global] [--target <path>] [--force] [--with-config]
   cewp list [--mode repo|global] [--target <path>]
   cewp doctor [--mode repo|global] [--target <path>] [--json]
+  cewp pilot create --pilot-id <id> --participant <maintainer-dogfood|independent-external> --participant-id <id> [--json]
+  cewp pilot status [--json]
   cewp workflow validate <definition.json> [--json]
   cewp workflow compile (--goal <text> | --from <issue|PRD|PLAN.md|progress.md>) [--source-kind <kind>] [--json]
   cewp workflow template <list|guarded-change|migration|review-only> [--json]
