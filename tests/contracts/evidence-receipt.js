@@ -159,6 +159,13 @@ function runContract() {
     const markdown = renderEvidenceReceiptMarkdown(first);
     assert(markdown.includes("# CEWP Evidence Receipt"), "Markdown receipt is human-readable");
     assert(markdown.includes("Host-internal usage: unknown"), "Markdown keeps explicit unknowns");
+    for (const section of ["## Tasks", "## Checkpoints", "## Commands and verification", "## Budget", "## Usage and estimate", "## Controls", "## Final review", "## Timestamps"]) {
+      assert(markdown.includes(section), `Markdown receipt includes ${section}`);
+    }
+    assert(markdown.includes("implement-example-attempt-0001"), "Markdown identifies checkpoint evidence");
+    assert(markdown.includes("node --test tests/example.test.js"), "Markdown identifies approved verification commands");
+    assert(markdown.includes("Protected allocations: passed"), "Markdown proves protected reserve compliance");
+    assert(markdown.includes("Decision: PASS"), "Markdown exposes independent final review");
     assert(!markdown.includes("TOP_SECRET_PROMPT"), "Markdown does not include prompt or raw log content");
     const written = writeEvidenceReceipt(found, options);
     assert(fs.existsSync(written.paths.json) && fs.existsSync(written.paths.markdown), "JSON and Markdown receipts are written locally");

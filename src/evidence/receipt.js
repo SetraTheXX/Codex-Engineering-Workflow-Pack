@@ -329,9 +329,48 @@ function buildEvidenceReceipt(found, options = {}) {
 }
 
 function renderEvidenceReceiptMarkdown(receipt) {
-  const taskLines = receipt.tasks.map((task) => (
-    `- ${task.id}: ${task.status}; attempts ${task.attempts}; scope ${task.scopeVerdict.status}; changed ${task.changedFiles.join(", ") || "none"}`
+  const taskLines = receipt.tasks.flatMap((task) => {
+    const recovery = task.recovery || { failureHistory: [], interventions: [] };
+    return [
+      `- ${task.id}: ${task.status}; attempts ${task.attempts}; scope ${task.scopeVerdict.status}`,
+      `  - Allowed: ${task.allowedFiles.join(", ") || "none"}`,
+      `  - Changed: ${task.changedFiles.join(", ") || "none"}`,
+      `  - Artifacts: ${task.artifacts.map((entry) => `${entry.kind}:${entry.path}`).join(", ") || "none"}`,
+      `  - Failure: ${task.failure ? `${task.failure.classification}: ${task.failure.summary}` : "none"}`,
+      `  - Recovery: ${recovery.interventions.map((entry) => `${entry.event}: ${entry.reason}`).join("; ") || "none"}`,
+    ];
+  }).join("\n");
+  const checkpointLines = receipt.checkpoints.map((entry) => {
+    const baseline = entry.verification && entry.verification.baseline
+      ? entry.verification.baseline.status
+      : "unknown";
+    return `- ${entry.checkpointId}: ${entry.status}; task ${entry.taskId}; attempt ${entry.attempt}; baseline ${baseline}; failure ${entry.failureClassification || "none"}`;
+  }).join("\n");
+  const commandLines = receipt.commands.flatMap((entry) => [
+    `- ${entry.taskId} baseline: ${entry.verification.baseline || "none"}`,
+    ...entry.verification.targeted.map((command) => `  - targeted: ${command}`),
+    ...entry.verification.full.map((command) => `  - full: ${command}`),
+  ]).join("\n");
+  const revisionLines = receipt.planRevisions.map((entry) => (
+    `- revision ${entry.revision}: ${entry.reason || entry.digest}; superseded ${entry.supersededAt || "unknown"}`
   )).join("\n");
+  const interventionLines = receipt.interventions.map((entry) => (
+    `- ${entry.event}: ${entry.reason}; actor ${entry.actor}; ${entry.recordedAt}`
+  )).join("\n");
+  const significantEventLines = receipt.events
+    .filter((entry) => ["threshold", "warning-presentation", "safe-pause", "unverified-pause", "host-limit", "cancellation"].includes(entry.category))
+    .map((entry) => `- ${entry.timestamp}: ${entry.category}/${entry.type}; ${entry.reason || entry.warning || entry.threshold || "recorded"}`)
+    .join("\n");
+  const allocationLines = receipt.budget.compliance.allocations.map((entry) => (
+    `- ${entry.name}: ${entry.consumed}/${entry.approved}; protected ${entry.protected ? "yes" : "no"}; ${entry.respected ? "passed" : "failed"}`
+  )).join("\n");
+  const observationLines = receipt.usage.observations.map((entry) => (
+    `- ${entry.category}/${entry.rawCategory}: ${entry.availability}; source ${entry.source.id}; auth ${entry.source.authenticationBoundary}; model ${entry.effectiveModel.status}`
+  )).join("\n");
+  const controlReceipt = receipt.policy.controls;
+  const controlLines = controlReceipt
+    ? controlReceipt.controls.map((entry) => `- ${entry.name}: ${entry.classification}; ${entry.effect}`).join("\n")
+    : "- none";
   const warningLines = receipt.warnings.length > 0
     ? receipt.warnings.map((warning) => `- ${warning.code}: ${warning.message}`).join("\n")
     : "- none";
@@ -341,19 +380,76 @@ function renderEvidenceReceiptMarkdown(receipt) {
 - Goal: ${receipt.goal}
 - Status: ${receipt.completeness.runStatus} (${receipt.completeness.status})
 - Execution: ${receipt.execution.owner} / ${receipt.execution.backend || "none"}
-- Reviewer: ${receipt.reviewer.decision || "none"}
+- Operating modes: ${receipt.operatingModes.join(", ")}
 - Source: ${receipt.sourcePlan.kind}; ${receipt.sourcePlan.path || "direct goal"}
+- Workflow: ${receipt.workflow.id} revision ${receipt.workflow.revision}; ${receipt.workflow.digest}
 - Git base: ${receipt.git.baseCommit.status === "known" ? receipt.git.baseCommit.value : "unknown"}
 - Git head: ${receipt.git.headCommit.value}
-- Managed operations: ${receipt.usage.managedOperations.label}${receipt.usage.managedOperations.value === null ? "" : ` (${receipt.usage.managedOperations.value})`}
-- Host-internal usage: ${receipt.usage.hostInternal.label}
-- API-equivalent cost: ${receipt.cost.apiEquivalent.label}
 - Integrity: ${receipt.integrity.claim}; ${receipt.integrity.files.length} hashed files; not tamper-proof
 ${receipt.redaction && receipt.redaction.applied ? `- Redaction: applied (${receipt.redaction.replacements} replacements)\n` : ""}
 
 ## Tasks
 
 ${taskLines || "- none"}
+
+## Checkpoints
+
+${checkpointLines || "- none"}
+
+## Commands and verification
+
+${commandLines || "- none"}
+
+## Plan revisions
+
+${revisionLines || "- none"}
+
+## Interventions and lifecycle decisions
+
+${interventionLines || "- none"}
+${significantEventLines ? `\n${significantEventLines}` : ""}
+
+## Budget
+
+- Compliance: ${receipt.budget.compliance.status}
+- Absolute ceiling: ${receipt.budget.compliance.absoluteCeilingRespected ? "passed" : "failed"}
+- Protected allocations: ${receipt.budget.compliance.protectedAllocationsRespected ? "passed" : "failed"}
+- Pause reason: ${receipt.budget.pauseReason || "none"}
+
+${allocationLines || "- none"}
+
+## Usage and estimate
+
+- Managed operations: ${receipt.usage.managedOperations.label}${receipt.usage.managedOperations.value === null ? "" : ` (${receipt.usage.managedOperations.value})`}
+- Captured output: ${receipt.usage.capturedOutputBytes.label}${receipt.usage.capturedOutputBytes.value === null ? "" : ` (${receipt.usage.capturedOutputBytes.value})`}
+- Managed tokens: ${receipt.usage.managedTokens.label}
+- Host-internal usage: ${receipt.usage.hostInternal.label}
+- Estimate: ${receipt.estimate.label}; confidence ${receipt.estimate.confidence}; samples ${receipt.estimate.sampleBasis.count}; estimator ${receipt.estimate.estimator.version}; drift ${receipt.estimate.drift.state}
+- API-equivalent cost: ${receipt.cost.apiEquivalent.label}${receipt.cost.apiEquivalent.model ? `; model ${receipt.cost.apiEquivalent.model}; pricing ${receipt.cost.apiEquivalent.pricingDate}` : ""}
+
+${observationLines || "- no usage observations"}
+
+## Controls
+
+- Execution owner: ${receipt.execution.owner}
+- Preventive enforced: ${controlReceipt ? controlReceipt.summary.preventiveEnforced : 0}
+- Imported observed: ${controlReceipt ? controlReceipt.summary.importedObserved : 0}
+
+${controlLines}
+
+## Final review
+
+- Status: ${receipt.reviewer.status}
+- Decision: ${receipt.reviewer.decision || "none"}
+- Review ID: ${receipt.reviewer.reviewId || "none"}
+- Reviews recorded: ${receipt.reviews.length}
+
+## Timestamps
+
+- Created: ${receipt.timestamps.createdAt}
+- Updated: ${receipt.timestamps.updatedAt}
+- Finalized: ${receipt.timestamps.finalizedAt || "none"}
+- Receipt generated: ${receipt.timestamps.generatedAt}
 
 ## Warnings
 

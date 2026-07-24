@@ -23,6 +23,11 @@ documented variable. Historical runs that predate a field retain an explicit unk
 finalized, have malformed event/evidence data, or are missing referenced evidence produce a partial receipt
 with warnings rather than a complete claim.
 
+The Markdown view is generated from that same model and includes tasks, checkpoints, approved commands and
+verification, revisions, interventions/recovery, budget and protected reserves, usage provenance/estimate,
+control classifications, final review, timestamps, and warnings. It is intended to explain a run without
+requiring raw logs; the JSON remains the machine-readable contract.
+
 ## Integrity Boundary
 
 Integrity entries contain byte length and `sha256` for canonical run evidence, the approved definition,
