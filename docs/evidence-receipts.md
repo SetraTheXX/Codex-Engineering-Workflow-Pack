@@ -52,6 +52,9 @@ New workflow lifecycle records use `event/v1`, with a closed type-to-category vo
 revision, task, checkpoint, dispatch, intervention, verification, usage, estimates, budgets, warnings,
 pauses, scope, review, cancellation, and finalization. Existing `workflow-event/v1` records are accepted as
 read-only legacy input and normalized in receipts; CEWP does not rewrite historical ledgers implicitly.
+Core workflow transitions emit distinct budget approval, checkpoint, dispatch, scope, verification, usage,
+allocation consumption, threshold/warning, pause, cancellation, review, and finalization records where the
+corresponding action occurs.
 
 `cewp run verify <workflow-run-id>` checks canonical state/definition consistency, event syntax and schemas,
 required result/checkpoint artifacts, bound-worktree liveness, and every receipt integrity hash. It executes
@@ -68,6 +71,10 @@ opened directly from disk on Windows or Linux.
 The report separates observed, estimated, budgeted, and unknown values; shows task progress, revisions,
 checkpoint verification, interventions and recovery state, protected reserves, preventive versus observed
 controls, and final review. Repository metadata is HTML-escaped, and raw prompts/logs remain excluded.
+
+Task receipts retain the failed checkpoint/classification, blocker, failure history, state history, and the
+operator intervention/reason that reopened work. Budget-paused receipts remain partial and separately prove
+absolute-ceiling and protected-allocation compliance; a pause is never rendered as completion.
 
 ## Run Comparison
 

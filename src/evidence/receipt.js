@@ -165,6 +165,12 @@ function taskReceipt(found, runtimeTask, resultsByTask) {
     failure: result ? result.failure : null,
     artifacts: result ? result.artifacts : [],
     resultId: runtimeTask.resultId,
+    recovery: {
+      blocker: runtimeTask.blocker,
+      failureHistory: runtimeTask.failureHistory || [],
+      stateHistory: runtimeTask.stateHistory || [],
+      interventions: (found.run.interventions || []).filter((entry) => entry.taskId === runtimeTask.id),
+    },
   };
 }
 

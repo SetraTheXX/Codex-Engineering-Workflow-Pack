@@ -12,6 +12,7 @@
 - Added `run-comparison/v1` and `cewp workflow compare` with explicit unknowns and evidence-backed native-goal baseline labeling.
 - Added adversarially tested `redaction-policy/v1` exports that preserve canonical local evidence and avoid absolute-path output.
 - Added `usage-observation/v1` provenance/raw-category records and reproducible unknown `usage-estimate/v1` calibration metadata.
+- Expanded lifecycle evidence and recovery receipts for failed checkpoints, budget pauses, host limits, cancellations, and audit-only controls.
 
 ## 0.11.0-beta.0
 

@@ -349,6 +349,23 @@ function pauseForWorkflowBudget(found, allocation, decision, timestamp) {
   };
   writeJsonAtomic(found.runPath, run);
   writeWorkflowProgress(found.runRoot, run, found.definition, { now: new Date(timestamp) });
+  if (decision.warning) {
+    appendWorkflowEvent(found.runRoot, {
+      timestamp,
+      type: "budget-threshold",
+      runId: run.runId,
+      threshold: decision.warning,
+      percent: decision.percent,
+      allocation,
+    });
+    appendWorkflowEvent(found.runRoot, {
+      timestamp,
+      type: "warning-presented",
+      runId: run.runId,
+      warning: decision.warning,
+      surface: "cewp-core-state",
+    });
+  }
   appendWorkflowEvent(found.runRoot, {
     schemaVersion: "workflow-event/v1",
     timestamp,
@@ -417,10 +434,9 @@ function startWorkflowTask(found, taskId, options = {}) {
     throw new Error(`Controlled workflow operation paused: ${budgetDecision.pauseStatus} (${budgetDecision.reason}).`);
   }
   let runBeforeStart = found.run;
-  if (
-    budgetDecision.warning
-    && !found.run.budget.thresholdEvents.some((event) => event.threshold === budgetDecision.warning)
-  ) {
+  const newBudgetWarning = budgetDecision.warning
+    && !found.run.budget.thresholdEvents.some((event) => event.threshold === budgetDecision.warning);
+  if (newBudgetWarning) {
     runBeforeStart = {
       ...found.run,
       budget: {
@@ -497,6 +513,41 @@ function startWorkflowTask(found, taskId, options = {}) {
   };
   writeJsonAtomic(found.runPath, run);
   const progress = writeWorkflowProgress(found.runRoot, run, found.definition, { now });
+  if (newBudgetWarning) {
+    appendWorkflowEvent(found.runRoot, {
+      timestamp,
+      type: "budget-threshold",
+      runId: run.runId,
+      threshold: budgetDecision.warning,
+      percent: budgetDecision.percent,
+      allocation,
+    });
+    appendWorkflowEvent(found.runRoot, {
+      timestamp,
+      type: "warning-presented",
+      runId: run.runId,
+      warning: budgetDecision.warning,
+      surface: "cewp-core-state",
+    });
+  }
+  appendWorkflowEvent(found.runRoot, {
+    timestamp,
+    type: "checkpoint-started",
+    runId: run.runId,
+    taskId,
+    checkpointId,
+    attempt,
+  });
+  appendWorkflowEvent(found.runRoot, {
+    timestamp,
+    type: "dispatch-started",
+    runId: run.runId,
+    taskId,
+    checkpointId,
+    workerId,
+    executionOwner: run.execution.owner,
+    backend: run.execution.backend,
+  });
   appendWorkflowEvent(found.runRoot, {
     schemaVersion: "workflow-event/v1",
     timestamp,
@@ -586,6 +637,50 @@ function recordWorkflowFailureResult(found, runtimeTask, checkpoint, checkpointP
   writeJsonAtomic(found.runPath, run);
   const now = new Date(result.completedAt);
   const progress = writeWorkflowProgress(found.runRoot, run, found.definition, { now });
+  appendWorkflowEvent(found.runRoot, {
+    timestamp: result.completedAt,
+    type: "scope-evaluated",
+    runId: run.runId,
+    taskId: runtimeTask.id,
+    checkpointId: checkpoint.checkpointId,
+    resultId: result.resultId,
+    status: "passed",
+  });
+  appendWorkflowEvent(found.runRoot, {
+    timestamp: result.completedAt,
+    type: "verification-completed",
+    runId: run.runId,
+    taskId: runtimeTask.id,
+    checkpointId: checkpoint.checkpointId,
+    resultId: result.resultId,
+    status: "failed",
+  });
+  appendWorkflowEvent(found.runRoot, {
+    timestamp: result.completedAt,
+    type: "usage-observed",
+    runId: run.runId,
+    taskId: runtimeTask.id,
+    checkpointId: checkpoint.checkpointId,
+    resultId: result.resultId,
+    usageCategories: Object.fromEntries(Object.entries(result.usage).map(([name, value]) => [name, value.label])),
+  });
+  appendWorkflowEvent(found.runRoot, {
+    timestamp: result.completedAt,
+    type: "allocation-consumed",
+    runId: run.runId,
+    taskId: runtimeTask.id,
+    checkpointId: checkpoint.checkpointId,
+    allocation: checkpoint.budget.activeAllocation,
+    consumed: budget.consumed.allocations[checkpoint.budget.activeAllocation],
+  });
+  appendWorkflowEvent(found.runRoot, {
+    timestamp: result.completedAt,
+    type: "checkpoint-completed",
+    runId: run.runId,
+    taskId: runtimeTask.id,
+    checkpointId: checkpoint.checkpointId,
+    status: blockedCheckpoint.status,
+  });
   appendWorkflowEvent(found.runRoot, {
     schemaVersion: "workflow-event/v1",
     timestamp: result.completedAt,
@@ -796,6 +891,50 @@ function recordWorkflowResult(found, taskId, candidate) {
   };
   writeJsonAtomic(found.runPath, run);
   const progress = writeWorkflowProgress(found.runRoot, run, found.definition, { now: new Date(result.completedAt) });
+  appendWorkflowEvent(found.runRoot, {
+    timestamp: result.completedAt,
+    type: "scope-evaluated",
+    runId: run.runId,
+    taskId,
+    checkpointId: checkpoint.checkpointId,
+    resultId: result.resultId,
+    status: "passed",
+  });
+  appendWorkflowEvent(found.runRoot, {
+    timestamp: result.completedAt,
+    type: "verification-completed",
+    runId: run.runId,
+    taskId,
+    checkpointId: checkpoint.checkpointId,
+    resultId: result.resultId,
+    status: "passed",
+  });
+  appendWorkflowEvent(found.runRoot, {
+    timestamp: result.completedAt,
+    type: "usage-observed",
+    runId: run.runId,
+    taskId,
+    checkpointId: checkpoint.checkpointId,
+    resultId: result.resultId,
+    usageCategories: Object.fromEntries(Object.entries(result.usage).map(([name, value]) => [name, value.label])),
+  });
+  appendWorkflowEvent(found.runRoot, {
+    timestamp: result.completedAt,
+    type: "allocation-consumed",
+    runId: run.runId,
+    taskId,
+    checkpointId: checkpoint.checkpointId,
+    allocation: checkpoint.budget.activeAllocation,
+    consumed: budget.consumed.allocations[checkpoint.budget.activeAllocation],
+  });
+  appendWorkflowEvent(found.runRoot, {
+    timestamp: result.completedAt,
+    type: "checkpoint-completed",
+    runId: run.runId,
+    taskId,
+    checkpointId: checkpoint.checkpointId,
+    status: completedCheckpoint.status,
+  });
   appendWorkflowEvent(found.runRoot, {
     schemaVersion: "workflow-event/v1",
     timestamp: result.completedAt,
@@ -1268,6 +1407,25 @@ function interveneWorkflowRun(found, options, timestamp, reason) {
     runId: run.runId,
     ...intervention,
   });
+  if (options.event === "add-budget") {
+    appendWorkflowEvent(found.runRoot, {
+      timestamp,
+      type: "budget-approved",
+      runId: run.runId,
+      actor: intervention.actor,
+      allocation: options.allocation,
+      operations: options.operations,
+      revision: budget.revisions.length,
+    });
+  } else if (options.event === "pause-host-limit") {
+    appendWorkflowEvent(found.runRoot, {
+      timestamp,
+      type: "paused-host-limit",
+      runId: run.runId,
+      reason,
+      actor: intervention.actor,
+    });
+  }
   return {
     run,
     checkpoint: null,
@@ -1347,6 +1505,15 @@ function interveneWorkflowLifecycle(found, options, timestamp, reason) {
     runId: run.runId,
     ...intervention,
   });
+  if (options.event === "cancel") {
+    appendWorkflowEvent(found.runRoot, {
+      timestamp,
+      type: "workflow-cancelled",
+      runId: run.runId,
+      reason,
+      actor: intervention.actor,
+    });
+  }
   return {
     run,
     checkpoints,
@@ -1572,6 +1739,15 @@ function createApprovedRun(options) {
     digest,
     approvalDigest,
     actor: "operator",
+  });
+  appendWorkflowEvent(runRoot, {
+    timestamp,
+    type: "budget-approved",
+    runId,
+    actor: "operator",
+    budgetSchemaVersion: run.budget.schemaVersion,
+    modelOperations: run.budget.modelOperations,
+    protectedAllocations: run.budget.protectedAllocations,
   });
   writeWorkflowProgress(runRoot, run, options.definition, { now });
   return {

@@ -37,9 +37,10 @@ function runContract() {
     let found = loadWorkflowRun(repoRoot, approved.runId);
     const eventsPath = path.join(found.runRoot, "events.jsonl");
     const events = readLifecycleEvents(eventsPath, { runId: approved.runId });
-    assert(events.length === 1, "approved workflow writes one initial lifecycle event");
+    assert(events.length === 2, "approved workflow writes run and budget approval events");
     assert(events[0].schemaVersion === EVENT_SCHEMA_VERSION, "new lifecycle events use event/v1");
     assert(events[0].category === "run", "workflow approval is categorized as a run event");
+    assert(events[1].category === "budget-approval", "approved envelope is a distinct budget event");
 
     const legacy = normalizeLifecycleEvent({
       schemaVersion: "workflow-event/v1",
@@ -53,6 +54,10 @@ function runContract() {
     const startedAt = new Date(new Date(found.run.createdAt).getTime() + 1000);
     startWorkflowTask(found, "implement-example", { now: startedAt });
     found = loadWorkflowRun(repoRoot, approved.runId);
+    const startedEvents = readLifecycleEvents(eventsPath, { runId: approved.runId });
+    for (const category of ["checkpoint", "dispatch", "task"]) {
+      assert(startedEvents.some((entry) => entry.category === category), `task start emits ${category} lifecycle evidence`);
+    }
     writeEvidenceReceipt(found, { generatedAt: "2026-07-22T10:01:00.000Z" });
     const healthy = verifyWorkflowRun(repoRoot, approved.runId);
     assert(healthy.schemaVersion === "run-verification/v1", "run verification is versioned");

@@ -11,6 +11,8 @@ const {
 } = require("../harness/lib/temp-repo");
 const { validDefinition } = require("./workflow-definition");
 const { approveWorkflow } = require("./workflow-scheduler");
+const { loadWorkflowRun } = require("../../src/workflow/state");
+const { buildEvidenceReceipt } = require("../../src/evidence/receipt");
 
 const cewpCli = path.join(__dirname, "..", "..", "bin", "cewp.js");
 
@@ -109,6 +111,16 @@ function runWorkflowFailureResultContract() {
 
     const firstRetry = retry(repoRoot, run.runId);
     assert(firstRetry.status === 0, `first failure permits bounded retry: ${firstRetry.stderr}`);
+    const recoveryReceipt = buildEvidenceReceipt(loadWorkflowRun(repoRoot, run.runId), {
+      generatedAt: "2026-07-22T15:00:00.000Z",
+    });
+    const recoveredTask = recoveryReceipt.tasks.find((task) => task.id === "implement-example");
+    const failedCheckpoint = recoveryReceipt.checkpoints.find((entry) => entry.checkpointId === firstCheckpoint.checkpointId);
+    assert(recoveryReceipt.completeness.status === "partial", "recovery in progress produces a partial receipt");
+    assert(failedCheckpoint.status === "blocked" && failedCheckpoint.failureClassification === "new-regression", "receipt identifies the failed checkpoint and classification");
+    assert(recoveredTask.recovery.failureHistory[0].checkpointId === firstCheckpoint.checkpointId, "receipt retains the failure that triggered recovery");
+    assert(recoveredTask.recovery.interventions.some((entry) => entry.event === "retry" && entry.reason === "Apply one bounded repair"), "receipt explains why the run continued");
+    assert(recoveredTask.status === "ready" && recoveredTask.attempts === 1, "receipt shows retry changed the task back to ready without claiming success");
     const secondCheckpoint = startTask(repoRoot, run.runId);
     assert(secondCheckpoint.budget.activeAllocation === "repair", "retry consumes only repair allocation");
     const repeatedResult = recordFailure(repoRoot, run, secondCheckpoint, "implement-example-failure-2");

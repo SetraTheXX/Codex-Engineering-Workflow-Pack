@@ -130,6 +130,9 @@ function runContract() {
     assert(first.tasks.length === 1 && first.checkpoints.length === 1, "receipt explains task and checkpoint structure");
     assert(first.tasks[0].changedFiles.includes("src/example.js"), "receipt records changed files");
     assert(first.tasks[0].verification.targeted[0].status === "passed", "receipt records verification evidence");
+    for (const category of ["scope", "verification", "usage-observation", "allocation-consumption", "checkpoint"]) {
+      assert(first.events.some((entry) => entry.category === category), `completed task emits ${category} lifecycle evidence`);
+    }
     assert(first.reviewer.decision === "PASS", "receipt retains independent reviewer PASS");
     assert(first.usage.managedOperations.label === "observed", "receipt aggregates observed managed operations");
     assert(first.usage.hostInternal.label === "unknown", "unavailable host usage remains unknown");
