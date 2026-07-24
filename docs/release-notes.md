@@ -11,6 +11,7 @@
 - Added portable `operator-report/v1` JSON and standalone offline HTML generation from the normalized receipt model.
 - Added `run-comparison/v1` and `cewp workflow compare` with explicit unknowns and evidence-backed native-goal baseline labeling.
 - Added adversarially tested `redaction-policy/v1` exports that preserve canonical local evidence and avoid absolute-path output.
+- Added `usage-observation/v1` provenance/raw-category records and reproducible unknown `usage-estimate/v1` calibration metadata.
 
 ## 0.11.0-beta.0
 

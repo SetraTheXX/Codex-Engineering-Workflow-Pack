@@ -79,3 +79,16 @@ excluded from numeric deltas.
 
 A native-owned workflow is labeled as a native-goal baseline only when a validated host binding includes a
 native goal reference. Native ownership alone is insufficient, and unavailable native usage is never zero.
+
+## Usage And Estimate Truth
+
+Each task-result, review-result, and supported host usage record becomes a separate
+`usage-observation/v1`. The receipt retains its normalized category, raw category name, observed/imported/
+unknown availability, source schema, authentication boundary, timestamp, scope, and effective model only
+when known. Bounded raw host payloads are not copied into the receipt. Imported observations stay imported,
+do not enter observed totals, and never imply billing impact.
+
+`usage-estimate/v1` records estimator version/method, grouping dimensions, local sample basis, calibration
+snapshot, and drift state. With fewer than five comparable runs—or without known model/effort—it remains an
+unknown range with unavailable confidence. CEWP does not promote a numeric estimate from fixtures or
+non-comparable history.

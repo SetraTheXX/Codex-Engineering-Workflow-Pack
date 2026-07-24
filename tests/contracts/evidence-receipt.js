@@ -19,6 +19,8 @@ const {
   renderEvidenceReceiptMarkdown,
   writeEvidenceReceipt,
 } = require("../../src/evidence/receipt");
+const { recordHostObservation } = require("../../src/integration/observation");
+const { supportedSnapshot } = require("./integration-capabilities");
 
 const cewpCli = path.join(__dirname, "..", "..", "bin", "cewp.js");
 
@@ -81,6 +83,40 @@ function runContract() {
   const repoRoot = makeTempRepo("cewp-evidence-receipt-");
   try {
     const found = completeRun(repoRoot);
+    recordHostObservation(found, {
+      schemaVersion: "host-observation/v1",
+      observationId: "receipt-usage-0001",
+      observedAt: "2026-07-18T12:06:30.000Z",
+      source: {
+        path: "codex-exec",
+        codexVersion: "codex-cli 0.137.0",
+        schemaVersion: "codex-exec-jsonl/v1",
+        authenticationBoundary: "managed-child",
+      },
+      scope: { kind: "workflow-run", runId: found.run.runId, taskId: null, checkpointId: null },
+      category: "thread-usage",
+      rawCategory: "turn.completed.usage",
+      availability: "observed",
+      data: { inputTokens: 100, cachedInputTokens: 40, outputTokens: 20, reasoningOutputTokens: 5 },
+      raw: { input_tokens: 100, cached_input_tokens: 40, output_tokens: 20, reasoning_output_tokens: 5 },
+    }, { capabilities: supportedSnapshot() });
+    recordHostObservation(found, {
+      schemaVersion: "host-observation/v1",
+      observationId: "receipt-usage-imported-0001",
+      observedAt: "2026-07-18T12:06:31.000Z",
+      source: {
+        path: "audit-import",
+        codexVersion: null,
+        schemaVersion: "external-receipt/v1",
+        authenticationBoundary: "external-owner",
+      },
+      scope: { kind: "workflow-run", runId: found.run.runId, taskId: null, checkpointId: null },
+      category: "thread-usage",
+      rawCategory: "external.usage",
+      availability: "imported",
+      data: { inputTokens: 50, cachedInputTokens: 0, outputTokens: 10, reasoningOutputTokens: 0 },
+      raw: { imported_total: 60 },
+    }, { capabilities: supportedSnapshot() });
     writeFile(path.join(found.runRoot, "adapter-output", "prompt.md"), "TOP_SECRET_PROMPT\n");
     const options = { generatedAt: "2026-07-18T12:07:00.000Z" };
     const first = buildEvidenceReceipt(found, options);
@@ -97,6 +133,17 @@ function runContract() {
     assert(first.reviewer.decision === "PASS", "receipt retains independent reviewer PASS");
     assert(first.usage.managedOperations.label === "observed", "receipt aggregates observed managed operations");
     assert(first.usage.hostInternal.label === "unknown", "unavailable host usage remains unknown");
+    assert(first.usage.observations.every((entry) => entry.schemaVersion === "usage-observation/v1"), "usage observations are independently versioned");
+    const hostUsage = first.usage.observations.find((entry) => entry.rawCategory === "turn.completed.usage");
+    assert(hostUsage.source.authenticationBoundary === "managed-child", "usage observation preserves authentication boundary");
+    assert(hostUsage.value.cachedInputTokens === 40 && hostUsage.value.reasoningOutputTokens === 5, "raw usage categories remain distinct");
+    assert(hostUsage.rawValue === null, "receipt excludes raw host payload while preserving normalized categories");
+    const importedUsage = first.usage.observations.find((entry) => entry.rawCategory === "external.usage");
+    assert(importedUsage.availability === "imported" && importedUsage.evidenceClass === "imported", "imported usage is never relabeled observed");
+    assert(importedUsage.billingImpact === "unknown", "host usage never implies a billing impact");
+    assert(first.events.some((entry) => entry.type === "usage-observed" && entry.category === "usage-observation"), "usage recording emits the versioned lifecycle category");
+    assert(first.estimate.estimator.version === "local-history/v1" && first.estimate.sampleBasis.count === 0, "unknown estimate remains reproducible from its empty sample basis");
+    assert(first.estimate.calibrationSnapshot.intervalCoverage === null && first.estimate.drift.state === "unknown", "estimate calibration and drift stay explicit");
     assert(first.budget.compliance.status === "passed", "receipt proves the approved budget ceilings were respected");
     assert(first.budget.compliance.protectedAllocationsRespected === true, "receipt proves protected allocations were not overspent");
     assert(first.cost.apiEquivalent.label === "unknown", "currency cost is not invented");
@@ -123,6 +170,10 @@ function runContract() {
     const missingEvidence = buildEvidenceReceipt(found, options);
     assert(missingEvidence.completeness.status === "partial", "missing referenced evidence closes receipt completeness");
     assert(missingEvidence.warnings.some((warning) => warning.code === "missing-referenced-evidence"), "missing evidence has an actionable warning");
+    fs.appendFileSync(path.join(found.runRoot, "integration", "host-observations.jsonl"), "{malformed\n");
+    const malformedUsage = buildEvidenceReceipt(found, options);
+    assert(malformedUsage.completeness.status === "partial", "malformed usage ledger cannot produce a complete receipt");
+    assert(malformedUsage.warnings.some((warning) => warning.code === "malformed-usage-observation-ledger"), "malformed usage ledger has an explicit warning");
 
     const partialRepo = makeTempRepo("cewp-evidence-receipt-partial-");
     try {

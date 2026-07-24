@@ -7,6 +7,7 @@ const { getGitHeadCommit } = require("../lib/git");
 const { normalizeSlashPath } = require("../lib/paths");
 const { loadHostBinding, loadIntegrationControlReceipt } = require("../integration/binding");
 const { parseLifecycleEvents } = require("./events");
+const { buildUsageObservations, unknownUsageEstimate } = require("./usage");
 const { writeJsonAtomic } = require("../workflow/state");
 
 const EVIDENCE_RECEIPT_SCHEMA_VERSION = "evidence-receipt/v1";
@@ -220,12 +221,18 @@ function buildEvidenceReceipt(found, options = {}) {
   const resultsByTask = new Map(results.map((entry) => [entry.value.taskId, entry.value]));
   const reviewValues = reviews.map((entry) => entry.value);
   const usageValues = [...results.map((entry) => entry.value), ...reviewValues].map((entry) => entry.usage);
+  const usageObservations = buildUsageObservations(
+    found,
+    results.map((entry) => entry.value),
+    reviewValues,
+    warnings,
+  );
   let complete = found.run.status === "finalized"
     && found.run.tasks.every((task) => task.status === "completed" && task.verification && task.verification.status === "passed")
     && (!found.run.reviewerPolicy.requiredForFinalize || found.run.reviewer.status === "passed");
   if (!complete) warnings.push({ code: "run-not-finalized", message: `Run status ${found.run.status} produces a partial receipt.` });
   const integrityFiles = integrityInventory(found, results, reviews, warnings);
-  if (warnings.some((warning) => ["missing-referenced-evidence", "malformed-evidence-file", "malformed-event", "incompatible-event-schema", "invalid-event", "missing-events"].includes(warning.code))) {
+  if (warnings.some((warning) => ["missing-referenced-evidence", "malformed-evidence-file", "malformed-event", "incompatible-event-schema", "invalid-event", "missing-events", "malformed-usage-observation-ledger"].includes(warning.code))) {
     complete = false;
   }
   const headCommit = getGitHeadCommit(found.repoRoot);
@@ -267,8 +274,9 @@ function buildEvidenceReceipt(found, options = {}) {
       capturedOutputBytes: truthAggregate(usageValues.map((usage) => usage && usage.capturedOutputBytes), "no uniformly observed captured output evidence"),
       managedTokens: truthAggregate(usageValues.map((usage) => usage && usage.managedTokens), "managed token totals are unavailable"),
       hostInternal: truthAggregate(usageValues.map((usage) => usage && usage.hostInternal), "host-internal usage is unavailable"),
+      observations: usageObservations,
     },
-    estimate: { schemaVersion: "usage-estimate/v1", label: "unknown", range: null, confidence: "unavailable", sampleBasis: null, driftState: "unknown" },
+    estimate: unknownUsageEstimate(),
     cost: { apiEquivalent: { label: "unknown", value: null, currency: null, pricingDate: null, model: null, reason: "no valid dated API pricing mapping" } },
     warningSurface: { status: "unknown", deliveries: [] },
     git: {
