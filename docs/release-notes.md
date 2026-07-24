@@ -2,18 +2,39 @@
 
 ## Unreleased
 
-### Phase 12 development
+No changes yet.
+
+## 0.12.0-beta.0
+
+### Summary
+
+Portable, deterministic workflow evidence and offline operator reporting. This version is prepared locally
+and is not published, tagged, or released. Exact clean Linux validation remains required before the Phase 12
+technical gate can close; Windows validation and cross-platform-safe artifact contracts do not substitute
+for that run. Numeric usage confidence also remains unavailable until real comparable local samples meet
+the documented calibration and drift thresholds.
+
+### Added
 
 - Added deterministic `evidence-receipt/v1` JSON/Markdown generation for workflow runs with complete-versus-partial truth, task/checkpoint/review evidence, usage unknowns, budget compliance, git identities, and local SHA-256 integrity metadata.
 - Added `cewp workflow receipt <run-id>` without executing agents or verification commands. Raw prompts, transcripts, adapter output, and raw log contents remain excluded by default.
 - Added the closed `event/v1` lifecycle vocabulary with read-only normalization of historical `workflow-event/v1` records.
-- Added read-only `cewp run verify <workflow-run-id>` checks for state, schemas, events, required artifacts, worktree liveness, and receipt integrity.
+- Added read-only `cewp run verify` checks for workflow state, schemas, events, required artifacts, worktree liveness, and receipt integrity.
 - Added portable `operator-report/v1` JSON and standalone offline HTML generation from the normalized receipt model.
 - Added `run-comparison/v1` and `cewp workflow compare` with explicit unknowns and evidence-backed native-goal baseline labeling.
 - Added adversarially tested `redaction-policy/v1` exports that preserve canonical local evidence and avoid absolute-path output.
 - Added `usage-observation/v1` provenance/raw-category records and reproducible unknown `usage-estimate/v1` calibration metadata.
 - Expanded lifecycle evidence and recovery receipts for failed checkpoints, budget pauses, host limits, cancellations, and audit-only controls.
 - Expanded the Markdown receipt so complete and partial runs can be understood without opening raw logs.
+
+### Truth boundaries
+
+- `usage-observation/v1` keeps source schemas, authentication boundaries, raw category names, and observed/imported/unknown states distinct.
+- `usage-estimate/v1` keeps its estimator, sample basis, calibration snapshot, and drift state; insufficient evidence produces no numeric range.
+- `run-comparison/v1` compares only equivalent observed dimensions. In particular, unavailable native usage remains unknown rather than zero.
+- Audit-only controls remain observed-not-enforced and never appear as preventive enforcement.
+- API-equivalent currency cost remains unknown without a supported dated model/pricing mapping.
+- No publish, tag, or release action was performed.
 
 ## 0.11.0-beta.0
 
