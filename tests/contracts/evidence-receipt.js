@@ -166,6 +166,7 @@ function runContract() {
     assert(markdown.includes("node --test tests/example.test.js"), "Markdown identifies approved verification commands");
     assert(markdown.includes("Protected allocations: passed"), "Markdown proves protected reserve compliance");
     assert(markdown.includes("Decision: PASS"), "Markdown exposes independent final review");
+    assert(markdown.includes("Provider: codex") && markdown.includes("Effective model: unknown"), "Markdown distinguishes known provider from unknown effective model");
     assert(!markdown.includes("TOP_SECRET_PROMPT"), "Markdown does not include prompt or raw log content");
     const written = writeEvidenceReceipt(found, options);
     assert(fs.existsSync(written.paths.json) && fs.existsSync(written.paths.markdown), "JSON and Markdown receipts are written locally");
