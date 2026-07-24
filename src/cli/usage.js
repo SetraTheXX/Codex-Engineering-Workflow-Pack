@@ -20,6 +20,7 @@ Usage:
   cewp workflow receipt <run-id> [--json]
   cewp workflow report <run-id> [--json]
   cewp workflow compare <left-run-id> <right-run-id> [--json]
+  cewp workflow export <run-id> [--json]
   cewp integration hooks approve <workflow-run-id> --yes [--json]
   cewp integration hooks status <workflow-run-id> [--json]
   cewp integration controls <workflow-run-id> [--json]

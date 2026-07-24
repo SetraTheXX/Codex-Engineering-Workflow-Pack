@@ -35,8 +35,16 @@ is not implied.
 
 Raw prompts, adapter output, transcripts, and raw log contents are excluded by default. The receipt may
 contain repository-relative paths, changed filenames, approved commands, bounded failure/review summaries,
-and artifact names. Inspect these fields before sharing. Phase 12 privacy work will add export redaction;
-until then, keep the receipt local if those metadata fields are sensitive.
+artifact names, goal/source metadata, host goal identity, revisions, events, timestamps, and reviewer text.
+Inspect these fields before sharing.
+
+`cewp workflow export <run-id>` writes separate `.redacted.json`, `.redacted.md`, and `.redacted.html`
+artifacts. It removes recognized credential assignments, authorization values, provider-token shapes,
+private-key blocks, URL credentials, sensitive/absolute/traversal paths, and active-content markup. It never
+overwrites or implicitly creates the canonical receipt. The export records `redaction-policy/v1`, its
+replacement count/classes, and that canonical local evidence is still required for integrity verification.
+Pattern redaction reduces accidental disclosure but is not a proof that arbitrary prose contains no secret;
+inspect exported metadata before sending it outside the repository boundary.
 
 ## Event Ledger And Run Health
 

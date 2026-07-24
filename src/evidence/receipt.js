@@ -335,6 +335,7 @@ function renderEvidenceReceiptMarkdown(receipt) {
 - Host-internal usage: ${receipt.usage.hostInternal.label}
 - API-equivalent cost: ${receipt.cost.apiEquivalent.label}
 - Integrity: ${receipt.integrity.claim}; ${receipt.integrity.files.length} hashed files; not tamper-proof
+${receipt.redaction && receipt.redaction.applied ? `- Redaction: applied (${receipt.redaction.replacements} replacements)\n` : ""}
 
 ## Tasks
 

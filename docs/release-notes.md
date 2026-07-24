@@ -10,6 +10,7 @@
 - Added read-only `cewp run verify <workflow-run-id>` checks for state, schemas, events, required artifacts, worktree liveness, and receipt integrity.
 - Added portable `operator-report/v1` JSON and standalone offline HTML generation from the normalized receipt model.
 - Added `run-comparison/v1` and `cewp workflow compare` with explicit unknowns and evidence-backed native-goal baseline labeling.
+- Added adversarially tested `redaction-policy/v1` exports that preserve canonical local evidence and avoid absolute-path output.
 
 ## 0.11.0-beta.0
 

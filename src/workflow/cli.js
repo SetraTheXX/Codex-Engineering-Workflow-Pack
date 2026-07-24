@@ -33,6 +33,7 @@ const { listWorkflowTemplates, loadWorkflowTemplate } = require("./templates");
 const { buildEvidenceReceipt, writeEvidenceReceipt } = require("../evidence/receipt");
 const { writeOperatorReport } = require("../evidence/report");
 const { compareEvidenceReceipts } = require("../evidence/compare");
+const { exportRedactedEvidence } = require("../evidence/redaction");
 
 function outputJson(command, data) {
   console.log(JSON.stringify({
@@ -64,6 +65,17 @@ function resolveProposalSource(options) {
 }
 
 function runWorkflow(options = {}) {
+  if (options.subcommand === "export") {
+    if (!options.workflowRunId) throw new Error("workflow export requires a run id.");
+    const result = exportRedactedEvidence(loadWorkflowRun(process.cwd(), options.workflowRunId));
+    if (options.json) outputJson("workflow.export", result);
+    else {
+      console.log("CEWP redacted evidence export written");
+      console.log(`Run ID: ${result.receipt.runId}`);
+      for (const [name, filePath] of Object.entries(result.paths)) console.log(`${name}: ${filePath}`);
+    }
+    return;
+  }
   if (options.subcommand === "compare") {
     if (!options.workflowRunId || !options.comparisonRunId) throw new Error("workflow compare requires two run ids.");
     const generatedAt = new Date().toISOString();

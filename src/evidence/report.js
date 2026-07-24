@@ -133,7 +133,7 @@ function renderOperatorReportHtml(report) {
 <section><h2>Controls</h2>${controlItems("Preventively enforced", report.controls.enforced)}${controlItems("Post-execution checked", report.controls.checked)}${controlItems("Observed, not enforced", report.controls.observed)}${controlItems("Unavailable", report.controls.unavailable)}</section>
 <section><h2>Final review</h2><p>Status: ${escapeHtml(report.finalReview.status)}; decision: ${escapeHtml(report.finalReview.decision)}</p></section>
 <section><h2>Warnings</h2>${list(report.warnings, (entry) => `${escapeHtml(entry.code)}: ${escapeHtml(entry.message)}`)}</section>
-<footer><p>Generated ${escapeHtml(report.generatedAt)}. Integrity: ${escapeHtml(report.integrity.claim)}; not tamper-proof. This offline report excludes raw prompts and logs.</p></footer>
+<footer><p>Generated ${escapeHtml(report.generatedAt)}. Integrity: ${escapeHtml(report.integrity.claim)}; not tamper-proof. Redaction: ${report.redaction && report.redaction.applied ? `applied (${report.redaction.replacements} replacements)` : "not applied"}. This offline report excludes raw prompts and logs.</p></footer>
 </body>
 </html>
 `;
