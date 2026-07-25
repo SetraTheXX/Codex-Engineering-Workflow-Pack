@@ -7,6 +7,7 @@ const { writeFile } = require("./temp-repo");
 
 const FAKE_ADAPTER_MODES = Object.freeze({
   PASS: "pass",
+  MODEL_INCOMPATIBLE: "model-incompatible",
   SCOPE_VIOLATION: "scope-violation",
   TEST_AUTHORING: "test-authoring",
   WORKER_NONZERO: "worker-nonzero",
@@ -112,6 +113,23 @@ if (isReviewer) {
   }
   console.error(\`fake codex stderr: reviewer \${decision}\`);
   process.exit(0);
+}
+
+if (mode === "model-incompatible") {
+  const message = "The 'gpt-5.6-sol' model requires a newer version of Codex. Please upgrade to the latest app or CLI and try again.";
+  const hostError = JSON.stringify({
+    error: {
+      message,
+      type: "invalid_request_error",
+      code: "invalid_request_error",
+    },
+  });
+  console.log(JSON.stringify({ type: "thread.started", thread_id: "fake-thread" }));
+  console.log(JSON.stringify({ type: "turn.started" }));
+  console.log(JSON.stringify({ type: "error", message: hostError }));
+  console.log(JSON.stringify({ type: "turn.failed", error: { message: hostError } }));
+  console.error("fake codex stderr: installed CLI cannot use the selected model");
+  process.exit(1);
 }
 
 const shouldViolateScope = mode === "scope-violation" && role === "worker-a";

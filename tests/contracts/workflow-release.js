@@ -13,7 +13,8 @@ const plugin = JSON.parse(fs.readFileSync(
 const releaseNotes = fs.readFileSync(path.join(repoRoot, "docs", "release-notes.md"), "utf8");
 
 function runWorkflowReleaseContract() {
-  assert(packageJson.version === "0.12.0-beta.0", "Phase 12 package version is exact");
+  const version = packageJson.version.match(/^0\.(\d+)\.0-beta\.0$/);
+  assert(version && Number.parseInt(version[1], 10) >= 12, "current beta remains at or beyond the Phase 12 package line");
   assert(plugin.version === packageJson.version, "plugin version follows the package version");
 
   const unreleasedIndex = releaseNotes.indexOf("## Unreleased");
@@ -22,7 +23,7 @@ function runWorkflowReleaseContract() {
   assert(unreleasedIndex >= 0 && releaseIndex > unreleasedIndex, "fresh Unreleased precedes the Phase 12 release");
   assert(previousIndex > releaseIndex, "Phase 12 release precedes earlier release history");
   const unreleased = releaseNotes.slice(unreleasedIndex, releaseIndex);
-  assert(unreleased.includes("No changes yet."), "fresh Unreleased is explicitly empty");
+  assert(/No changes yet|Manual acceptance/i.test(unreleased), "Unreleased truthfully records current post-beta work");
   for (const claim of [
     "`evidence-receipt/v1`",
     "`event/v1`",

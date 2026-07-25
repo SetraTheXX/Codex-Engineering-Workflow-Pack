@@ -2,7 +2,7 @@
 
 CEWP is beta software. These limits are product boundaries, not hidden roadmap promises.
 
-- The supervised golden path supports one active checkpoint per run and manual linear continuation from a verified snapshot. A general multi-checkpoint graph, dependency scheduler, automatic plan compiler, and plan migration engine are not shipped.
+- The managed supervised convenience path supports one active checkpoint at a time. The workflow runtime supports validated DAGs, scheduling, revisions, and migrations, but its compiler emits a source-bound agent request rather than invoking a model or making arbitrary prose executable.
 - Managed supervised execution uses exactly one owner/backend pair: `managed` with `codex-exec`.
 - CEWP does not attach to a ChatGPT desktop task's private thread or native goal lifecycle.
 - CEWP does not inject persistent desktop UI, a title-bar meter, or arbitrary notifications. Structured conversation and CLI output are the minimum warning surface.
@@ -16,6 +16,7 @@ CEWP is beta software. These limits are product boundaries, not hidden roadmap p
 - Manual is a non-executing handoff adapter. Claude, Gemini, Hermes, and other providers are not implemented.
 - Supervised worktree cleanup automation is not shipped; rollback is available for owned unverified work, and terminal evidence is retained for deliberate inspection/removal.
 - CEWP never automatically merges, pushes, publishes, tags, or creates a release.
-- Beta schemas and command details can change with migration notes before 1.0.
+- The stable-core candidate publishes explicit schema and migration contracts, but the package remains beta and 1.0 eligibility is blocked by real Phase 13 evidence and exact release matrices.
+- Phase 13 pilot infrastructure validates local records and thresholds but does not supply real participants. Maintainer dogfood and deterministic fixtures remain excluded; the external-user, repository, repeat-use, case-study, feedback, and contribution gates are still open.
 
 Report setup failures, workflow failures, or misleading evidence through the repository issue tracker. Include `cewp doctor --json` output after removing local paths or sensitive values.

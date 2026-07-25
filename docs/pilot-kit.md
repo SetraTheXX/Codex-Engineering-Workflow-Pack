@@ -2,6 +2,39 @@
 
 This kit collects real adoption evidence without mandatory telemetry. Do not mark a pilot complete unless a person outside the maintainer's normal environment performs the steps and confirms the result.
 
+## Local Pilot Ledger
+
+Canonical pilot records stay under the ignored local runtime path
+`.cewp/pilots/`. They are never packaged or committed. Create a privacy-safe
+record, then add one validated observation at a time:
+
+```bash
+cewp pilot create --pilot-id <id> --participant <maintainer-dogfood|independent-external> --participant-id <privacy-safe-id>
+cewp pilot record <id> --from <pilot-observation.json> --yes
+cewp pilot status --json
+cewp pilot export [<id>] --json
+```
+
+`cewp pilot status` exits nonzero until every Phase 13 gate has qualifying
+evidence. `cewp pilot export` writes a separate redacted JSON/Markdown projection;
+it does not change the canonical record, transmit data, or prove arbitrary prose
+contains no secret.
+
+A `repository-attempt` observation must use two different privacy-safe identifiers:
+`attempt.id` identifies that run, while `attempt.repositoryId` is a stable pseudonym
+for the repository. Status counts distinct `repositoryId` values, so repeat attempts
+against one repository cannot satisfy the ten-repository gate. Repeat-user evidence
+is likewise counted once per privacy-safe participant id. Malformed or incompatible
+local records remain visible as invalid warnings and keep status incomplete.
+
+Maintainer runs, fixtures, demos, and multiple machines used by one person remain
+visible but excluded from independent counts. Real pilot completion requires ten
+independent repositories, at least three independent participants, five full
+reviewed runs, three repeat users without maintainer assistance, three comparable
+native-goal studies, three recovery scenarios, budget and host-limit evidence,
+three public case studies, onboarding remediation, and external contributor
+evidence. The CLI infrastructure cannot manufacture any of those results.
+
 ## Pilot Target
 
 Choose one bounded repository task that can be reviewed independently:

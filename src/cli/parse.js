@@ -509,7 +509,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (["doctor", "run", "supervise", "workflow", "integration", "pilot", "demo"].includes(args.command) && arg === "--json") {
+    if (["doctor", "run", "supervise", "workflow", "integration", "pilot", "demo", "compatibility"].includes(args.command) && arg === "--json") {
       args.json = true;
       continue;
     }

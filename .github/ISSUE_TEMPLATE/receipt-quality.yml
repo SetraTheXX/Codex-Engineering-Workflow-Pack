@@ -1,0 +1,36 @@
+name: Receipt quality feedback
+description: Report missing, misleading, or hard-to-understand evidence.
+title: "[receipt]: "
+labels: ["evidence"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include secrets, credentials, source code, private paths, prompts, or raw logs. Include only a redacted export or a sanitized excerpt.
+  - type: dropdown
+    id: truth
+    attributes:
+      label: Affected truth label
+      description: Which observed / estimated / budgeted / unknown distinction was unclear?
+      options: [observed, estimated, budgeted, unknown, multiple, not-applicable]
+    validations:
+      required: true
+  - type: textarea
+    id: field
+    attributes:
+      label: Misleading or missing field
+      description: Name the receipt section and explain what a reader could misunderstand.
+    validations:
+      required: true
+  - type: textarea
+    id: excerpt
+    attributes:
+      label: Redacted receipt excerpt
+      description: Use `cewp workflow export` or `cewp pilot export`; remove anything still sensitive.
+      render: json
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected explanation
+    validations:
+      required: true

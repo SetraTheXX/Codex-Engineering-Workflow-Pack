@@ -2,7 +2,83 @@
 
 ## Unreleased
 
-No changes yet.
+### Added
+
+- Added a maintainer-safe manual acceptance guide covering credential-free preflight,
+  one bounded real supervised checkpoint, pause/revise/resume, review and receipt,
+  ownership conflicts, recovery fixtures, and honest pilot classification.
+
+## 0.14.0-beta.0
+
+### Summary
+
+Stable-core candidate contracts, recovery/security guidance, CEWP-owned performance
+budgets, package lifecycle coverage, and local release-artifact preparation. This
+version is prepared locally and is not published, tagged, pushed, or released.
+It is deliberately not `1.0.0`: real Phase 13 evidence and exact clean release
+matrices remain mandatory blockers.
+
+### Added
+
+- Added `cewp compatibility --json` with `stable-compatibility/v1` covering Node,
+  OS, Git, Codex, package/plugin, host claims, modes, owners, backend, and schemas.
+- Added explicit downgrade detection plus migration/deprecation guarantees for
+  supported beta state and stable candidate schemas.
+- Added the 1.0 security re-audit record, failure-recovery guide, contract index,
+  native-goal decision guide, and CEWP-controlled performance budgets.
+- Added clean package install/upgrade/downgrade-warning/uninstall capability evidence.
+- Added local validation and artifact preparation with a hashed manifest; remote
+  publication, tag, push, and GitHub release actions remain human-only and absent.
+
+### Validation truth
+
+- Windows local contracts can prove the candidate implementation, but do not replace
+  a clean Linux run of this exact source or the repository release matrix.
+- No external participant, repository, repeat-use, case-study, feedback, or
+  contribution evidence was fabricated. Phase 13 and the 1.0 gate remain open.
+- The security review states the local technical finding boundary; it cannot prove
+  that no undisclosed external vulnerability exists.
+
+## 0.13.0-beta.0
+
+### Summary
+
+Local, privacy-safe pilot evidence infrastructure and public feedback/contributor
+surfaces. This version is prepared locally and is not published, tagged, or
+released. Real external-user evidence is absent, so the Phase 13 exit gate remains
+open and 1.0 is not validated. Exact clean Linux validation of the current source
+also remains required.
+
+### Added
+
+- Added canonical `pilot-record/v1` records under ignored `.cewp/pilots/` state,
+  with explicit `maintainer-dogfood` and `independent-external` classification.
+- Added `cewp pilot create`, `record`, `status`, and `export` with structured
+  observations, complete Phase 13 threshold reporting, atomic writes, duplicate
+  evidence refusal, and nonzero incomplete status.
+- Added distinct privacy-safe repository and attempt identities, participant-deduped
+  repeat-use counts, and fail-safe status warnings for malformed local records.
+- Added workflow receipt linking so a full reviewed run qualifies only with a
+  finalized run, complete receipt, passing integrity verification, and independent
+  reviewer PASS.
+- Added separate `pilot-export/v1` JSON/Markdown artifacts with adversarial
+  redaction, canonical-record preservation, and symlink containment.
+- Added four privacy-aware GitHub issue forms, a case-study template, contributor
+  guidance, architecture map, contract-extension example, and private security
+  reporting path.
+
+### Validation truth
+
+- Deterministic fixtures prove the pilot contracts but do not count as pilot
+  participants, repository attempts, repeat users, reviewed runs, comparisons, or
+  case studies.
+- Maintainer dogfood is retained and explicitly excluded from independent counts.
+- Real external participant, repository, repeat-use, case-study, feedback, and
+  contribution evidence is absent; it must be collected later from actual users.
+- Ecosystem listing was not submitted because the golden-path evidence and public
+  case studies do not yet exist.
+- No publish, tag, release, push, PR, merge, telemetry, provider, desktop UI, or
+  terminal-server action was added.
 
 ## 0.12.0-beta.0
 

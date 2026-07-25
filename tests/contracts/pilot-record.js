@@ -3,7 +3,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { assert } = require("../harness/lib/assertions");
-const { cleanupRepo, makeTempRepo, readJson, runNode } = require("../harness/lib/temp-repo");
+const { cleanupRepo, makeTempRepo, readJson, runNode, writeJson } = require("../harness/lib/temp-repo");
 
 const cewpCli = path.join(__dirname, "..", "..", "bin", "cewp.js");
 
@@ -72,6 +72,19 @@ function runContract() {
     ], repoRoot);
     assert(fabricatedClass.status === 1 && fabricatedClass.stderr.includes("independent-external"), "unsupported participant classifications fail closed");
     assert(!fs.existsSync(path.resolve(repoRoot, "..", "escape")), "unsafe pilot ids cannot escape the local pilot root");
+
+    writeJson(path.join(repoRoot, ".cewp", "pilots", "incompatible", "record.json"), {
+      schemaVersion: "pilot-record/v999",
+      pilotId: "incompatible",
+    });
+    const malformedRoot = path.join(repoRoot, ".cewp", "pilots", "malformed");
+    fs.mkdirSync(malformedRoot, { recursive: true });
+    fs.writeFileSync(path.join(malformedRoot, "record.json"), "{not-json\n");
+    const failSafeStatus = runNode(cewpCli, ["pilot", "status", "--json"], repoRoot);
+    assert(failSafeStatus.status === 1, "invalid local pilot records keep Phase 13 incomplete");
+    const inspected = JSON.parse(failSafeStatus.stdout).data;
+    assert(inspected.records.valid === 1 && inspected.records.invalid === 2, "status distinguishes valid and invalid pilot records");
+    assert(inspected.warnings.filter((entry) => entry.code === "pilot-record-invalid").length === 2, "each invalid pilot record has a reviewable fail-safe warning");
   } finally {
     cleanupRepo(repoRoot);
   }

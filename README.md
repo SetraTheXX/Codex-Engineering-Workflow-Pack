@@ -117,12 +117,38 @@ Budget or host exhaustion produces a resumable pause, not a fake PASS. Partial f
 
 CEWP still ships ten reusable engineering skills and the earlier Coordinator Mode runtime for compatibility. The supervised path remains the managed `codex-exec` golden path. The workflow runtime adds source-bound compiler requests, approved task graphs, variable workers, result intake, recovery, revisions, and migrations without executing arbitrary prose or adding another backend.
 
+## Local Pilot Evidence
+
+Phase 13 pilot records are optional, local, and ignored by Git. They distinguish
+maintainer dogfood from genuinely independent participants and never add mandatory
+telemetry:
+
+```bash
+cewp pilot create --pilot-id dogfood-1 --participant maintainer-dogfood --participant-id maintainer-1
+cewp pilot status --json
+cewp pilot export dogfood-1 --json
+```
+
+The infrastructure is implemented, but real external pilot evidence is still
+absent. Fixtures and this maintainer's own runs do not satisfy external-user gates;
+1.0 is therefore not complete.
+
 ## Documentation
 
 - [Install Guide](docs/install.md)
 - [Supervised Workflow](docs/supervised-workflow.md)
+- [Native Goal or CEWP?](docs/native-goal-or-cewp.md)
+- [Stable Compatibility Contract](docs/stable-compatibility.md)
+- [Stable Contract Reference](docs/contracts.md)
+- [Migration Policy](docs/migration-policy.md)
+- [Troubleshooting and Recovery](docs/recovery-guide.md)
+- [Performance Budgets](docs/performance-budgets.md)
+- [1.0 Security Review](docs/security-review-1.0.md)
+- [Türkçe Manuel Kabul ve Deneme Rehberi](docs/manual-acceptance.md)
 - [External Integration Boundary](docs/external-integration-boundary.md)
 - [Evidence Receipts](docs/evidence-receipts.md)
+- [Architecture](docs/architecture.md)
+- [Contract Extension Example](docs/contract-extension-example.md)
 - [Workflow Runtime](docs/workflow-runtime.md)
 - [Known Limitations](docs/known-limitations.md)
 - [Pilot Kit](docs/pilot-kit.md)
@@ -131,10 +157,12 @@ CEWP still ships ten reusable engineering skills and the earlier Coordinator Mod
 - [Coordinator Mode Compatibility](docs/coordinator-mode.md)
 - [Adapter Contract](docs/adapter-contract.md)
 - [Release Notes](docs/release-notes.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
 
 ## Status
 
-CEWP is beta software. The workflow compiler emits a source-bound agent request rather than calling a model, and the graph runtime accepts only validated, explicitly approved definitions and evidence. External pilot gates are still required before a future stable release is declared complete. Review the plan, evidence, and receipt before integrating changes.
+CEWP is beta software. Phase 14 stable-core contracts are available through `cewp compatibility --json`, but external pilot gates and exact clean release matrices are still required before 1.0 can be declared complete. Review the plan, evidence, and receipt before integrating changes.
 
 ## License
 

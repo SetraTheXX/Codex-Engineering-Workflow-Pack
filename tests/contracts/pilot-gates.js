@@ -25,6 +25,7 @@ function repositoryAttempt(observationId, attemptId) {
     observedAt: "2026-07-22T02:00:00.000Z",
     attempt: {
       id: attemptId,
+      repositoryId: attemptId,
       language: "javascript",
       sizeBucket: "small",
       operatingSystem: "windows",
@@ -115,7 +116,7 @@ function runContract() {
     const repositoryGate = status.gates.find((gate) => gate.id === "independent-repository-attempts");
     const participantGate = status.gates.find((gate) => gate.id === "independent-external-participants");
     assert(repositoryGate.observed === 1, "only the independent repository attempt counts");
-    assert(repositoryGate.qualifyingEvidence.length === 1 && repositoryGate.qualifyingEvidence[0].includes("external-1"), "qualifying evidence is reviewable");
+    assert(repositoryGate.qualifyingEvidence.length === 1 && repositoryGate.qualifyingEvidence[0] === "repo-attempt-1", "privacy-safe repository identity makes qualifying evidence reviewable");
     assert(participantGate.observed === 0, "an enrolled external participant does not count before golden-path completion");
 
     createPilot(repoRoot, "external-2", "independent-external", "person-2");
@@ -233,9 +234,27 @@ function runContract() {
     assert(broadStatus.gates.find((gate) => gate.id === "full-reviewed-runs").status === "unmet", "reviewed-run gate remains open for receipt-linked evidence");
     assert(broadStatus.complete === false, "broad fixture evidence cannot bypass the reviewed-run gate");
 
+    recordInline(repoRoot, "external-1", evidence("repeat-extra-1", "repeat-user", "repeatUse", {
+      runOrdinal: 3,
+      withoutMaintainerAssistance: true,
+    }, 59));
+    recordInline(repoRoot, "external-1", evidence("repeat-extra-2", "repeat-user", "repeatUse", {
+      runOrdinal: 4,
+      withoutMaintainerAssistance: true,
+    }, 59));
+    const afterRepeatedSameParticipant = JSON.parse(runNode(cewpCli, ["pilot", "status", "--json"], repoRoot).stdout).data;
+    const repeatGate = afterRepeatedSameParticipant.gates.find((gate) => gate.id === "repeat-users-without-maintainer-assistance");
+    assert(repeatGate.observed === 3, "repeat-user gate counts distinct participant ids rather than repeat observations");
+
     writeJson(path.join(repoRoot, "duplicate-attempt.json"), repositoryAttempt("duplicate-attempt-observation", "repo-attempt-1"));
     const duplicateAttempt = recordObservation(repoRoot, "external-2", "duplicate-attempt.json");
     assert(duplicateAttempt.status === 1 && duplicateAttempt.stderr.includes("evidence identity already exists"), "duplicate repository attempts fail closed across pilot records");
+
+    const sameRepository = repositoryAttempt("same-repository-new-attempt", "new-attempt-id");
+    sameRepository.attempt.repositoryId = "repo-attempt-1";
+    writeJson(path.join(repoRoot, "same-repository.json"), sameRepository);
+    const duplicateRepository = recordObservation(repoRoot, "external-2", "same-repository.json");
+    assert(duplicateRepository.status === 1 && duplicateRepository.stderr.includes("repository-attempt:repo-attempt-1"), "one repository cannot be inflated into multiple independent repository attempts");
   } finally {
     cleanupRepo(repoRoot);
   }

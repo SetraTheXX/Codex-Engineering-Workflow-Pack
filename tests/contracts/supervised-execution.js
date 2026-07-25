@@ -3,7 +3,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { assert } = require("../harness/lib/assertions");
-const { createFakeCodexAdapter } = require("../harness/lib/fake-adapter");
+const {
+  createFakeCodexAdapter,
+  FAKE_ADAPTER_MODES,
+} = require("../harness/lib/fake-adapter");
 const {
   cleanupRepo,
   makeTempRepo,
@@ -93,6 +96,117 @@ function runNativeOwnershipConflictContract() {
     assert(result.status === 1, "managed dispatch rejects a native-owned task worktree");
     assert(result.stderr.includes("execution-ownership-conflict"), "ownership refusal is actionable");
     assert(!fs.existsSync(targetWorktree), "conflicting managed worktree is not created");
+  } finally {
+    fs.rmSync(fake.fakeRoot, { recursive: true, force: true });
+    cleanupRepo(repoRoot);
+  }
+}
+
+function runUnignoredCewpRuntimeContract() {
+  const repoRoot = makeTempRepo("cewp-supervised-runtime-clean-");
+  const fake = createFakeCodexAdapter();
+  try {
+    const gitignorePath = path.join(repoRoot, ".gitignore");
+    const gitignore = fs.readFileSync(gitignorePath, "utf8")
+      .split(/\r?\n/)
+      .filter((line) => line !== ".cewp/")
+      .join("\n");
+    fs.writeFileSync(gitignorePath, gitignore);
+    const committed = require("node:child_process").spawnSync("git", [
+      "add", ".gitignore",
+    ], { cwd: repoRoot, encoding: "utf8", shell: false });
+    assert(committed.status === 0, `fixture stages .gitignore: ${committed.stderr}`);
+    const commit = require("node:child_process").spawnSync("git", [
+      "commit", "-m", "test: expose CEWP runtime state",
+    ], { cwd: repoRoot, encoding: "utf8", shell: false });
+    assert(commit.status === 0, `fixture commits .gitignore: ${commit.stderr}`);
+
+    const runId = createApprovedRun(repoRoot);
+    const status = require("node:child_process").spawnSync("git", [
+      "status", "--porcelain", "--untracked-files=all",
+    ], { cwd: repoRoot, encoding: "utf8", shell: false });
+    assert(status.status === 0 && status.stdout.includes("?? .cewp/"), "fixture exposes only CEWP-owned untracked runtime state");
+    assert(runNode(cewpCli, ["policy", "set", "full-authority"], repoRoot).status === 0, "fixture grants worker authority");
+
+    const executed = runNode(cewpCli, [
+      "supervise", "execute", runId, "--yes", "--timeout", "20", "--json",
+    ], repoRoot, { env: fake.env });
+    assert(executed.status === 0, `CEWP-owned untracked .cewp runtime state does not dirty the source repo: ${executed.stderr}`);
+    assert(JSON.parse(executed.stdout).data.run.status === "verifying", "runtime-only source state still reaches the verification gate");
+  } finally {
+    fs.rmSync(fake.fakeRoot, { recursive: true, force: true });
+    cleanupRepo(repoRoot);
+  }
+}
+
+function runTrackedCewpMutationContract() {
+  const repoRoot = makeTempRepo("cewp-supervised-runtime-tracked-");
+  const fake = createFakeCodexAdapter();
+  try {
+    const markerPath = path.join(repoRoot, ".cewp", "tracked-marker.txt");
+    fs.mkdirSync(path.dirname(markerPath), { recursive: true });
+    fs.writeFileSync(markerPath, "committed\n");
+    const git = require("node:child_process");
+    assert(git.spawnSync("git", ["add", "-f", ".cewp/tracked-marker.txt"], {
+      cwd: repoRoot, encoding: "utf8", shell: false,
+    }).status === 0, "fixture stages the intentional tracked CEWP marker");
+    assert(git.spawnSync("git", ["commit", "-m", "test: track CEWP marker"], {
+      cwd: repoRoot, encoding: "utf8", shell: false,
+    }).status === 0, "fixture commits the intentional tracked CEWP marker");
+
+    const runId = createApprovedRun(repoRoot);
+    fs.writeFileSync(markerPath, "modified\n");
+    assert(runNode(cewpCli, ["policy", "set", "full-authority"], repoRoot).status === 0, "fixture grants worker authority");
+    const executed = runNode(cewpCli, [
+      "supervise", "execute", runId, "--yes", "--timeout", "20", "--json",
+    ], repoRoot, { env: fake.env });
+    assert(executed.status === 1, "tracked .cewp changes still make the source repository dirty");
+    assert(executed.stderr.includes("source repository is dirty"), "tracked .cewp refusal remains fail-closed");
+  } finally {
+    fs.rmSync(fake.fakeRoot, { recursive: true, force: true });
+    cleanupRepo(repoRoot);
+  }
+}
+
+function runCodexModelIncompatibilityContract() {
+  const repoRoot = makeTempRepo("cewp-supervised-model-incompatible-");
+  const fake = createFakeCodexAdapter(FAKE_ADAPTER_MODES.MODEL_INCOMPATIBLE);
+  try {
+    const runId = createApprovedRun(repoRoot);
+    assert(runNode(cewpCli, ["policy", "set", "full-authority"], repoRoot).status === 0, "fixture grants worker authority");
+    const executed = runNode(cewpCli, [
+      "supervise", "execute", runId, "--yes", "--timeout", "20", "--json",
+    ], repoRoot, { env: fake.env });
+    assert(executed.status === 1, "incompatible Codex host blocks managed dispatch");
+    const response = JSON.parse(executed.stdout);
+    const run = response.data.run;
+    const task = run.tasks[0];
+    assert(run.status === "blocked" && task.status === "blocked", "host incompatibility remains fail-closed");
+    assert(task.blocker.code === "codex-cli-model-incompatible", "structured host failure receives a specific blocker code");
+    assert(
+      task.blocker.reasons.some((reason) => reason.includes("requires a newer version of Codex")),
+      "blocker retains the host's actionable failure",
+    );
+    assert(
+      !task.blocker.reasons.includes("codex-exec last message is missing"),
+      "missing last-message noise does not hide a structured host failure",
+    );
+    assert(
+      task.blocker.remediation.some((action) => action.includes("Upgrade the Codex app or CLI")),
+      "blocker tells the operator how to restore host compatibility",
+    );
+    assert(task.blocker.automaticChanges === false, "CEWP records that it did not reroute the model or alter host configuration");
+    assert(task.attempts[0].changedFiles.length === 0, "failed host startup makes no repository changes");
+    assert(run.usage.managedTokens.label === "unknown", "missing usage remains unknown rather than zero");
+    assert(
+      run.reviewer.status === "pending" && run.reviewer.decision === null,
+      "host failure cannot bypass the reviewer gate",
+    );
+    const progress = fs.readFileSync(
+      path.join(repoRoot, ".cewp", "supervised-runs", runId, "progress.md"),
+      "utf8",
+    );
+    assert(progress.includes("Upgrade the Codex app or CLI"), "operator progress renders remediation");
   } finally {
     fs.rmSync(fake.fakeRoot, { recursive: true, force: true });
     cleanupRepo(repoRoot);
@@ -261,6 +375,9 @@ function runSupervisedExecutionContract() {
 
 try {
   runNativeOwnershipConflictContract();
+  runUnignoredCewpRuntimeContract();
+  runTrackedCewpMutationContract();
+  runCodexModelIncompatibilityContract();
   runSupervisedExecutionContract();
   console.log("[PASS] supervised dispatch preserves ownership, scope, and usage truth");
 } catch (error) {

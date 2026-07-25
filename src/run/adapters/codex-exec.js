@@ -256,6 +256,70 @@ function didAdapterTimeOut(execResult) {
   return Boolean(execResult.error && execResult.error.code === "ETIMEDOUT");
 }
 
+function unwrapCodexErrorMessage(value) {
+  if (typeof value !== "string" || value.trim().length === 0) return null;
+  const message = value.trim();
+  try {
+    const parsed = JSON.parse(message);
+    if (parsed && parsed.error && typeof parsed.error.message === "string") {
+      return parsed.error.message.trim();
+    }
+  } catch {
+    // A plain-text host message is already usable evidence.
+  }
+  return message;
+}
+
+function getStructuredCodexFailureMessages(stdout) {
+  const messages = [];
+  for (const line of String(stdout || "").split(/\r?\n/).map((value) => value.trim()).filter(Boolean)) {
+    let event;
+    try {
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    if (event.type === "turn.failed" && event.error) {
+      const message = unwrapCodexErrorMessage(event.error.message);
+      if (message) messages.push(message);
+    } else if (event.type === "error") {
+      const message = unwrapCodexErrorMessage(event.message);
+      if (message) messages.push(message);
+    }
+  }
+  return [...new Set(messages)];
+}
+
+function classifyCodexExecFailure(stdout) {
+  const messages = getStructuredCodexFailureMessages(stdout);
+  if (messages.length === 0) return null;
+
+  const incompatibleModel = messages.find((message) => /requires a newer version of Codex/i.test(message));
+  if (incompatibleModel) {
+    return {
+      code: "codex-cli-model-incompatible",
+      reasons: [incompatibleModel],
+      actions: ["rollback", "abandon", "recreate-after-remediation"],
+      remediation: [
+        "Upgrade the Codex app or CLI through its supported installer.",
+        "Alternatively, explicitly approve a model supported by the installed Codex version.",
+        "Then roll back or abandon this blocked run and create a new supervised run.",
+      ],
+      automaticChanges: false,
+    };
+  }
+
+  return {
+    code: "codex-exec-host-failure",
+    reasons: messages,
+    actions: ["inspect-logs", "rollback", "abandon"],
+    remediation: [
+      "Inspect the captured codex-exec stdout and stderr logs, remediate the reported host failure, and create a new supervised run.",
+    ],
+    automaticChanges: false,
+  };
+}
+
 function normalizeAdapterResult({
   role,
   status,
@@ -315,5 +379,6 @@ module.exports = {
   runCodexExecAdapter,
   getAdapterExitCode,
   didAdapterTimeOut,
+  classifyCodexExecFailure,
   normalizeAdapterResult,
 };

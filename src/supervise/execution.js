@@ -20,6 +20,7 @@ const {
   runCodexExecAdapter,
   getAdapterExitCode,
   didAdapterTimeOut,
+  classifyCodexExecFailure,
 } = require("../run/adapters/codex-exec");
 const {
   OWNERSHIP_SCHEMA_VERSION,
@@ -203,7 +204,7 @@ function reuseOwnedWorktree(found, startedAt) {
 }
 
 function createOwnedWorktree(found, startedAt) {
-  if (isRepoDirty(found.repoRoot)) {
+  if (isRepoDirty(found.repoRoot, { ignoreUntrackedCewpRuntime: true })) {
     throw new Error("Cannot dispatch a supervised checkpoint while the source repository is dirty.");
   }
   const currentHead = getGitHeadCommit(found.repoRoot);
@@ -430,6 +431,9 @@ function executeSupervisedCheckpoint(options = {}) {
   }
   const testAuthoring = getTestAuthoringVerdict(found.run, changes.changedFiles);
   const lastMessagePresent = fs.existsSync(lastMessagePath);
+  const adapterFailure = exitCode !== 0
+    ? classifyCodexExecFailure(execResult.stdout)
+    : null;
   const succeeded = exitCode === 0
     && !timedOut
     && scopeWarnings.length === 0
@@ -461,11 +465,15 @@ function executeSupervisedCheckpoint(options = {}) {
     },
   };
   const blockerReasons = [];
-  if (exitCode !== 0) blockerReasons.push(`codex-exec exited with code ${exitCode}`);
+  if (adapterFailure) {
+    blockerReasons.push(...adapterFailure.reasons);
+  } else if (exitCode !== 0) {
+    blockerReasons.push(`codex-exec exited with code ${exitCode}`);
+  }
   if (timedOut) blockerReasons.push(`codex-exec timed out after ${options.timeoutSeconds}s`);
   blockerReasons.push(...scopeWarnings);
   blockerReasons.push(...testAuthoring.violations);
-  if (!lastMessagePresent) blockerReasons.push("codex-exec last message is missing");
+  if (!lastMessagePresent && !adapterFailure) blockerReasons.push("codex-exec last message is missing");
   const completedRun = {
     ...startedRun,
     status: succeeded ? "verifying" : "blocked",
@@ -479,9 +487,15 @@ function executeSupervisedCheckpoint(options = {}) {
       status: succeeded ? "awaiting-verification" : "blocked",
       attempts: [completedAttempt],
       blocker: succeeded ? null : {
-        code: "dispatch-or-scope-failure",
+        code: adapterFailure ? adapterFailure.code : "dispatch-or-scope-failure",
         reasons: blockerReasons,
-        actions: ["retry", "revise", "rollback", "abandon"],
+        actions: adapterFailure
+          ? adapterFailure.actions
+          : ["retry", "revise", "rollback", "abandon"],
+        ...(adapterFailure ? {
+          remediation: adapterFailure.remediation,
+          automaticChanges: adapterFailure.automaticChanges,
+        } : {}),
       },
     }],
   };
