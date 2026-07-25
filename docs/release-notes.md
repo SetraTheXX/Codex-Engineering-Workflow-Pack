@@ -4,6 +4,37 @@
 
 No changes yet.
 
+## 0.14.0-beta.0
+
+### Summary
+
+Stable-core candidate contracts, recovery/security guidance, CEWP-owned performance
+budgets, package lifecycle coverage, and local release-artifact preparation. This
+version is prepared locally and is not published, tagged, pushed, or released.
+It is deliberately not `1.0.0`: real Phase 13 evidence and exact clean release
+matrices remain mandatory blockers.
+
+### Added
+
+- Added `cewp compatibility --json` with `stable-compatibility/v1` covering Node,
+  OS, Git, Codex, package/plugin, host claims, modes, owners, backend, and schemas.
+- Added explicit downgrade detection plus migration/deprecation guarantees for
+  supported beta state and stable candidate schemas.
+- Added the 1.0 security re-audit record, failure-recovery guide, contract index,
+  native-goal decision guide, and CEWP-controlled performance budgets.
+- Added clean package install/upgrade/downgrade-warning/uninstall capability evidence.
+- Added local validation and artifact preparation with a hashed manifest; remote
+  publication, tag, push, and GitHub release actions remain human-only and absent.
+
+### Validation truth
+
+- Windows local contracts can prove the candidate implementation, but do not replace
+  a clean Linux run of this exact source or the repository release matrix.
+- No external participant, repository, repeat-use, case-study, feedback, or
+  contribution evidence was fabricated. Phase 13 and the 1.0 gate remain open.
+- The security review states the local technical finding boundary; it cannot prove
+  that no undisclosed external vulnerability exists.
+
 ## 0.13.0-beta.0
 
 ### Summary

@@ -7,6 +7,7 @@ Usage:
   cewp init [--mode repo|global] [--target <path>] [--force] [--with-config]
   cewp list [--mode repo|global] [--target <path>]
   cewp doctor [--mode repo|global] [--target <path>] [--json]
+  cewp compatibility [--json]
   cewp pilot create --pilot-id <id> --participant <maintainer-dogfood|independent-external> --participant-id <id> [--json]
   cewp pilot record <pilot-id> --from <observation.json> --yes [--json]
   cewp pilot status [--json]

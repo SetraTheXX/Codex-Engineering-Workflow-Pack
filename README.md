@@ -137,6 +137,13 @@ absent. Fixtures and this maintainer's own runs do not satisfy external-user gat
 
 - [Install Guide](docs/install.md)
 - [Supervised Workflow](docs/supervised-workflow.md)
+- [Native Goal or CEWP?](docs/native-goal-or-cewp.md)
+- [Stable Compatibility Contract](docs/stable-compatibility.md)
+- [Stable Contract Reference](docs/contracts.md)
+- [Migration Policy](docs/migration-policy.md)
+- [Troubleshooting and Recovery](docs/recovery-guide.md)
+- [Performance Budgets](docs/performance-budgets.md)
+- [1.0 Security Review](docs/security-review-1.0.md)
 - [External Integration Boundary](docs/external-integration-boundary.md)
 - [Evidence Receipts](docs/evidence-receipts.md)
 - [Architecture](docs/architecture.md)
@@ -154,7 +161,7 @@ absent. Fixtures and this maintainer's own runs do not satisfy external-user gat
 
 ## Status
 
-CEWP is beta software. The workflow compiler emits a source-bound agent request rather than calling a model, and the graph runtime accepts only validated, explicitly approved definitions and evidence. External pilot gates are still required before a future stable release is declared complete. Review the plan, evidence, and receipt before integrating changes.
+CEWP is beta software. Phase 14 stable-core contracts are available through `cewp compatibility --json`, but external pilot gates and exact clean release matrices are still required before 1.0 can be declared complete. Review the plan, evidence, and receipt before integrating changes.
 
 ## License
 

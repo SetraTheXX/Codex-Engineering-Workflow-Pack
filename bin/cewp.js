@@ -37,6 +37,7 @@ const { runSupervise } = require("../src/supervise/cli");
 const { runWorkflow } = require("../src/workflow/cli");
 const { runIntegration } = require("../src/integration/cli");
 const { runPilot } = require("../src/pilot/cli");
+const { runCompatibility } = require("../src/compatibility/contract");
 const { printHuman: printSupervisedDemo, runSupervisedDemo } = require("../src/demo/supervised");
 
 function runDemo(options) {
@@ -227,12 +228,17 @@ async function main() {
       return;
     }
 
+    if (args.command === "compatibility") {
+      runCompatibility(args);
+      return;
+    }
+
     if (args.command === "demo") {
       runDemo(args);
       return;
     }
 
-    if (!["init", "list", "doctor", "policy", "run", "supervise", "workflow", "integration", "pilot", "demo"].includes(args.command)) {
+    if (!["init", "list", "doctor", "policy", "run", "supervise", "workflow", "integration", "pilot", "compatibility", "demo"].includes(args.command)) {
       throw new Error(`Unsupported command: ${args.command}`);
     }
   } catch (error) {
