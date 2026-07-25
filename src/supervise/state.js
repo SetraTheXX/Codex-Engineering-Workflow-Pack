@@ -299,7 +299,7 @@ function renderProgress(run) {
     ? task.evidence.map(formatProgressEvidence).join("\n")
     : "- none";
   const blockerDetail = blocker
-    ? `${blocker.code}; reasons: ${(blocker.reasons || []).join(" | ") || "none"}; actions: ${(blocker.actions || []).join(", ") || "none"}`
+    ? `${blocker.code}; reasons: ${(blocker.reasons || []).join(" | ") || "none"}; actions: ${(blocker.actions || []).join(", ") || "none"}; remediation: ${(blocker.remediation || []).join(" | ") || "none"}`
     : "none";
   const pauseDetail = run.pause && run.status.startsWith("paused-")
     ? `${run.pause.reason}; actions: ${(run.pause.actions || []).join(", ") || "none"}`

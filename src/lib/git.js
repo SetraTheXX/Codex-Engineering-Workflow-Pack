@@ -21,14 +21,24 @@ function getGitOutput(args, cwd) {
   return result;
 }
 
-function isRepoDirty(repoRoot) {
-  const result = getGitOutput(["status", "--porcelain"], repoRoot);
+function isUntrackedCewpRuntimeEntry(line) {
+  if (!line.startsWith("?? ")) return false;
+  const repoPath = line.slice(3).replace(/^"|"$/g, "").replace(/\\/g, "/");
+  return repoPath === ".cewp" || repoPath.startsWith(".cewp/");
+}
+
+function isRepoDirty(repoRoot, options = {}) {
+  const result = getGitOutput(["status", "--porcelain=v1", "--untracked-files=all"], repoRoot);
 
   if (result.status !== 0) {
     throw new Error(`Failed to inspect git status: ${(result.stderr || result.stdout || "").trim()}`);
   }
 
-  return result.stdout.trim().length > 0;
+  const entries = result.stdout.split(/\r?\n/).filter(Boolean);
+  const relevant = options.ignoreUntrackedCewpRuntime === true
+    ? entries.filter((line) => !isUntrackedCewpRuntimeEntry(line))
+    : entries;
+  return relevant.length > 0;
 }
 
 function branchExists(repoRoot, branch) {
