@@ -74,6 +74,10 @@ function parseArgs(argv) {
     workerId: undefined,
     templateName: undefined,
     compilerDigest: undefined,
+    operation: undefined,
+    taskClass: undefined,
+    model: undefined,
+    effort: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -93,7 +97,7 @@ function parseArgs(argv) {
     return args;
   }
 
-  const optionStart = ["run", "supervise", "workflow", "demo"].includes(args.command) ? 2 : 1;
+  const optionStart = ["run", "supervise", "workflow", "integration", "demo"].includes(args.command) ? 2 : 1;
 
   for (let index = optionStart; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -125,6 +129,16 @@ function parseArgs(argv) {
 
     if (args.command === "policy" && index === 1) {
       args.subcommand = arg;
+      continue;
+    }
+
+    if (args.command === "integration" && args.subcommand === "hooks" && index === 2) {
+      args.action = arg;
+      continue;
+    }
+
+    if (args.command === "integration" && args.subcommand === "hooks" && index === 3 && !arg.startsWith("--")) {
+      args.workflowRunId = arg;
       continue;
     }
 
@@ -203,13 +217,45 @@ function parseArgs(argv) {
     if (
       args.command === "supervise"
       && [
-        "approve", "status", "execute", "verify", "retry", "review", "receipt", "finalize",
+        "approve", "status", "execute", "verify", "retry", "review", "receipt", "finalize", "effort",
         "revise", "pause", "resume", "add-budget", "rollback", "cancel", "abandon", "block", "continue", "reassign",
       ].includes(args.subcommand)
       && index === 2
       && !arg.startsWith("--")
     ) {
       args.runId = arg;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--operation") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--operation requires an effort-policy operation.");
+      args.operation = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--task-class") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--task-class requires a Codex task class.");
+      args.taskClass = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--model") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--model requires an explicit Codex model.");
+      args.model = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "supervise" && arg === "--effort") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--effort requires a supported Codex reasoning effort.");
+      args.effort = value;
+      index += 1;
       continue;
     }
 
@@ -410,7 +456,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (["doctor", "run", "supervise", "workflow", "demo"].includes(args.command) && arg === "--json") {
+    if (["doctor", "run", "supervise", "workflow", "integration", "demo"].includes(args.command) && arg === "--json") {
       args.json = true;
       continue;
     }
@@ -421,6 +467,12 @@ function parseArgs(argv) {
     }
 
     if (args.command === "workflow" && arg === "--yes") {
+      args.yes = true;
+      continue;
+    }
+
+
+    if (args.command === "integration" && arg === "--yes") {
       args.yes = true;
       continue;
     }

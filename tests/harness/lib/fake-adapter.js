@@ -38,6 +38,17 @@ if (args[0] !== "exec") {
   process.exit(2);
 }
 
+const expectedModel = process.env.CEWP_FAKE_CODEX_EXPECT_MODEL;
+const expectedEffort = process.env.CEWP_FAKE_CODEX_EXPECT_EFFORT;
+if (expectedModel && valueAfter("--model") !== expectedModel) {
+  console.error("fake codex did not receive the approved --model override");
+  process.exit(3);
+}
+if (expectedEffort && !args.includes('model_reasoning_effort="' + expectedEffort + '"')) {
+  console.error("fake codex did not receive the approved reasoning-effort override");
+  process.exit(3);
+}
+
 function valueAfter(flag) {
   const index = args.indexOf(flag);
   return index === -1 ? undefined : args[index + 1];

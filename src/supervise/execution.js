@@ -23,8 +23,13 @@ const {
 } = require("../run/adapters/codex-exec");
 const {
   OWNERSHIP_SCHEMA_VERSION,
+  loadOwnershipRecords,
   validateOwnershipRecord,
 } = require("../run/ownership");
+const {
+  confirmCodexEffortEvidence,
+  resolveCodexEffortForDispatch,
+} = require("../integration/effort-policy");
 const {
   appendEvent,
   findSupervisedRun,
@@ -210,27 +215,7 @@ function createOwnedWorktree(found, startedAt) {
   if (continued) return continued;
 
   const paths = getWorktreePaths(found);
-  if (fs.existsSync(paths.worktreePath)) {
-    throw new Error(`Managed checkpoint worktree already exists: ${paths.worktreePath}`);
-  }
-  const branchProbe = getGitOutput(["show-ref", "--verify", "--quiet", `refs/heads/${paths.branch}`], found.repoRoot);
-  if (branchProbe.status === 0) {
-    throw new Error(`Managed checkpoint branch already exists: ${paths.branch}`);
-  }
-
-  fs.mkdirSync(path.dirname(paths.worktreePath), { recursive: true });
-  const created = getGitOutput([
-    "worktree",
-    "add",
-    paths.worktreePath,
-    "-b",
-    paths.branch,
-    checkpointBaseCommit(found.run, found.run.tasks[0]),
-  ], found.repoRoot);
-  if (created.status !== 0) {
-    throw new Error(`Failed to create managed checkpoint worktree: ${(created.stderr || created.stdout || "").trim()}`);
-  }
-
+  const ownershipPath = path.join(found.runRoot, "ownership.json");
   const ownership = validateOwnershipRecord({
     schemaVersion: OWNERSHIP_SCHEMA_VERSION,
     runId: found.runId,
@@ -254,13 +239,34 @@ function createOwnedWorktree(found, startedAt) {
       app: false,
       notification: false,
     },
-    ownershipRecords: [],
+    ownershipRecords: loadOwnershipRecords(found.repoRoot, { excludePath: ownershipPath }),
     requestedOwnership: ownership,
   }, { repoRoot: found.repoRoot });
   if (!gate.allowed) {
     throw new Error(`Controlled operation blocked: ${gate.reason}`);
   }
-  writeJsonAtomic(path.join(found.runRoot, "ownership.json"), ownership);
+  if (fs.existsSync(paths.worktreePath)) {
+    throw new Error(`Managed checkpoint worktree already exists: ${paths.worktreePath}`);
+  }
+  const branchProbe = getGitOutput(["show-ref", "--verify", "--quiet", `refs/heads/${paths.branch}`], found.repoRoot);
+  if (branchProbe.status === 0) {
+    throw new Error(`Managed checkpoint branch already exists: ${paths.branch}`);
+  }
+
+  fs.mkdirSync(path.dirname(paths.worktreePath), { recursive: true });
+  const created = getGitOutput([
+    "worktree",
+    "add",
+    paths.worktreePath,
+    "-b",
+    paths.branch,
+    checkpointBaseCommit(found.run, found.run.tasks[0]),
+  ], found.repoRoot);
+  if (created.status !== 0) {
+    throw new Error(`Failed to create managed checkpoint worktree: ${(created.stderr || created.stdout || "").trim()}`);
+  }
+
+  writeJsonAtomic(ownershipPath, ownership);
   return { ...paths, ownership };
 }
 
@@ -301,6 +307,7 @@ function executeSupervisedCheckpoint(options = {}) {
   assertPolicyAllows(found.repoRoot, "runWorkers");
   assertPolicyAllows(found.repoRoot, "runCommands");
   enforceOperationBudget(found, "implementation");
+  const codexSelection = resolveCodexEffortForDispatch(found, "implementation");
 
   const startedAt = new Date().toISOString();
   const owned = createOwnedWorktree(found, startedAt);
@@ -330,6 +337,7 @@ function executeSupervisedCheckpoint(options = {}) {
     scope: { status: "pending", warnings: [] },
     testAuthoring: { policy: found.run.assurance.testAuthoring, status: "pending", violations: [] },
     usage: { label: "unknown", value: null },
+    codex: codexSelection.evidence,
   };
   let startedRun = {
     ...found.run,
@@ -396,6 +404,8 @@ function executeSupervisedCheckpoint(options = {}) {
     timeoutSeconds: options.timeoutSeconds,
     sandbox: "workspace-write",
     structuredJson: true,
+    model: codexSelection.model,
+    effort: codexSelection.effort,
   });
   const remainingOutput = Math.max(
     0,
@@ -439,6 +449,7 @@ function executeSupervisedCheckpoint(options = {}) {
     },
     testAuthoring,
     usage,
+    codex: confirmCodexEffortEvidence(attempt.codex, usage),
     logs: {
       stdout: path.relative(found.runRoot, stdoutPath).replace(/\\/g, "/"),
       stderr: path.relative(found.runRoot, stderrPath).replace(/\\/g, "/"),
@@ -549,6 +560,7 @@ function retrySupervisedCheckpoint(options = {}) {
   }
   assertPolicyAllows(found.repoRoot, "runWorkers");
   enforceOperationBudget(found, "repair");
+  const codexSelection = resolveCodexEffortForDispatch(found, "repair");
   const repairCount = task.attempts.filter((attempt) => attempt.kind === "repair").length;
   if (repairCount >= found.run.budget.maxRepairsPerCheckpoint.value) {
     throw new Error("Checkpoint repair limit is exhausted; explicit budget revision is required.");
@@ -592,6 +604,7 @@ function retrySupervisedCheckpoint(options = {}) {
     scope: { status: "pending", warnings: [] },
     testAuthoring: { policy: found.run.assurance.testAuthoring, status: "pending", violations: [] },
     usage: { label: "unknown", value: null },
+    codex: codexSelection.evidence,
   };
   let startedRun = {
     ...found.run,
@@ -638,6 +651,8 @@ function retrySupervisedCheckpoint(options = {}) {
     timeoutSeconds: options.timeoutSeconds,
     sandbox: "workspace-write",
     structuredJson: true,
+    model: codexSelection.model,
+    effort: codexSelection.effort,
   });
   const remainingOutput = Math.max(
     0,
@@ -679,6 +694,7 @@ function retrySupervisedCheckpoint(options = {}) {
     },
     testAuthoring,
     usage,
+    codex: confirmCodexEffortEvidence(attempt.codex, usage),
     logs: {
       stdout: path.relative(found.runRoot, stdoutPath).replace(/\\/g, "/"),
       stderr: path.relative(found.runRoot, stderrPath).replace(/\\/g, "/"),

@@ -48,6 +48,57 @@ function createApprovedRun(repoRoot) {
   return runId;
 }
 
+function runNativeOwnershipConflictContract() {
+  const repoRoot = makeTempRepo("cewp-supervised-native-conflict-");
+  const fake = createFakeCodexAdapter();
+  try {
+    const runId = createApprovedRun(repoRoot);
+    assert(runNode(cewpCli, ["policy", "set", "full-authority"], repoRoot).status === 0, "fixture grants worker authority");
+    const runPath = path.join(repoRoot, ".cewp", "supervised-runs", runId, "run.json");
+    const run = JSON.parse(fs.readFileSync(runPath, "utf8"));
+    const taskId = run.tasks[0].id;
+    const targetWorktree = path.resolve(
+      repoRoot,
+      "..",
+      ".cewp-worktrees",
+      path.basename(repoRoot),
+      runId,
+      taskId,
+    );
+    const nativeOwnershipPath = path.join(
+      repoRoot,
+      ".cewp",
+      "workflow-runs",
+      "native-owner",
+      "integration",
+      "ownership.json",
+    );
+    fs.mkdirSync(path.dirname(nativeOwnershipPath), { recursive: true });
+    fs.writeFileSync(nativeOwnershipPath, `${JSON.stringify({
+      schemaVersion: "execution-ownership/v1",
+      runId: "native-owner",
+      taskId,
+      checkpointId: `${taskId}-attempt-0001`,
+      owner: "native",
+      backend: null,
+      status: "active",
+      createdAt: "2026-07-18T12:00:00.000Z",
+      cleanupAuthority: "host-owner",
+      worktree: { id: `${runId}:${taskId}`, path: targetWorktree },
+    }, null, 2)}\n`);
+
+    const result = runNode(cewpCli, [
+      "supervise", "execute", runId, "--yes", "--timeout", "20", "--json",
+    ], repoRoot, { env: fake.env });
+    assert(result.status === 1, "managed dispatch rejects a native-owned task worktree");
+    assert(result.stderr.includes("execution-ownership-conflict"), "ownership refusal is actionable");
+    assert(!fs.existsSync(targetWorktree), "conflicting managed worktree is not created");
+  } finally {
+    fs.rmSync(fake.fakeRoot, { recursive: true, force: true });
+    cleanupRepo(repoRoot);
+  }
+}
+
 function runSupervisedExecutionContract() {
   const repoRoot = makeTempRepo("cewp-supervised-exec-");
   const fake = createFakeCodexAdapter();
@@ -209,6 +260,7 @@ function runSupervisedExecutionContract() {
 }
 
 try {
+  runNativeOwnershipConflictContract();
   runSupervisedExecutionContract();
   console.log("[PASS] supervised dispatch preserves ownership, scope, and usage truth");
 } catch (error) {

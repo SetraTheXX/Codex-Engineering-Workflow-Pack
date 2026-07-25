@@ -24,7 +24,16 @@ function runPluginPackageContract() {
   assert(manifest.skills === "./skills/", "plugin skill path is contained and relative");
   assert(manifest.apps === undefined, "plugin does not claim an unbuilt app");
   assert(manifest.mcpServers === undefined, "plugin does not claim an unbuilt MCP server");
-  assert(manifest.hooks === undefined, "plugin does not enable unreviewed hooks");
+  assert(manifest.hooks === "./hooks/hooks.json", "plugin declares one contained reviewable hook bundle");
+  const hookConfig = readJson(path.join(repoRoot, "plugins", "cewp", "hooks", "hooks.json"));
+  assert(
+    JSON.stringify(Object.keys(hookConfig.hooks).sort()) === JSON.stringify(["SubagentStart", "SubagentStop"]),
+    "plugin hooks are limited to subagent evidence events",
+  );
+  assert(
+    fs.existsSync(path.join(repoRoot, "plugins", "cewp", "hooks", "capture-subagent.js")),
+    "declared hook handler exists",
+  );
   assert(
     fs.existsSync(path.join(repoRoot, "plugins", "cewp", "assets", "cewp.svg")),
     "plugin asset exists",

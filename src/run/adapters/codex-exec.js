@@ -198,14 +198,20 @@ function buildCodexExecInvocation({
   outputLastMessagePath,
   sandbox = "workspace-write",
   structuredJson = false,
+  model,
+  effort,
 }) {
   const formatArgs = structuredJson ? ["--json"] : [];
+  const modelArgs = model ? ["--model", model] : [];
+  const effortArgs = effort ? ["--config", `model_reasoning_effort="${effort}"`] : [];
   return {
     command: command || "codex",
     args: [
     ...prefixArgs,
     "exec",
     ...formatArgs,
+    ...modelArgs,
+    ...effortArgs,
     "--cd",
     worktreePath,
     "--sandbox",
@@ -218,7 +224,7 @@ function buildCodexExecInvocation({
   };
 }
 
-function runCodexExecAdapter({ worktreePath, promptPath, outputLastMessagePath, timeoutSeconds, sandbox = "workspace-write", structuredJson = false }) {
+function runCodexExecAdapter({ worktreePath, promptPath, outputLastMessagePath, timeoutSeconds, sandbox = "workspace-write", structuredJson = false, model, effort }) {
   validateTimeoutSeconds(timeoutSeconds);
   const prompt = fs.readFileSync(promptPath, "utf8");
   const invocation = buildCodexExecInvocation({
@@ -229,6 +235,8 @@ function runCodexExecAdapter({ worktreePath, promptPath, outputLastMessagePath, 
     outputLastMessagePath,
     sandbox,
     structuredJson,
+    model,
+    effort,
   });
 
   return childProcess.spawnSync(invocation.command, invocation.args, {

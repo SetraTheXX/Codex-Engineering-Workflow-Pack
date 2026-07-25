@@ -1,0 +1,31 @@
+{
+  "description": "Optional CEWP subagent lifecycle evidence. CEWP Core gates remain authoritative.",
+  "hooks": {
+    "SubagentStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$PLUGIN_ROOT/hooks/capture-subagent.js\"",
+            "command_windows": "node \"%PLUGIN_ROOT%\\hooks\\capture-subagent.js\"",
+            "statusMessage": "Recording optional CEWP subagent evidence"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$PLUGIN_ROOT/hooks/capture-subagent.js\"",
+            "command_windows": "node \"%PLUGIN_ROOT%\\hooks\\capture-subagent.js\"",
+            "statusMessage": "Recording optional CEWP subagent summary"
+          }
+        ]
+      }
+    ]
+  }
+}

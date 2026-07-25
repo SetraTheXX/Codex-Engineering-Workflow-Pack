@@ -1,5 +1,6 @@
 "use strict";
 
+const fs = require("node:fs");
 const path = require("node:path");
 const { normalizeComparePath } = require("../lib/paths");
 
@@ -76,11 +77,49 @@ function findOwnershipConflict(records, requested, options = {}) {
   return undefined;
 }
 
+function loadOwnershipRecords(repoRoot, options = {}) {
+  const recordsRoot = path.join(repoRoot, ".cewp");
+  if (!fs.existsSync(recordsRoot)) return [];
+  const excludedPath = options.excludePath
+    ? normalizeComparePath(path.resolve(options.excludePath))
+    : null;
+  const records = [];
+  const pending = [recordsRoot];
+
+  while (pending.length > 0) {
+    const directory = pending.pop();
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true })) {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory() && !entry.isSymbolicLink()) {
+        pending.push(entryPath);
+        continue;
+      }
+      if (
+        !entry.isFile()
+        || entry.name !== "ownership.json"
+        || normalizeComparePath(path.resolve(entryPath)) === excludedPath
+      ) {
+        continue;
+      }
+      let record;
+      try {
+        record = JSON.parse(fs.readFileSync(entryPath, "utf8"));
+      } catch (error) {
+        throw new Error(`Invalid execution ownership registry entry ${entryPath}: ${error.message}`);
+      }
+      records.push(validateOwnershipRecord(record));
+    }
+  }
+
+  return records;
+}
+
 module.exports = {
   EXECUTION_OWNERS,
   MANAGED_BACKENDS,
   OWNERSHIP_SCHEMA_VERSION,
   findOwnershipConflict,
+  loadOwnershipRecords,
   normalizeWorktreePath,
   validateOwnershipRecord,
 };

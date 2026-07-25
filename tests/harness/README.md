@@ -25,6 +25,7 @@ npm run test:skill-format
 npm run test:ownership-gates
 npm run test:fixtures
 npm run test:plugin-package
+npm run test:integration-hook-evidence
 ```
 
 `npm test` runs these focused contracts before the broader smoke lifecycle.
