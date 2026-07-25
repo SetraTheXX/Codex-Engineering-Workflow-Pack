@@ -20,6 +20,13 @@ evidence. `cewp pilot export` writes a separate redacted JSON/Markdown projectio
 it does not change the canonical record, transmit data, or prove arbitrary prose
 contains no secret.
 
+A `repository-attempt` observation must use two different privacy-safe identifiers:
+`attempt.id` identifies that run, while `attempt.repositoryId` is a stable pseudonym
+for the repository. Status counts distinct `repositoryId` values, so repeat attempts
+against one repository cannot satisfy the ten-repository gate. Repeat-user evidence
+is likewise counted once per privacy-safe participant id. Malformed or incompatible
+local records remain visible as invalid warnings and keep status incomplete.
+
 Maintainer runs, fixtures, demos, and multiple machines used by one person remain
 visible but excluded from independent counts. Real pilot completion requires ten
 independent repositories, at least three independent participants, five full

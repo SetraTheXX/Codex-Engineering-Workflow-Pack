@@ -117,6 +117,22 @@ Budget or host exhaustion produces a resumable pause, not a fake PASS. Partial f
 
 CEWP still ships ten reusable engineering skills and the earlier Coordinator Mode runtime for compatibility. The supervised path remains the managed `codex-exec` golden path. The workflow runtime adds source-bound compiler requests, approved task graphs, variable workers, result intake, recovery, revisions, and migrations without executing arbitrary prose or adding another backend.
 
+## Local Pilot Evidence
+
+Phase 13 pilot records are optional, local, and ignored by Git. They distinguish
+maintainer dogfood from genuinely independent participants and never add mandatory
+telemetry:
+
+```bash
+cewp pilot create --pilot-id dogfood-1 --participant maintainer-dogfood --participant-id maintainer-1
+cewp pilot status --json
+cewp pilot export dogfood-1 --json
+```
+
+The infrastructure is implemented, but real external pilot evidence is still
+absent. Fixtures and this maintainer's own runs do not satisfy external-user gates;
+1.0 is therefore not complete.
+
 ## Documentation
 
 - [Install Guide](docs/install.md)

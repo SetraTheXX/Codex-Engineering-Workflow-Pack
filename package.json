@@ -1,6 +1,6 @@
 {
   "name": "@setrathex/codex-engineering-workflow-pack",
-  "version": "0.12.0-beta.0",
+  "version": "0.13.0-beta.0",
   "description": "Long-running Codex goals without blind runs: local-first supervision, verification, recovery, review, and evidence.",
   "license": "MIT",
   "repository": {
@@ -59,7 +59,7 @@
   "scripts": {
     "test": "npm run test:contracts && npm run test:phase12 && npm run test:phase13 && npm run smoke",
     "test:phase12": "npm run test:evidence-receipt && npm run test:event-run-verify && npm run test:operator-report && npm run test:run-comparison && npm run test:evidence-redaction",
-    "test:phase13": "npm run test:pilot-record && npm run test:pilot-gates && npm run test:pilot-receipt-link && npm run test:pilot-export && npm run test:pilot-public-surface && npm run test:contributor-surface",
+    "test:phase13": "npm run test:pilot-record && npm run test:pilot-gates && npm run test:pilot-receipt-link && npm run test:pilot-export && npm run test:pilot-public-surface && npm run test:contributor-surface && npm run test:pilot-release",
     "test:contracts": "npm run test:init-install && npm run test:adapter-profile && npm run test:doctor-json && npm run test:operator-json && npm run test:hook-output && npm run test:skill-format && npm run test:ownership-gates && npm run test:fixtures && npm run test:plugin-package && npm run test:supervised-intake && npm run test:supervised-proposal && npm run test:supervised-controls && npm run test:supervised-execution && npm run test:supervised-review && npm run test:supervised-failure && npm run test:supervised-linear-resume && npm run test:supervised-demo && npm run test:workflow-definition && npm run test:workflow-compiler && npm run test:workflow-proposal && npm run test:workflow-scheduler && npm run test:workflow-worker-matrix && npm run test:workflow-result && npm run test:workflow-failure-result && npm run test:workflow-state-machine && npm run test:workflow-interventions && npm run test:workflow-failure-matrix && npm run test:workflow-budget && npm run test:workflow-progress && npm run test:workflow-review && npm run test:workflow-checkpoint-review && npm run test:workflow-lifecycle && npm run test:workflow-revision && npm run test:workflow-migration && npm run test:workflow-templates && npm run test:workflow-docs && npm run test:workflow-release && npm run test:integration-capabilities && npm run test:integration-binding && npm run test:integration-effort-policy && npm run test:integration-hook-evidence && npm run test:integration-mcp && npm run test:integration-observation && npm run test:native-goal-events",
     "test:init-install": "node tests/contracts/init-install.js",
     "test:adapter-profile": "node tests/contracts/adapter-profile.js",
@@ -116,6 +116,7 @@
     "test:pilot-export": "node tests/contracts/pilot-export.js",
     "test:pilot-public-surface": "node tests/contracts/pilot-public-surface.js",
     "test:contributor-surface": "node tests/contracts/contributor-surface.js",
+    "test:pilot-release": "node tests/contracts/pilot-release.js",
     "demo:supervised": "node src/demo/supervised.js",
     "test:plugin-lifecycle": "node tests/capabilities/plugin-lifecycle.js",
     "test:clean-install": "node tests/capabilities/clean-install.js",
@@ -126,7 +127,7 @@
     "check:workflow-syntax": "node --check ./src/workflow/budget.js && node --check ./src/workflow/compiler.js && node --check ./src/workflow/migration.js && node --check ./src/workflow/progress.js && node --check ./src/workflow/proposal.js && node --check ./src/workflow/review.js && node --check ./src/workflow/revision.js && node --check ./src/workflow/templates.js && node --check ./tests/contracts/workflow-budget.js && node --check ./tests/contracts/workflow-checkpoint-review.js && node --check ./tests/contracts/workflow-compiler.js && node --check ./tests/contracts/workflow-docs.js && node --check ./tests/contracts/workflow-failure-matrix.js && node --check ./tests/contracts/workflow-failure-result.js && node --check ./tests/contracts/workflow-migration.js && node --check ./tests/contracts/workflow-progress.js && node --check ./tests/contracts/workflow-release.js && node --check ./tests/contracts/workflow-review.js && node --check ./tests/contracts/workflow-lifecycle.js && node --check ./tests/contracts/workflow-revision.js && node --check ./tests/contracts/workflow-templates.js && node --check ./tests/contracts/workflow-worker-matrix.js",
     "check:mcp": "node --check ./bin/cewp-mcp.js && node --check ./src/mcp/server.js && node --check ./src/mcp/tools.js && node --check ./tests/contracts/integration-mcp.js",
     "check:evidence": "node --check ./src/evidence/receipt.js && node --check ./src/evidence/events.js && node --check ./src/evidence/report.js && node --check ./src/evidence/compare.js && node --check ./src/evidence/redaction.js && node --check ./src/evidence/usage.js && node --check ./src/evidence/verify.js && node --check ./src/run/verify.js && node --check ./tests/contracts/evidence-receipt.js && node --check ./tests/contracts/event-run-verify.js && node --check ./tests/contracts/operator-report.js && node --check ./tests/contracts/run-comparison.js && node --check ./tests/contracts/evidence-redaction.js",
-    "check:pilot": "node --check ./src/pilot/record.js && node --check ./src/pilot/observation.js && node --check ./src/pilot/evidence.js && node --check ./src/pilot/status.js && node --check ./src/pilot/export.js && node --check ./src/pilot/cli.js && node --check ./tests/contracts/pilot-record.js && node --check ./tests/contracts/pilot-gates.js && node --check ./tests/contracts/pilot-receipt-link.js && node --check ./tests/contracts/pilot-export.js && node --check ./tests/contracts/pilot-public-surface.js && node --check ./tests/contracts/contributor-surface.js",
+    "check:pilot": "node --check ./src/pilot/record.js && node --check ./src/pilot/observation.js && node --check ./src/pilot/evidence.js && node --check ./src/pilot/status.js && node --check ./src/pilot/export.js && node --check ./src/pilot/cli.js && node --check ./tests/contracts/pilot-record.js && node --check ./tests/contracts/pilot-gates.js && node --check ./tests/contracts/pilot-receipt-link.js && node --check ./tests/contracts/pilot-export.js && node --check ./tests/contracts/pilot-public-surface.js && node --check ./tests/contracts/contributor-surface.js && node --check ./tests/contracts/pilot-release.js",
     "check": "npm run check:syntax && npm run check:workflow-syntax && npm run check:mcp && npm run check:evidence && npm run check:pilot && npm test",
     "pack:dry-run": "npm pack --dry-run"
   },

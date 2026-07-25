@@ -68,6 +68,7 @@ function validateRepositoryAttempt(value) {
   }
   return {
     id: requireSafeId(value.id, "pilot observation attempt.id"),
+    repositoryId: requireSafeId(value.repositoryId, "pilot observation attempt.repositoryId"),
     language: requireLabel(value.language, "pilot observation attempt.language"),
     sizeBucket: requireEnum(value.sizeBucket, "sizeBucket"),
     operatingSystem: requireEnum(value.operatingSystem, "operatingSystem"),
@@ -316,7 +317,7 @@ function loadPilotRecord(repoRoot, pilotId) {
 }
 
 function observationEvidenceIdentity(observation) {
-  if (observation.type === "repository-attempt") return `repository-attempt:${observation.data.attempt.id}`;
+  if (observation.type === "repository-attempt") return `repository-attempt:${observation.data.attempt.repositoryId}`;
   if (observation.type === "native-goal-comparison") return `native-goal-comparison:${observation.data.comparison.id}`;
   if (observation.type === "recovery") return `recovery:${observation.data.recovery.id}`;
   if (observation.type === "public-case-study") return `public-case-study:${observation.data.caseStudy.id}`;
