@@ -1,6 +1,6 @@
 {
   "name": "cewp",
-  "version": "0.10.0-beta.0",
+  "version": "0.11.0-beta.0",
   "description": "Plan, run, recover, and review bounded engineering checkpoints through the local CEWP runtime.",
   "author": {
     "name": "SetraTheXX",
@@ -16,6 +16,7 @@
     "evidence"
   ],
   "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
   "hooks": "./hooks/hooks.json",
   "interface": {
     "displayName": "CEWP",

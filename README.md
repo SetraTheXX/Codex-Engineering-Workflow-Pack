@@ -67,7 +67,9 @@ Nothing in that flow merges, pushes, publishes, tags, or creates a release.
 
 ## Codex Plugin
 
-The thin plugin contributes exactly three conversational skills. CEWP Core and the CLI remain authoritative.
+The thin plugin contributes exactly three conversational skills, a local stdio MCP bridge, and an optional
+review-required subagent evidence hook. Every mutating MCP operation delegates to the same CEWP Core used
+by the CLI; plugin surfaces do not become execution owners or bypass gates.
 
 From a source checkout:
 
@@ -77,7 +79,14 @@ codex plugin add cewp@cewp-local
 codex plugin list
 ```
 
-Then ask Codex to plan a supervised run, run the current checkpoint, or resume an existing run. The plugin does not gain direct access to the host's private thread, native goal lifecycle, billing data, or persistent UI.
+Then ask Codex to plan a supervised run, run the current checkpoint, or resume an existing run. The plugin
+can expose `cewp_create`, `cewp_inspect`, `cewp_approve`, `cewp_continue`, `cewp_retry`, `cewp_revise`,
+`cewp_verify`, and `cewp_finalize` when the package-provided `cewp-mcp` command is on `PATH`. It does not
+gain direct access to the host's private thread, native goal lifecycle, billing data, or persistent UI.
+
+For a workflow with a validated host binding, `cewp integration controls <workflow-run-id> --json` shows
+preventive, post-execution, imported-observation, and unavailable control classes without promoting
+audit-only evidence into enforcement.
 
 ## What CEWP Records
 
@@ -112,6 +121,7 @@ CEWP still ships ten reusable engineering skills and the earlier Coordinator Mod
 
 - [Install Guide](docs/install.md)
 - [Supervised Workflow](docs/supervised-workflow.md)
+- [External Integration Boundary](docs/external-integration-boundary.md)
 - [Workflow Runtime](docs/workflow-runtime.md)
 - [Known Limitations](docs/known-limitations.md)
 - [Pilot Kit](docs/pilot-kit.md)

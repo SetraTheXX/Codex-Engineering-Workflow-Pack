@@ -1,6 +1,6 @@
 {
   "name": "@setrathex/codex-engineering-workflow-pack",
-  "version": "0.10.0-beta.0",
+  "version": "0.11.0-beta.0",
   "description": "Long-running Codex goals without blind runs: local-first supervision, verification, recovery, review, and evidence.",
   "license": "MIT",
   "repository": {
@@ -13,6 +13,7 @@
   },
   "bin": {
     "cewp": "bin/cewp.js",
+    "cewp-mcp": "bin/cewp-mcp.js",
     "codex-engineering-workflow-pack": "bin/cewp.js"
   },
   "files": [
@@ -29,6 +30,7 @@
     "docs/known-limitations.md",
     "docs/pilot-kit.md",
     "docs/codex-capability-matrix.md",
+    "docs/external-integration-boundary.md",
     "docs/adr/0001-codex-first-supervised-goals.md",
     "docs/adr/0002-execution-ownership.md",
     "docs/adr/0003-cost-assurance-and-safe-pauses.md",
@@ -50,7 +52,7 @@
   },
   "scripts": {
     "test": "npm run test:contracts && npm run smoke",
-    "test:contracts": "npm run test:init-install && npm run test:adapter-profile && npm run test:doctor-json && npm run test:operator-json && npm run test:hook-output && npm run test:skill-format && npm run test:ownership-gates && npm run test:fixtures && npm run test:plugin-package && npm run test:supervised-intake && npm run test:supervised-proposal && npm run test:supervised-controls && npm run test:supervised-execution && npm run test:supervised-review && npm run test:supervised-failure && npm run test:supervised-linear-resume && npm run test:supervised-demo && npm run test:workflow-definition && npm run test:workflow-compiler && npm run test:workflow-proposal && npm run test:workflow-scheduler && npm run test:workflow-worker-matrix && npm run test:workflow-result && npm run test:workflow-failure-result && npm run test:workflow-state-machine && npm run test:workflow-interventions && npm run test:workflow-failure-matrix && npm run test:workflow-budget && npm run test:workflow-progress && npm run test:workflow-review && npm run test:workflow-checkpoint-review && npm run test:workflow-lifecycle && npm run test:workflow-revision && npm run test:workflow-migration && npm run test:workflow-templates && npm run test:workflow-docs && npm run test:workflow-release && npm run test:integration-capabilities && npm run test:integration-binding && npm run test:integration-effort-policy && npm run test:integration-hook-evidence && npm run test:integration-observation && npm run test:native-goal-events",
+    "test:contracts": "npm run test:init-install && npm run test:adapter-profile && npm run test:doctor-json && npm run test:operator-json && npm run test:hook-output && npm run test:skill-format && npm run test:ownership-gates && npm run test:fixtures && npm run test:plugin-package && npm run test:supervised-intake && npm run test:supervised-proposal && npm run test:supervised-controls && npm run test:supervised-execution && npm run test:supervised-review && npm run test:supervised-failure && npm run test:supervised-linear-resume && npm run test:supervised-demo && npm run test:workflow-definition && npm run test:workflow-compiler && npm run test:workflow-proposal && npm run test:workflow-scheduler && npm run test:workflow-worker-matrix && npm run test:workflow-result && npm run test:workflow-failure-result && npm run test:workflow-state-machine && npm run test:workflow-interventions && npm run test:workflow-failure-matrix && npm run test:workflow-budget && npm run test:workflow-progress && npm run test:workflow-review && npm run test:workflow-checkpoint-review && npm run test:workflow-lifecycle && npm run test:workflow-revision && npm run test:workflow-migration && npm run test:workflow-templates && npm run test:workflow-docs && npm run test:workflow-release && npm run test:integration-capabilities && npm run test:integration-binding && npm run test:integration-effort-policy && npm run test:integration-hook-evidence && npm run test:integration-mcp && npm run test:integration-observation && npm run test:native-goal-events",
     "test:init-install": "node tests/contracts/init-install.js",
     "test:adapter-profile": "node tests/contracts/adapter-profile.js",
     "test:doctor-json": "node tests/contracts/doctor-json.js",
@@ -92,6 +94,7 @@
     "test:integration-binding": "node tests/contracts/integration-binding.js",
     "test:integration-effort-policy": "node tests/contracts/integration-effort-policy.js",
     "test:integration-hook-evidence": "node tests/contracts/integration-hook-evidence.js",
+    "test:integration-mcp": "node tests/contracts/integration-mcp.js",
     "test:integration-observation": "node tests/contracts/integration-observation.js",
     "test:native-goal-events": "node tests/contracts/native-goal-events.js",
     "demo:supervised": "node src/demo/supervised.js",
@@ -102,7 +105,8 @@
     "check:cli": "node ./bin/cewp.js --help",
     "check:syntax": "node --check ./bin/cewp.js && node --check ./src/demo/fake-codex.js && node --check ./src/demo/supervised.js && node --check ./src/integration/capabilities.js && node --check ./src/integration/binding.js && node --check ./src/integration/cli.js && node --check ./src/integration/effort-policy.js && node --check ./src/integration/hook-evidence.js && node --check ./src/integration/observation.js && node --check ./src/integration/native-goal.js && node --check ./src/skills/install.js && node --check ./src/skills/format.js && node --check ./src/skills/doctor-report.js && node --check ./src/run/ownership.js && node --check ./src/run/control-gates.js && node --check ./src/supervise/budget.js && node --check ./src/supervise/cli.js && node --check ./src/supervise/commands.js && node --check ./src/supervise/controls.js && node --check ./src/supervise/execution.js && node --check ./src/supervise/profiles.js && node --check ./src/supervise/receipt.js && node --check ./src/supervise/review.js && node --check ./src/supervise/state.js && node --check ./src/supervise/test-authoring.js && node --check ./src/supervise/verification.js && node --check ./src/workflow/cli.js && node --check ./src/workflow/definition.js && node --check ./src/workflow/graph.js && node --check ./src/workflow/result.js && node --check ./src/workflow/scheduler.js && node --check ./src/workflow/source.js && node --check ./src/workflow/state.js && node --check ./src/workflow/transitions.js && node --check ./plugins/cewp/hooks/capture-subagent.js && node --check ./tests/contracts/init-install.js && node --check ./tests/contracts/adapter-profile.js && node --check ./tests/contracts/doctor-json.js && node --check ./tests/contracts/operator-json.js && node --check ./tests/contracts/hook-output.js && node --check ./tests/contracts/skill-format.js && node --check ./tests/contracts/ownership-gates.js && node --check ./tests/contracts/deterministic-fixtures.js && node --check ./tests/contracts/plugin-package.js && node --check ./tests/contracts/supervised-intake.js && node --check ./tests/contracts/supervised-proposal.js && node --check ./tests/contracts/supervised-controls.js && node --check ./tests/contracts/supervised-execution.js && node --check ./tests/contracts/supervised-review.js && node --check ./tests/contracts/supervised-failure.js && node --check ./tests/contracts/supervised-linear-resume.js && node --check ./tests/contracts/supervised-demo.js && node --check ./tests/contracts/integration-capabilities.js && node --check ./tests/contracts/integration-binding.js && node --check ./tests/contracts/integration-effort-policy.js && node --check ./tests/contracts/integration-hook-evidence.js && node --check ./tests/contracts/integration-observation.js && node --check ./tests/contracts/native-goal-events.js && node --check ./tests/contracts/workflow-definition.js && node --check ./tests/contracts/workflow-proposal.js && node --check ./tests/contracts/workflow-scheduler.js && node --check ./tests/contracts/workflow-result.js && node --check ./tests/contracts/workflow-state-machine.js && node --check ./tests/contracts/workflow-interventions.js && node --check ./tests/capabilities/clean-install.js && node --check ./tests/capabilities/plugin-lifecycle.js && node --check ./tests/capabilities/codex-app-server.js && node --check ./tests/capabilities/fixtures/deny-shell-hook.js",
     "check:workflow-syntax": "node --check ./src/workflow/budget.js && node --check ./src/workflow/compiler.js && node --check ./src/workflow/migration.js && node --check ./src/workflow/progress.js && node --check ./src/workflow/proposal.js && node --check ./src/workflow/review.js && node --check ./src/workflow/revision.js && node --check ./src/workflow/templates.js && node --check ./tests/contracts/workflow-budget.js && node --check ./tests/contracts/workflow-checkpoint-review.js && node --check ./tests/contracts/workflow-compiler.js && node --check ./tests/contracts/workflow-docs.js && node --check ./tests/contracts/workflow-failure-matrix.js && node --check ./tests/contracts/workflow-failure-result.js && node --check ./tests/contracts/workflow-migration.js && node --check ./tests/contracts/workflow-progress.js && node --check ./tests/contracts/workflow-release.js && node --check ./tests/contracts/workflow-review.js && node --check ./tests/contracts/workflow-lifecycle.js && node --check ./tests/contracts/workflow-revision.js && node --check ./tests/contracts/workflow-templates.js && node --check ./tests/contracts/workflow-worker-matrix.js",
-    "check": "npm run check:syntax && npm run check:workflow-syntax && npm test",
+    "check:mcp": "node --check ./bin/cewp-mcp.js && node --check ./src/mcp/server.js && node --check ./src/mcp/tools.js && node --check ./tests/contracts/integration-mcp.js",
+    "check": "npm run check:syntax && npm run check:workflow-syntax && npm run check:mcp && npm test",
     "pack:dry-run": "npm pack --dry-run"
   },
   "keywords": [

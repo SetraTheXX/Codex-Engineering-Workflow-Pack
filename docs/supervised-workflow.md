@@ -156,6 +156,29 @@ Generated files include:
 
 Editing `progress.md` does not mutate `run.json`. Managed token categories are observed only from valid structured turn events. Host-internal usage remains unknown when the selected boundary does not expose it.
 
+## Local MCP Bridge
+
+The npm package installs `cewp-mcp`, a local stdio MCP server. The Codex plugin declares it through
+`plugins/cewp/.mcp.json`; it opens no network listener and uses the server process working directory as
+the fixed repository root. The eight tools are `cewp_create`, `cewp_inspect`, `cewp_approve`,
+`cewp_continue`, `cewp_retry`, `cewp_revise`, `cewp_verify`, and `cewp_finalize`.
+
+The MCP dispatcher imports the same CEWP Core functions used by `cewp supervise`; it does not invoke a
+second workflow implementation. CLI `--yes` gates map to a required `confirm: true` argument for approve,
+retry, and finalize. All state, execution ownership, policy, effort, scope, budget, verification, receipt,
+and independent-review checks remain in Core. MCP host approval is an additional host safety boundary and
+never substitutes for those checks. Business-rule failures return structured tool errors; malformed calls
+and unknown tools return JSON-RPC protocol errors.
+
+During initialization, a supported MCP protocol version is echoed with `compatibility.compatible: true`.
+An unsupported version negotiates the current supported version but also returns the stable
+`mcp-protocol-version-drift` warning and `cewp-cli-operator-json` fallback; clients should disconnect or
+use that fallback rather than assuming newer semantics.
+
+The plugin MCP entry expects the package-provided `cewp-mcp` binary to be on `PATH`. If a third-party MCP
+client cannot discover the plugin manifest, configure a local stdio server with command `cewp-mcp` and set
+its working directory to the intended repository. Do not point one server process at multiple repositories.
+
 ## Cleanup
 
 `cewp demo supervised` removes its temporary repository and worktree automatically.

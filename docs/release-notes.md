@@ -4,6 +4,34 @@
 
 No changes yet.
 
+## 0.11.0-beta.0
+
+### Summary
+
+Codex-first native-goal supervision and integration bridge preparation. Phase 11 keeps managed, native,
+and audit-only ownership separate, retains `codex-exec`, adds supported headless integration surfaces,
+and preserves provider-neutral workflow state. This version is prepared locally and is not published,
+tagged, or released; clean Linux validation remains required before the technical release gate can close.
+
+### Added
+
+- Enforced cross-mode worktree conflicts so native and managed ownership cannot target the same CEWP task worktree or active checkpoint.
+- Added explicit implementation, repair, and reviewer task classes with operator-approved model/effort revisions and no automatic model routing.
+- Added opt-in, exact-definition and version-bound `SubagentStart`/`SubagentStop` evidence. Hook absence, drift, malformed input, or host distrust leaves Core gates unchanged.
+- Added a local stdio bridge with eight Core-backed MCP tools for create, inspect, approve, continue, retry, revise, verify, and finalize. MCP and CLI call the same services and preserve the same Core gates.
+- Added MCP protocol-drift negotiation with a stable compatibility warning and CLI/operator-JSON fallback.
+- Added structured host observations that keep observed, imported, stale, malformed, unavailable, and unknown truth states distinct without inventing billing impact.
+- Added `integration-control-receipt/v1` and `cewp integration controls` so audit-only evidence cannot be presented as preventive enforcement.
+- Added a packaged external-integration boundary for third-party MCP/operator JSON clients and rich Codex clients that own a separate App Server lifecycle.
+
+### Changed
+
+- App Server remains ungraduated because no material supported lifecycle, usage, or recovery advantage was proven. An explicit request retains the `codex-exec` fallback.
+- Provider-specific host, goal, thread, turn, subagent, and worktree references stay outside provider-neutral workflow schemas.
+- Host goal completion, hook completion, and imported evidence never count as CEWP verification or independent reviewer PASS.
+- Independent external pilot evidence remains Phase 13 validation debt; fixtures, maintainer dogfood, and multiple machines used by one maintainer do not satisfy it.
+- No provider, desktop UI, terminal server, merge, push, publish, tag, or release automation was added.
+
 ## 0.10.0-beta.0
 
 ### Summary

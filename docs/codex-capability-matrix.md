@@ -52,7 +52,7 @@ Schema presence does not prove that a plugin can attach to the desktop app's exi
 | `PreToolUse` deny output | supported | The deterministic fixture emits the documented `permissionDecision: deny` shape and is covered by `npm run test:hook-output`. |
 | `PreToolUse` as complete enforcement | unavailable | Official docs exclude or limit richer shell and non-MCP paths. A real CLI 0.137.0 Windows probe executed the requested PowerShell command despite the Bash deny hook. Core policy remains authoritative. |
 | Hook-based instant turn cancellation | unknown | Stop semantics do not establish instantaneous cancellation of an in-flight model or external process. |
-| Local MCP to CEWP Core | unknown | MCP is supported by the host. Phase 11 implements a small Core-backed tool surface while conversation and CLI fallbacks remain required. |
+| Local MCP to CEWP Core | supported | `cewp-mcp` implements the documented local stdio JSON-RPC lifecycle and exactly eight Core-backed tools. `npm run test:integration-mcp` proves schema validation, current-directory repository scope, Core state transitions, confirmation gates, business errors, protocol errors, and explicit protocol-version drift fallback without credentials. |
 
 ## App Server Boundary
 
@@ -104,7 +104,7 @@ Reasons:
 - App Server adds useful goal metadata and lifecycle methods, but remains a separately owned experimental process with version drift and unresolved authenticated usage/cancellation behavior.
 - The spike did not demonstrate enough recovery or accounting advantage to justify shipping two incomplete managed backends.
 
-The native fallback is a bounded generated goal brief plus supported host goal tools or explicit result intake. `audit-only` remains available for evidence supplied by another owner. The local MCP bridge is the next supported integration surface. Hooks and Apps SDK UI remain optional projections; their absence never weakens CEWP Core. See [ADR 0005](adr/0005-codex-integration-backend.md).
+The native fallback is a bounded generated goal brief plus supported host goal tools or explicit result intake. `audit-only` remains available for evidence supplied by another owner. The local MCP bridge is the supported headless integration surface. Hooks and Apps SDK UI remain optional projections; their absence never weakens CEWP Core. See [ADR 0005](adr/0005-codex-integration-backend.md) and the [external integration boundary](external-integration-boundary.md).
 
 ## Reproduction
 
@@ -118,6 +118,7 @@ npm run test:plugin-lifecycle
 npm run test:hook-output
 npm run test:integration-capabilities
 npm run test:integration-hook-evidence
+npm run test:integration-mcp
 ```
 
 The nested model probe is intentionally excluded from automated tests because it consumes account usage. Raw account values, credentials, thread ids, and machine-specific paths are not part of this document.

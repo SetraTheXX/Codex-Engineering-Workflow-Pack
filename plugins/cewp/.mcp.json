@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "cewp": {
+      "command": "cewp-mcp",
+      "args": [],
+      "env": {}
+    }
+  }
+}

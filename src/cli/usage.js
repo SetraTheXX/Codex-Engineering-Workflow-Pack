@@ -19,6 +19,7 @@ Usage:
   cewp workflow finalize <run-id> --yes [--json]
   cewp integration hooks approve <workflow-run-id> --yes [--json]
   cewp integration hooks status <workflow-run-id> [--json]
+  cewp integration controls <workflow-run-id> [--json]
   cewp workflow revise <run-id> --proposal <revision.json> [--from <source>] [--json]
   cewp workflow apply-revision <run-id> --proposal <revision.json> --digest <sha256> --yes [--json]
   cewp workflow migrate <supervised-v1-run-id> [--digest <sha256> --yes] [--json]

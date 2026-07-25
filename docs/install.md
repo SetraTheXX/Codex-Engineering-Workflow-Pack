@@ -228,6 +228,16 @@ The harness uses temporary repos, exercises Coordinator Mode runtime helpers, an
 
 The supervised demo uses a deterministic fake Codex process in a temporary repository. It does not use credentials or start a real provider.
 
+The npm package also installs the plugin-declared local MCP command:
+
+```bash
+cewp-mcp
+```
+
+It is a stdio protocol process, not an interactive shell command or network server. Codex starts it from
+the repository selected for the task. Third-party MCP clients may configure the same command with the
+intended repository as `cwd`; the command must be available on `PATH`.
+
 If Codex does not show installed skills, restart or reload Codex and confirm that each skill has:
 
 ```txt

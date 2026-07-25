@@ -23,7 +23,14 @@ function runPluginPackageContract() {
   assert(manifest.version === packageJson.version, "plugin and npm versions stay aligned");
   assert(manifest.skills === "./skills/", "plugin skill path is contained and relative");
   assert(manifest.apps === undefined, "plugin does not claim an unbuilt app");
-  assert(manifest.mcpServers === undefined, "plugin does not claim an unbuilt MCP server");
+  assert(manifest.mcpServers === "./.mcp.json", "plugin declares one contained local MCP bundle");
+  const mcpConfig = readJson(path.join(repoRoot, "plugins", "cewp", ".mcp.json"));
+  assert(
+    JSON.stringify(Object.keys(mcpConfig.mcpServers)) === JSON.stringify(["cewp"]),
+    "plugin MCP bundle declares only the CEWP local server",
+  );
+  assert(mcpConfig.mcpServers.cewp.command === "cewp-mcp", "plugin MCP delegates to the installed CEWP Core binary");
+  assert(packageJson.bin["cewp-mcp"] === "bin/cewp-mcp.js", "npm package exposes the declared MCP binary");
   assert(manifest.hooks === "./hooks/hooks.json", "plugin declares one contained reviewable hook bundle");
   const hookConfig = readJson(path.join(repoRoot, "plugins", "cewp", "hooks", "hooks.json"));
   assert(
