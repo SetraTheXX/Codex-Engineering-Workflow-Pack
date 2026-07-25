@@ -13,7 +13,8 @@ function read(relativePath) {
 function runContract() {
   const packageJson = JSON.parse(read("package.json"));
   const plugin = JSON.parse(read("plugins/cewp/.codex-plugin/plugin.json"));
-  assert(packageJson.version === "0.13.0-beta.0", "package is prepared for the Phase 13 beta");
+  const version = packageJson.version.match(/^0\.(\d+)\.0-beta\.0$/);
+  assert(version && Number(version[1]) >= 13, "current beta preserves the Phase 13 release surface");
   assert(plugin.version === packageJson.version, "plugin and package versions stay aligned");
 
   const notes = read("docs/release-notes.md");

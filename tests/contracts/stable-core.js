@@ -18,6 +18,7 @@ function runContract() {
   assert(result.status === 0, `compatibility command succeeds: ${result.stderr}`);
   const contract = JSON.parse(result.stdout);
   assert(contract.schemaVersion === "stable-compatibility/v1", "compatibility output has a stable schema");
+  assert(contract.packageVersion === "0.14.0-beta.0", "package is prepared for the Phase 14 stable-core beta");
   assert(contract.release.status === "blocked-pilot-evidence", "compatibility truth does not claim 1.0 eligibility");
   assert(JSON.stringify(contract.runtime.node.majors) === JSON.stringify([22, 24, 26]), "tested Node majors are explicit");
   assert(contract.execution.managedBackend.id === "codex-exec", "codex-exec remains the stable managed backend");

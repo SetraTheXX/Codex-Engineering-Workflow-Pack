@@ -1,8 +1,14 @@
 "use strict";
 
-const packageJson = require("../../package.json");
-
 const STABLE_COMPATIBILITY_SCHEMA_VERSION = "stable-compatibility/v1";
+
+function packageVersion() {
+  try {
+    return require("../../package.json").version;
+  } catch {
+    return "unknown";
+  }
+}
 
 function numericVersion(value) {
   const match = String(value || "").match(/^(\d+)\.(\d+)\.(\d+)/);
@@ -30,7 +36,7 @@ function assessDowngradeCompatibility(readerVersion, stateWrittenByVersion) {
 function buildCompatibilityContract() {
   return {
     schemaVersion: STABLE_COMPATIBILITY_SCHEMA_VERSION,
-    packageVersion: packageJson.version,
+    packageVersion: packageVersion(),
     release: {
       line: "1.x candidate",
       status: "blocked-pilot-evidence",
