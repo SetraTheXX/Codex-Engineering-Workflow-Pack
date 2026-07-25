@@ -5,6 +5,7 @@ const path = require("node:path");
 const { readRepoJson } = require("../workflow/source");
 const { writeJsonAtomic } = require("../workflow/state");
 const { PILOT_RECORD_SCHEMA_VERSION, validatePilotId } = require("./record");
+const { inspectReviewedRunEvidence } = require("./evidence");
 
 const PILOT_OBSERVATION_SCHEMA_VERSION = "pilot-observation/v1";
 const SAFE_ID = /^[a-z0-9][a-z0-9-]{0,63}$/;
@@ -23,6 +24,7 @@ const OBSERVATION_TYPES = new Set([
   "public-case-study",
   "estimate-calibration-report",
   "guardrail-audit-pass",
+  "full-reviewed-run",
 ]);
 const ATTEMPT_ENUMS = Object.freeze({
   sizeBucket: new Set(["small", "medium", "large", "unknown"]),
@@ -255,6 +257,13 @@ function validateGuardrailAudit(value) {
   };
 }
 
+function validateReviewedRun(value) {
+  const input = requireObject(value, "full-reviewed-run");
+  return {
+    workflowRunId: requireSafeId(input.workflowRunId, "full-reviewed-run workflowRunId"),
+  };
+}
+
 function normalizeObservationData(value) {
   switch (value.type) {
     case "repository-attempt": return { attempt: validateRepositoryAttempt(value.attempt) };
@@ -271,6 +280,7 @@ function normalizeObservationData(value) {
     case "public-case-study": return { caseStudy: validateCaseStudy(value.caseStudy) };
     case "estimate-calibration-report": return { calibration: validateCalibration(value.calibration) };
     case "guardrail-audit-pass": return { audit: validateGuardrailAudit(value.audit) };
+    case "full-reviewed-run": return { run: validateReviewedRun(value.run) };
     default: throw new Error(`Unsupported pilot observation type: ${value.type || "missing"}.`);
   }
 }
@@ -311,6 +321,7 @@ function observationEvidenceIdentity(observation) {
   if (observation.type === "recovery") return `recovery:${observation.data.recovery.id}`;
   if (observation.type === "public-case-study") return `public-case-study:${observation.data.caseStudy.id}`;
   if (observation.type === "onboarding-remediation") return `onboarding-remediation:${observation.data.failure.code}`;
+  if (observation.type === "full-reviewed-run") return `full-reviewed-run:${observation.data.run.workflowRunId}`;
   return `${observation.type}:${observation.id}`;
 }
 
@@ -345,17 +356,26 @@ function recordPilotObservation(options = {}) {
   if (duplicateIdentity) {
     throw new Error(`Pilot evidence identity already exists: ${duplicateIdentity}.`);
   }
-  const eligible = found.record.participant.classification === "independent-external";
+  const independentParticipant = found.record.participant.classification === "independent-external";
+  const evidence = observation.type === "full-reviewed-run"
+    ? inspectReviewedRunEvidence(repoRoot, observation.data.run.workflowRunId)
+    : null;
+  const eligible = independentParticipant && (!evidence || evidence.status === "qualified");
   const stored = {
     ...observation,
     recordedAt: (options.now || new Date()).toISOString(),
     source: { sha256: source.sha256, pathRecorded: false },
+    evidence,
     qualification: {
       eligible,
-      classification: eligible ? "independent-evidence" : "maintainer-dogfood",
+      classification: eligible
+        ? "independent-evidence"
+        : independentParticipant ? "excluded-evidence" : "maintainer-dogfood",
       reason: eligible
         ? "validated structured observation from an independent-external pilot record"
-        : "maintainer dogfood never counts as independent Phase 13 evidence",
+        : independentParticipant
+          ? evidence.reason
+          : "maintainer dogfood never counts as independent Phase 13 evidence",
     },
   };
   const record = {
