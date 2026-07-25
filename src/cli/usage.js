@@ -17,6 +17,10 @@ Usage:
   cewp workflow result <run-id> --task <task-id> --result <task-result.json> --yes [--json]
   cewp workflow review <run-id> --result <review-result.json> --yes [--json]
   cewp workflow finalize <run-id> --yes [--json]
+  cewp workflow receipt <run-id> [--json]
+  cewp workflow report <run-id> [--json]
+  cewp workflow compare <left-run-id> <right-run-id> [--json]
+  cewp workflow export <run-id> [--json]
   cewp integration hooks approve <workflow-run-id> --yes [--json]
   cewp integration hooks status <workflow-run-id> [--json]
   cewp integration controls <workflow-run-id> [--json]
@@ -56,6 +60,7 @@ Usage:
   cewp run status [run-id] [--json]
   cewp run next [run-id] [--json]
   cewp run resume [run-id] [--json]
+  cewp run verify <workflow-run-id> [--json]
   cewp run prompts
   cewp run prompt <manager|worker-a|worker-b|reviewer>
   cewp run worktrees plan

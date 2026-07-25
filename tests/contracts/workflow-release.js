@@ -22,7 +22,7 @@ function runWorkflowReleaseContract() {
   assert(unreleasedIndex >= 0 && releaseIndex > unreleasedIndex, "fresh Unreleased precedes the Phase 11 release");
   assert(previousIndex > releaseIndex, "Phase 11 release precedes earlier release history");
   const unreleased = releaseNotes.slice(unreleasedIndex, releaseIndex);
-  assert(unreleased.includes("No changes yet."), "fresh Unreleased is explicitly empty");
+  assert(unreleased.includes("Phase 12 development"), "post-Phase 11 work remains in Unreleased");
   for (const claim of [
     "native and managed ownership",
     "no automatic model routing",

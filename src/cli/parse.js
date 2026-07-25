@@ -78,6 +78,7 @@ function parseArgs(argv) {
     taskClass: undefined,
     model: undefined,
     effort: undefined,
+    comparisonRunId: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -107,7 +108,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "run" && ["status", "next", "resume"].includes(args.subcommand) && index === 2 && !arg.startsWith("--")) {
+    if (args.command === "run" && ["status", "next", "resume", "verify"].includes(args.subcommand) && index === 2 && !arg.startsWith("--")) {
       args.runId = arg;
       continue;
     }
@@ -157,7 +158,17 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (args.command === "workflow" && ["status", "start", "result", "review", "finalize", "intervene", "revise", "apply-revision", "migrate"].includes(args.subcommand) && index === 2 && !arg.startsWith("--")) {
+    if (args.command === "workflow" && args.subcommand === "compare" && index === 2 && !arg.startsWith("--")) {
+      args.workflowRunId = arg;
+      continue;
+    }
+
+    if (args.command === "workflow" && args.subcommand === "compare" && index === 3 && !arg.startsWith("--")) {
+      args.comparisonRunId = arg;
+      continue;
+    }
+
+    if (args.command === "workflow" && ["status", "start", "result", "review", "finalize", "receipt", "report", "export", "intervene", "revise", "apply-revision", "migrate"].includes(args.subcommand) && index === 2 && !arg.startsWith("--")) {
       args.workflowRunId = arg;
       continue;
     }

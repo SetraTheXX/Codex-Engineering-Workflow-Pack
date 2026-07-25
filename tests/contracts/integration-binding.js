@@ -14,6 +14,7 @@ const {
   loadHostBinding,
 } = require("../../src/integration/binding");
 const { loadWorkflowRun, startWorkflowTask } = require("../../src/workflow/state");
+const { buildEvidenceReceipt } = require("../../src/evidence/receipt");
 
 const cewpCli = path.join(__dirname, "..", "..", "bin", "cewp.js");
 
@@ -186,6 +187,10 @@ function main() {
         controlReceipt.claims.providerExecutionSuppliesEnforcement === false,
         "audit receipt never treats provider-controlled execution as the enforcement source",
       );
+      const auditEvidence = buildEvidenceReceipt(auditFound, { generatedAt: "2026-07-22T15:20:00.000Z" });
+      const importedControl = auditEvidence.policy.controls.controls.find((entry) => entry.classification === "imported");
+      assert(importedControl.effect === "observed-not-enforced", "audit-only evidence receipt preserves observed-not-enforced effect");
+      assert(auditEvidence.policy.controls.summary.preventiveEnforced === 0, "audit-only evidence receipt never reports preventive enforcement");
       const shown = runNode(cewpCli, ["integration", "controls", audit.runId, "--json"], auditRepo);
       assert(shown.status === 0, `control receipt is available through operator JSON: ${shown.stderr}`);
       const shownReceipt = JSON.parse(shown.stdout);

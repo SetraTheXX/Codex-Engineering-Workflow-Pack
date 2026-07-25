@@ -19,6 +19,7 @@ const {
 } = require("../src/run/basic");
 const { runFinalize } = require("../src/run/finalize");
 const { runCollect } = require("../src/run/collect");
+const { runVerify } = require("../src/run/verify");
 const { runDispatchPlan } = require("../src/run/dispatch/plan");
 const { runDispatchCheck } = require("../src/run/dispatch/check");
 const { runDispatchPrompts } = require("../src/run/dispatch/prompts");
@@ -74,6 +75,11 @@ async function runCommand(options) {
 
   if (options.subcommand === "resume") {
     runResume(options);
+    return;
+  }
+
+  if (options.subcommand === "verify") {
+    runVerify(options);
     return;
   }
 

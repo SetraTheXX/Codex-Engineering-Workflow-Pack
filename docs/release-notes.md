@@ -2,7 +2,18 @@
 
 ## Unreleased
 
-No changes yet.
+### Phase 12 development
+
+- Added deterministic `evidence-receipt/v1` JSON/Markdown generation for workflow runs with complete-versus-partial truth, task/checkpoint/review evidence, usage unknowns, budget compliance, git identities, and local SHA-256 integrity metadata.
+- Added `cewp workflow receipt <run-id>` without executing agents or verification commands. Raw prompts, transcripts, adapter output, and raw log contents remain excluded by default.
+- Added the closed `event/v1` lifecycle vocabulary with read-only normalization of historical `workflow-event/v1` records.
+- Added read-only `cewp run verify <workflow-run-id>` checks for state, schemas, events, required artifacts, worktree liveness, and receipt integrity.
+- Added portable `operator-report/v1` JSON and standalone offline HTML generation from the normalized receipt model.
+- Added `run-comparison/v1` and `cewp workflow compare` with explicit unknowns and evidence-backed native-goal baseline labeling.
+- Added adversarially tested `redaction-policy/v1` exports that preserve canonical local evidence and avoid absolute-path output.
+- Added `usage-observation/v1` provenance/raw-category records and reproducible unknown `usage-estimate/v1` calibration metadata.
+- Expanded lifecycle evidence and recovery receipts for failed checkpoints, budget pauses, host limits, cancellations, and audit-only controls.
+- Expanded the Markdown receipt so complete and partial runs can be understood without opening raw logs.
 
 ## 0.11.0-beta.0
 

@@ -30,6 +30,10 @@ const {
 } = require("./state");
 const { deriveSchedule } = require("./scheduler");
 const { listWorkflowTemplates, loadWorkflowTemplate } = require("./templates");
+const { buildEvidenceReceipt, writeEvidenceReceipt } = require("../evidence/receipt");
+const { writeOperatorReport } = require("../evidence/report");
+const { compareEvidenceReceipts } = require("../evidence/compare");
+const { exportRedactedEvidence } = require("../evidence/redaction");
 
 function outputJson(command, data) {
   console.log(JSON.stringify({
@@ -61,6 +65,61 @@ function resolveProposalSource(options) {
 }
 
 function runWorkflow(options = {}) {
+  if (options.subcommand === "export") {
+    if (!options.workflowRunId) throw new Error("workflow export requires a run id.");
+    const result = exportRedactedEvidence(loadWorkflowRun(process.cwd(), options.workflowRunId));
+    if (options.json) outputJson("workflow.export", result);
+    else {
+      console.log("CEWP redacted evidence export written");
+      console.log(`Run ID: ${result.receipt.runId}`);
+      for (const [name, filePath] of Object.entries(result.paths)) console.log(`${name}: ${filePath}`);
+    }
+    return;
+  }
+  if (options.subcommand === "compare") {
+    if (!options.workflowRunId || !options.comparisonRunId) throw new Error("workflow compare requires two run ids.");
+    const generatedAt = new Date().toISOString();
+    const left = buildEvidenceReceipt(loadWorkflowRun(process.cwd(), options.workflowRunId), { generatedAt });
+    const right = buildEvidenceReceipt(loadWorkflowRun(process.cwd(), options.comparisonRunId), { generatedAt });
+    const comparison = compareEvidenceReceipts(left, right);
+    if (options.json) outputJson("workflow.compare", comparison);
+    else {
+      console.log("CEWP workflow comparison");
+      console.log(`Left: ${comparison.runs.left.runId} (${comparison.runs.left.execution.owner})`);
+      console.log(`Right: ${comparison.runs.right.runId} (${comparison.runs.right.execution.owner})`);
+      console.log(`Equivalence: ${comparison.equivalence.status}`);
+      console.log(`Unavailable: ${comparison.equivalence.unavailable.join(", ") || "none"}`);
+    }
+    return;
+  }
+  if (options.subcommand === "report") {
+    if (!options.workflowRunId) throw new Error("workflow report requires a run id.");
+    const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
+    const result = writeOperatorReport(found);
+    if (options.json) outputJson("workflow.report", result);
+    else {
+      console.log("CEWP offline operator report written");
+      console.log(`Run ID: ${result.report.runId}`);
+      console.log(`Status: ${result.report.completeness.status}`);
+      console.log(`JSON: ${result.paths.json}`);
+      console.log(`HTML: ${result.paths.html}`);
+    }
+    return;
+  }
+  if (options.subcommand === "receipt") {
+    if (!options.workflowRunId) throw new Error("workflow receipt requires a run id.");
+    const found = loadWorkflowRun(process.cwd(), options.workflowRunId);
+    const result = writeEvidenceReceipt(found);
+    if (options.json) outputJson("workflow.receipt", result);
+    else {
+      console.log("CEWP evidence receipt written");
+      console.log(`Run ID: ${result.receipt.runId}`);
+      console.log(`Completeness: ${result.receipt.completeness.status}`);
+      console.log(`JSON: ${result.paths.json}`);
+      console.log(`Markdown: ${result.paths.markdown}`);
+    }
+    return;
+  }
   if (options.subcommand === "compile") {
     const request = createWorkflowCompilerRequest({
       repoRoot: process.cwd(),

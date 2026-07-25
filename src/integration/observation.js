@@ -2,6 +2,7 @@
 
 const fs = require("node:fs");
 const path = require("node:path");
+const { appendLifecycleEvent } = require("../evidence/events");
 const { validateCodexCapabilitySnapshot } = require("./capabilities");
 
 const HOST_OBSERVATION_SCHEMA_VERSION = "host-observation/v1";
@@ -353,6 +354,16 @@ function recordHostObservation(found, candidate, options = {}) {
   const filePath = ledgerPath(found);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.appendFileSync(filePath, `${JSON.stringify(observation)}\n`);
+  appendLifecycleEvent(found.runRoot, {
+    timestamp: observation.observedAt,
+    type: "usage-observed",
+    runId: found.run.runId,
+    observationId: observation.observationId,
+    usageCategory: observation.category,
+    availability: observation.availability,
+    evidenceClass: observation.evidenceClass,
+    actor: observation.source.path,
+  });
   return observation;
 }
 

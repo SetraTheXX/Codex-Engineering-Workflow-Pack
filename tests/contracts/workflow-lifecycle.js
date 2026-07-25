@@ -56,6 +56,8 @@ function runWorkflowLifecycleContract() {
     const cancelled = JSON.parse(cancelledResult.stdout).data.run;
     assert(cancelled.status === "cancelled", "cancel is a terminal non-success run state");
     assert(cancelled.tasks.every((task) => task.status === "cancelled"), "cancel cascades to all unfinished tasks");
+    const cancellationEvents = fs.readFileSync(path.join(repoRoot, ".cewp", "workflow-runs", cancelledRun.runId, "events.jsonl"), "utf8");
+    assert(cancellationEvents.includes("\"category\":\"cancellation\""), "cancellation has a dedicated lifecycle category");
     const abandonedResult = intervene(repoRoot, cancelledRun.runId, "abandon", {
       reason: "Operator closes the cancelled run",
     });

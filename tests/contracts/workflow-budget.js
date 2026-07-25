@@ -1,11 +1,14 @@
 "use strict";
 
+const fs = require("node:fs");
 const path = require("node:path");
 const { assert } = require("../harness/lib/assertions");
 const { evaluateWorkflowOperation } = require("../../src/workflow/budget");
 const { validDefinition } = require("./workflow-definition");
 const { successfulResult } = require("./workflow-result");
 const { approveWorkflow } = require("./workflow-scheduler");
+const { loadWorkflowRun } = require("../../src/workflow/state");
+const { buildEvidenceReceipt } = require("../../src/evidence/receipt");
 const {
   cleanupRepo,
   makeTempRepo,
@@ -119,6 +122,15 @@ function runWorkflowBudgetContract() {
     ], repoRoot).stdout).data.run;
     assert(paused.status === "paused-budget-safe", "budget refusal persists a safe pause");
     assert(paused.budget.pauseReason === "implementation-allocation-exhausted", "pause reason is canonical state");
+    const pausedReceipt = buildEvidenceReceipt(loadWorkflowRun(repoRoot, approved.runId), {
+      generatedAt: "2026-07-22T15:10:00.000Z",
+    });
+    assert(pausedReceipt.completeness.status === "partial" && pausedReceipt.budget.pauseReason === "implementation-allocation-exhausted", "budget-paused run has an explanatory partial receipt");
+    assert(pausedReceipt.budget.compliance.absoluteCeilingRespected === true, "paused receipt proves the absolute ceiling was respected");
+    assert(pausedReceipt.budget.compliance.protectedAllocationsRespected === true, "paused receipt proves protected allocations were preserved");
+    assert(pausedReceipt.events.some((entry) => entry.category === "safe-pause"), "safe pause is normalized in the event ledger");
+    assert(pausedReceipt.events.some((entry) => entry.category === "threshold"), "budget refusal records the reached threshold");
+    assert(pausedReceipt.events.some((entry) => entry.category === "warning-presentation"), "budget refusal records Core warning presentation");
 
     const addBudget = runNode(cewpCli, [
       "workflow", "intervene", approved.runId,
@@ -152,6 +164,8 @@ function runWorkflowBudgetContract() {
     const hostPaused = JSON.parse(hostPause.stdout).data.run;
     assert(hostPaused.status === "paused-host-limit", "host limit has a distinct run state");
     assert(hostPaused.budget.hostLimit.active === true, "host limit observation is retained");
+    const hostPauseEvents = fs.readFileSync(path.join(repoRoot, ".cewp", "workflow-runs", approved.runId, "events.jsonl"), "utf8");
+    assert(hostPauseEvents.includes("\"category\":\"host-limit\""), "manual host pause emits the host-limit lifecycle category");
     const hostResume = runNode(cewpCli, [
       "workflow", "intervene", approved.runId,
       "--event", "resume",
