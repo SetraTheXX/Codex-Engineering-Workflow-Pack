@@ -59,18 +59,19 @@ function runContract() {
 
   const manualAcceptance = read("docs/manual-acceptance.md");
   for (const phrase of [
-    "Credential-free preflight",
-    "Supervised checkpoint",
-    "Pause, revise, and resume",
-    "Independent review and receipt",
-    "Ownership conflict",
-    "Pilot evidence",
-    "What must not be claimed",
+    "Şimdi ne yapmalısın?",
+    "Kimlik bilgisi gerektirmeyen ön kontrol",
+    "Denetimli checkpoint",
+    "Duraklatma, revizyon ve devam ettirme",
+    "Bağımsız inceleme ve makbuz",
+    "Sahiplik çakışması",
+    "Pilot kanıtı",
+    "Ne iddia edilmemeli?",
   ]) {
     assert(manualAcceptance.includes(phrase), `manual acceptance covers ${phrase}`);
   }
   assert(manualAcceptance.includes("maintainer-dogfood"), "manual acceptance classifies the maintainer honestly");
-  assert(manualAcceptance.includes("does not count as independent"), "manual acceptance cannot turn maintainer testing into external evidence");
+  assert(manualAcceptance.includes("bağımsız Phase 13 kullanıcı doğrulaması sayılmaz"), "manual acceptance cannot turn maintainer testing into external evidence");
 }
 
 try {

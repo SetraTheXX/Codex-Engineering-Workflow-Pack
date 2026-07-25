@@ -1,126 +1,220 @@
-# Manual CEWP Acceptance
+# CEWP Manuel Kabul ve Deneme Rehberi
 
-This guide is for the maintainer or a pilot participant testing CEWP in a disposable
-repository. Use a fresh branch or clone, keep secrets out of prompts and fixtures,
-and review every command before approving execution.
+Bu rehber, CEWP'yi bakım sorumlusu veya pilot katılımcısı olarak güvenli biçimde
+denemen içindir. Testleri yeni bir dalda, geçici bir klonda veya gözden çıkarılabilir
+bir depoda yap. Komutları onaylamadan önce oku; prompt ve test dosyalarına gizli bilgi
+koyma.
 
-Maintainer testing must be recorded as `maintainer-dogfood`. It is useful technical
-evidence, but it does not count as independent Phase 13 validation.
+Kendi yaptığın testler `maintainer-dogfood` olarak kaydedilmelidir. Bunlar değerli
+teknik kanıttır fakat bağımsız Phase 13 kullanıcı doğrulaması sayılmaz.
 
-## Credential-free preflight
+## Şimdi ne yapmalısın?
 
-From the CEWP source repository:
+1. Önce aşağıdaki **Kimlik bilgisi gerektirmeyen ön kontrol** bölümünü uygula.
+2. Sonra deneme için küçük ve geçici bir Git deposu hazırla.
+3. Bu depoda yalnız `README.md` dosyasını değiştiren tek bir denetimli checkpoint çalıştır.
+4. Duraklatma, devam ettirme, doğrulama, inceleme ve makbuz adımlarını sırayla dene.
+5. Sonucu `maintainer-dogfood` olarak kaydet; dış kullanıcı sonucu gibi gösterme.
+6. Hata görürsen komutu, temizlenmiş hata mesajını, beklenen sonucu ve gerçek sonucu not et.
+
+İlk turda gerçek bir projeni kullanma. Önce geçici depoda akışın tamamını gör.
+
+## Kimlik bilgisi gerektirmeyen ön kontrol
+
+CEWP kaynak deposunda PowerShell aç ve kaynak komutunun yolunu tanımla:
 
 ```powershell
-node .\bin\cewp.js --help
-node .\bin\cewp.js doctor --json
-node .\bin\cewp.js compatibility --json
+$cewpRepo = "C:\Users\tunca\Desktop\Projeler Ve Planlar Güncel\CEWP Phase 8"
+$cewp = Join-Path $cewpRepo "bin\cewp.js"
+Set-Location $cewpRepo
+node $cewp --help
+node $cewp doctor --json
+node $cewp compatibility --json
 npm run test:clean-install
 npm run test:plugin-lifecycle
 ```
 
-Expected: help renders, doctor is actionable, compatibility reports
-`blocked-pilot-evidence`, clean install/demo/uninstall passes, and the isolated
-plugin lifecycle installs, disables, upgrades, and removes without creating auth.
+Beklenen sonuç:
 
-## Supervised checkpoint
+- Yardım metni görüntülenir.
+- Doctor sonucu anlaşılır ve uygulanabilir olur.
+- Uyumluluk sonucu, gerçek pilot kanıtları olmadığı için `blocked-pilot-evidence` gösterir.
+- Temiz kurulum, kimlik bilgisi gerektirmeyen demo ve kaldırma testi geçer.
+- İzole plugin testi kurulum, devre dışı bırakma, yükseltme ve kaldırma adımlarını geçer.
+- Testler yeni bir Codex kimlik doğrulama dosyası oluşturmaz.
 
-Use a disposable target repository containing a committed `README.md`. The following
-path invokes real managed Codex execution, so keep the task narrow:
+## Geçici deneme deposu hazırlama
+
+PowerShell'de CEWP deposunun dışında geçici bir klasör oluştur:
 
 ```powershell
-cewp supervise plan --goal "Add one clearly labeled manual-acceptance note to README.md" --scope README.md --verify "git diff --check" --stop "The note is present and git diff --check passes" --json
-cewp supervise approve <run-id> --yes --json
-cewp supervise execute <run-id> --yes --json
-cewp supervise verify <run-id> --json
+$deneme = Join-Path $env:TEMP "cewp-manuel-deneme"
+New-Item -ItemType Directory -Force -Path $deneme | Out-Null
+Set-Location $deneme
+git init
+git config user.email "cewp-deneme@example.local"
+git config user.name "CEWP Manuel Deneme"
+"# CEWP Manuel Deneme" | Set-Content README.md
+git add README.md
+git commit -m "Başlangıç"
 ```
 
-Expected: the proposal is explicit, approval is required before execution, only the
-approved file changes, and host completion alone does not mark verification PASS.
-Stop if the plan or worktree is not the intended disposable target.
+Bu depo yalnız deneme içindir. İçinde gerçek kaynak kodu, token, parola veya özel belge
+bulundurma.
 
-## Pause, revise, and resume
+## Denetimli checkpoint
 
-Before finalization, exercise a controlled pause and a source-bound revision:
+Aşağıdaki yol gerçek yönetilen Codex yürütmesini kullanır. Hedefi küçük tut:
 
 ```powershell
-cewp supervise pause <run-id> --reason budget-safe --yes --json
-cewp supervise status <run-id> --json
-cewp supervise resume <run-id> --yes --json
-cewp supervise revise <run-id> --goal "Keep the same bounded README note and clarify its wording" --json
+node $cewp supervise plan --goal "README.md dosyasına Manuel kabul notu başlıklı tek bir bölüm ekle" --scope README.md --verify "git diff --check" --stop "Not eklenmiş ve git diff --check geçmiş olmalı" --json
+node $cewp supervise approve <run-id> --yes --json
 ```
 
-Expected: pause is truthful and resumable, completed evidence remains present, resume
-returns to the exact prior gate, and revision requires review rather than silently
-changing the approved scope.
+`<run-id>` yerine ilk komutun döndürdüğü çalışma kimliğini yaz.
+Bu aşamada henüz `execute` çalıştırma; önce aşağıdaki duraklatma ve revizyon
+kontrolünü tamamla.
 
-## Independent review and receipt
+Beklenen sonuç:
 
-After execution and verification:
+- Öneri çalıştırmadan önce açıkça gösterilir.
+- Yürütme için ayrıca onay gerekir.
+- Yalnızca izin verilen `README.md` değişir.
+- Codex host tarafında tamamlandı görünmesi tek başına CEWP doğrulama PASS'i oluşturmaz.
+- Yanlış depo veya worktree görünürse yürütmeyi onaylama.
+
+## Duraklatma, revizyon ve devam ettirme
+
+Finalization öncesinde kontrollü duraklatmayı ve revizyonu dene:
 
 ```powershell
-cewp supervise review <run-id> --yes --json
-cewp supervise receipt <run-id> --json
-cewp supervise finalize <run-id> --yes --json
+node $cewp supervise pause <run-id> --reason budget-safe --yes --json
+node $cewp supervise status <run-id> --json
+node $cewp supervise resume <run-id> --yes --json
+node $cewp supervise revise <run-id> --goal "Aynı sınırlı README notunu koru ve anlatımını netleştir" --json
+node $cewp supervise approve <run-id> --yes --json
 ```
 
-Expected: finalize refuses missing verification or reviewer PASS. The JSON/Markdown
-receipt identifies owner/backend, scope, verification, review, usage provenance,
-unknown host usage, and integrity metadata without copying raw prompts or secrets.
+Beklenen sonuç:
 
-## Ownership conflict
+- Duraklatma gerçeğe uygun ve devam ettirilebilir bir durum üretir.
+- Önceden tamamlanan kanıt kaybolmaz.
+- Devam ettirme, çalışmayı doğru önceki kapıya döndürür.
+- Revizyon kapsamı sessizce değiştirmez; yeniden inceleme gerektirir.
 
-In the CEWP development repository, run:
+## Yürütme ve doğrulama
+
+Revize edilen planı yeniden onayladıktan sonra:
 
 ```powershell
+node $cewp supervise execute <run-id> --yes --json
+node $cewp supervise verify <run-id> --json
+```
+
+Beklenen sonuç:
+
+- Yalnızca izin verilen `README.md` değişir.
+- Kapsam dışı değişiklik güvenli biçimde reddedilir.
+- Repository doğrulama komutu ayrı çalışır ve sonucu kaydedilir.
+- Host tarafındaki tamamlanma tek başına doğrulama PASS'i değildir.
+
+## Bağımsız inceleme ve makbuz
+
+Yürütme ve doğrulama tamamlandıktan sonra:
+
+```powershell
+node $cewp supervise review <run-id> --yes --json
+node $cewp supervise receipt <run-id> --json
+node $cewp supervise finalize <run-id> --yes --json
+```
+
+Beklenen sonuç:
+
+- Doğrulama veya reviewer PASS yoksa finalize reddedilir.
+- JSON ve Markdown makbuzu; owner/backend, kapsam, doğrulama, inceleme, kullanım
+  kaynağı, bilinmeyen host kullanımı ve bütünlük bilgisini gösterir.
+- Ham prompt, token veya gizli dosya içeriği makbuza kopyalanmaz.
+
+## Sahiplik çakışması
+
+CEWP geliştirme deposunda:
+
+```powershell
+Set-Location $cewpRepo
 npm run test:ownership-gates
 npm run test:integration-binding
 ```
 
-Expected: managed and native ownership cannot target the same task worktree, unsafe
-nested dispatch fails closed, and released/abandoned ownership is explicit. Do not
-simulate this by starting two real agents against the same worktree.
+Beklenen sonuç:
 
-## Failure and recovery
+- `managed` ve `native` sahiplik aynı görev worktree'sini hedefleyemez.
+- Güvensiz iç içe dispatch güvenli biçimde reddedilir.
+- Bırakılan veya terk edilen sahiplik açıkça kaydedilir.
 
-Run the deterministic recovery contracts:
+Bunu iki gerçek ajanı aynı worktree üzerinde başlatarak deneme. Deterministik testleri kullan.
+
+## Hata ve kurtarma
+
+CEWP geliştirme deposunda:
 
 ```powershell
+Set-Location $cewpRepo
 npm run test:supervised-failure
 npm run test:supervised-controls
 npm run test:workflow-failure-matrix
 npm run test:workflow-lifecycle
 ```
 
-Expected: repeated signatures stop, operational/host limits create resumable states,
-protected reviewer allocation is not borrowed, partial evidence survives, and no
-failure path manufactures reviewer PASS.
+Beklenen sonuç:
 
-## Pilot evidence
+- Tekrarlanan aynı hata imzası sınırsız döngü başlatmaz.
+- Operasyon bütçesi veya host limiti, devam ettirilebilir ve dürüst durum üretir.
+- Reviewer için korunan bütçe başka işler tarafından tüketilmez.
+- Kısmi kanıt kurtarma sırasında korunur.
+- Hiçbir hata yolu sahte reviewer PASS üretmez.
 
-Record maintainer testing honestly:
+## Pilot kanıtı
+
+Kendi testini dürüstçe bakım sorumlusu denemesi olarak kaydet:
 
 ```powershell
-cewp pilot create --pilot-id maintainer-manual-1 --participant maintainer-dogfood --participant-id maintainer-1 --json
-cewp pilot status --json
-cewp pilot export maintainer-manual-1 --json
+Set-Location $deneme
+node $cewp pilot create --pilot-id maintainer-manual-1 --participant maintainer-dogfood --participant-id maintainer-1 --json
+node $cewp pilot status --json
+node $cewp pilot export maintainer-manual-1 --json
 ```
 
-Expected: status remains incomplete and the maintainer record is excluded from
-independent counts. Canonical records stay under ignored `.cewp/pilots/`; export is a
-separate redacted projection. A future external participant must use a privacy-safe
-independent identity and confirm their own real repository outcome.
+Beklenen sonuç:
 
-## What must not be claimed
+- Pilot durumu tamamlanmamış kalır.
+- Bakım sorumlusu kaydı bağımsız kullanıcı sayımlarına dahil edilmez.
+- Asıl kayıt ignored `.cewp/pilots/` altında kalır.
+- Export ayrı ve redakte edilmiş bir projeksiyondur.
 
-- A passing fixture is not an external user, repository attempt, or case study.
-- Native host completion is not CEWP verification or reviewer PASS.
-- Missing, stale, or malformed host usage is not zero.
-- A Windows pass does not prove the exact Linux release matrix.
-- Artifact preparation is not publication, tagging, pushing, or a GitHub release.
-- `1.0.0` is not eligible until every real Phase 13 gate and release matrix passes.
+Gelecekteki dış katılımcı kendi gerçek repository sonucunu onaylamalı ve kişisel bilgi
+içermeyen bağımsız bir katılımcı kimliği kullanmalıdır.
 
-Capture sanitized command output, CEWP version, OS/Node/Git/Codex versions, expected
-versus actual behavior, recovery result, and the final receipt. Never include tokens,
-auth files, raw private prompts, source code, or absolute private repository paths in
-a public report.
+## Ne iddia edilmemeli?
+
+- Geçen fixture testi, gerçek dış kullanıcı veya case study değildir.
+- Kendi testin bağımsız kullanıcı testi değildir.
+- Native host tamamlanması CEWP doğrulaması veya reviewer PASS değildir.
+- Eksik, eski veya bozuk host kullanım bilgisi sıfır değildir.
+- Windows testi tek başına Linux release matrisini kanıtlamaz.
+- Artifact hazırlamak publish, tag, push veya GitHub release yapmak değildir.
+- Gerçek Phase 13 kapıları geçmeden `1.0.0` hazır veya tamamlandı denmemelidir.
+
+## Test sonunda kaydetmen gerekenler
+
+- CEWP sürümü
+- İşletim sistemi
+- Node, Git ve Codex sürümleri
+- Çalıştırılan komut
+- Beklenen davranış
+- Gerçek davranış
+- Duraklatma veya kurtarma sonucu
+- Reviewer kararı
+- Son makbuzun gizli bilgi içermeyen özeti
+
+Herkese açık rapora token, auth dosyası, ham özel prompt, kaynak kodu veya mutlak özel
+repository yolu koyma.
