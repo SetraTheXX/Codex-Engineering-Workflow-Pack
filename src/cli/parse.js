@@ -111,6 +111,11 @@ function parseArgs(argv) {
       continue;
     }
 
+    if (args.command === "pilot" && args.subcommand === "export" && index === 2 && !arg.startsWith("--")) {
+      args.pilotId = arg;
+      continue;
+    }
+
     if (args.command === "pilot" && arg === "--pilot-id") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) throw new Error("--pilot-id requires an id.");

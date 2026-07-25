@@ -3,6 +3,7 @@
 const { createPilotRecord } = require("./record");
 const { derivePilotStatus } = require("./status");
 const { recordPilotObservation } = require("./observation");
+const { exportPilotEvidence } = require("./export");
 
 function outputJson(command, data) {
   console.log(JSON.stringify({
@@ -15,6 +16,17 @@ function outputJson(command, data) {
 }
 
 function runPilot(options = {}) {
+  if (options.subcommand === "export") {
+    const result = exportPilotEvidence(process.cwd(), options.pilotId);
+    if (options.json) outputJson("pilot.export", result);
+    else {
+      console.log("CEWP redacted pilot export written");
+      console.log(`Scope: ${result.export.scope.pilotId || "all"}`);
+      console.log(`JSON: ${result.paths.json}`);
+      console.log(`Markdown: ${result.paths.markdown}`);
+    }
+    return;
+  }
   if (options.subcommand === "record") {
     if (!options.yes) throw new Error("pilot record requires --yes confirmation.");
     const result = recordPilotObservation({

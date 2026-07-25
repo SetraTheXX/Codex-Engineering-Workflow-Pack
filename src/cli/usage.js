@@ -10,6 +10,7 @@ Usage:
   cewp pilot create --pilot-id <id> --participant <maintainer-dogfood|independent-external> --participant-id <id> [--json]
   cewp pilot record <pilot-id> --from <observation.json> --yes [--json]
   cewp pilot status [--json]
+  cewp pilot export [<pilot-id>] [--json]
   cewp workflow validate <definition.json> [--json]
   cewp workflow compile (--goal <text> | --from <issue|PRD|PLAN.md|progress.md>) [--source-kind <kind>] [--json]
   cewp workflow template <list|guarded-change|migration|review-only> [--json]
