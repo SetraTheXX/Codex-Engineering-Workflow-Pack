@@ -1,0 +1,36 @@
+name: Feature request
+description: Propose a focused improvement backed by a real workflow need.
+title: "[feature]: "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include secrets, private source, repository paths, or raw logs. Keep examples sanitized or redacted. Native Codex goal mode remains the simpler path for low-risk one-step work.
+  - type: textarea
+    id: task
+    attributes:
+      label: Target task class
+      description: Describe the bounded, risky, recoverable, or evidence-sensitive task where this helps.
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current workaround and limitation
+    validations:
+      required: true
+  - type: textarea
+    id: outcome
+    attributes:
+      label: Observable outcome
+      description: Explain the smallest public behavior that would solve the need.
+    validations:
+      required: true
+  - type: dropdown
+    id: native
+    attributes:
+      label: Would native goal mode be sufficient?
+      options: ["No", "Uncertain", "Yes"]
+    validations:
+      required: true

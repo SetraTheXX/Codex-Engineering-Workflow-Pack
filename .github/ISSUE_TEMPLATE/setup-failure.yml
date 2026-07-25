@@ -1,0 +1,38 @@
+name: Setup failure
+description: Report an install, initialization, or diagnostics failure.
+title: "[setup]: "
+labels: ["setup"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include secrets, credentials, private repository paths, source code, or raw logs. Redact local paths and sensitive values before submitting.
+  - type: input
+    id: version
+    attributes:
+      label: CEWP version
+      placeholder: 0.13.0-beta.0
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Provide OS, Node, Git, and Codex versions without account details.
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Sanitized cewp doctor --json output
+      description: Remove absolute paths and sensitive values.
+      render: json
+    validations:
+      required: true
+  - type: textarea
+    id: failure
+    attributes:
+      label: Sanitized failure and attempted remediation
+      description: Include the public command, short redacted error, and whether the suggested remediation worked.
+    validations:
+      required: true

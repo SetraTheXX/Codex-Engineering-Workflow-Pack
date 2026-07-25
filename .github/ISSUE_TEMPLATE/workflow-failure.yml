@@ -1,0 +1,40 @@
+name: Workflow failure
+description: Report a supervision, verification, recovery, review, or finalize failure.
+title: "[workflow]: "
+labels: ["workflow"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not include secrets, credentials, private repository paths, source code, or raw logs. Use a redacted receipt excerpt when evidence is useful.
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Workflow stage
+      options: [plan, approval, execution, verification, recovery, review, receipt, finalize, cleanup]
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Public command and sanitized error
+      description: Include only the bounded command and redacted error.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: recovery
+    attributes:
+      label: Recovery state
+      description: State whether prior evidence was retained and what next action CEWP reported.
