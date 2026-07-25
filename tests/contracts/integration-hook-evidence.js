@@ -44,7 +44,7 @@ function main() {
     const output = JSON.parse(approved.stdout);
     assert(output.command === "integration.hooks.approve", "approval identifies the public command");
     assert(output.data.trust.schemaVersion === "codex-hook-trust/v1", "hook trust is versioned");
-    assert(output.data.trust.cewpVersion === "0.11.0-beta.0", "approval binds the CEWP runtime version");
+    assert(output.data.trust.cewpVersion === "0.12.0-beta.0", "approval binds the CEWP runtime version");
     assert(output.data.trust.codexVersion === "codex-cli 0.200.0", "approval binds the observed Codex version");
     assert(/^sha256:[a-f0-9]{64}$/.test(output.data.trust.bundleDigest), "approval binds the exact hook bundle");
     assert(output.data.nextAction.command === "/hooks", "approval still requires the host trust review");

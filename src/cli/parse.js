@@ -79,6 +79,9 @@ function parseArgs(argv) {
     model: undefined,
     effort: undefined,
     comparisonRunId: undefined,
+    pilotId: undefined,
+    participant: undefined,
+    participantId: undefined,
   };
 
   if (argv[0] === "--help" || argv[0] === "-h") {
@@ -98,10 +101,44 @@ function parseArgs(argv) {
     return args;
   }
 
-  const optionStart = ["run", "supervise", "workflow", "integration", "demo"].includes(args.command) ? 2 : 1;
+  const optionStart = ["run", "supervise", "workflow", "integration", "pilot", "demo"].includes(args.command) ? 2 : 1;
 
   for (let index = optionStart; index < argv.length; index += 1) {
     const arg = argv[index];
+
+    if (args.command === "pilot" && args.subcommand === "record" && index === 2 && !arg.startsWith("--")) {
+      args.pilotId = arg;
+      continue;
+    }
+
+    if (args.command === "pilot" && args.subcommand === "export" && index === 2 && !arg.startsWith("--")) {
+      args.pilotId = arg;
+      continue;
+    }
+
+    if (args.command === "pilot" && arg === "--pilot-id") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--pilot-id requires an id.");
+      args.pilotId = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "pilot" && arg === "--participant") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--participant requires a classification.");
+      args.participant = value;
+      index += 1;
+      continue;
+    }
+
+    if (args.command === "pilot" && arg === "--participant-id") {
+      const value = argv[index + 1];
+      if (!value || value.startsWith("--")) throw new Error("--participant-id requires an id.");
+      args.participantId = value;
+      index += 1;
+      continue;
+    }
 
     if (args.command === "run" && args.subcommand === "prompt" && index === 2) {
       args.role = arg;
@@ -472,7 +509,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (["doctor", "run", "supervise", "workflow", "integration", "demo"].includes(args.command) && arg === "--json") {
+    if (["doctor", "run", "supervise", "workflow", "integration", "pilot", "demo"].includes(args.command) && arg === "--json") {
       args.json = true;
       continue;
     }
@@ -483,6 +520,11 @@ function parseArgs(argv) {
     }
 
     if (args.command === "workflow" && arg === "--yes") {
+      args.yes = true;
+      continue;
+    }
+
+    if (args.command === "pilot" && arg === "--yes") {
       args.yes = true;
       continue;
     }
@@ -546,7 +588,7 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (["run", "supervise", "workflow"].includes(args.command) && arg === "--from") {
+    if (["run", "supervise", "workflow", "pilot"].includes(args.command) && arg === "--from") {
       const value = argv[index + 1];
       if (!value || value.startsWith("--")) {
         throw new Error("--from requires a file path.");

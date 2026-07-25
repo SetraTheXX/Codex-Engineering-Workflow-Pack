@@ -42,6 +42,7 @@ function runContract() {
     const generatedAt = "2026-07-22T13:00:00.000Z";
     const left = buildEvidenceReceipt(loadWorkflowRun(repoRoot, managed.runId), { generatedAt });
     const right = buildEvidenceReceipt(loadWorkflowRun(repoRoot, native.runId), { generatedAt });
+    assert(right.providers[0].provider.status === "known" && right.providers[0].provider.value === "codex", "validated native Codex binding identifies the provider");
     const comparison = compareEvidenceReceipts(left, right);
     assert(comparison.schemaVersion === "run-comparison/v1", "run comparison is versioned");
     assert(comparison.runs.left.execution.owner === "managed" && comparison.runs.right.execution.owner === "native", "execution owner and backend are compared");

@@ -244,6 +244,16 @@ function buildEvidenceReceipt(found, options = {}) {
   const headCommit = getGitHeadCommit(found.repoRoot);
   const baseCommit = found.run.git && found.run.git.baseCommit;
   const hostBinding = loadHostBinding(found);
+  const warningDeliveries = events
+    .filter((entry) => entry.category === "warning-presentation")
+    .map((entry) => ({
+      warning: entry.warning || "unknown",
+      surface: entry.surface || "unknown",
+      deliveredAt: entry.timestamp,
+      evidence: "event/v1",
+    }));
+  const knownCodexProvider = found.run.execution.backend === "codex-exec"
+    || Boolean(hostBinding && hostBinding.host.product === "codex");
 
   return {
     schemaVersion: EVIDENCE_RECEIPT_SCHEMA_VERSION,
@@ -265,7 +275,7 @@ function buildEvidenceReceipt(found, options = {}) {
     interventions: found.run.interventions || [],
     events,
     providers: [{
-      provider: found.run.execution.backend === "codex-exec"
+      provider: knownCodexProvider
         ? { status: "known", value: "codex" }
         : { status: "unknown", value: null, reason: "selected execution boundary does not identify a provider" },
       effectiveModel: { status: "unknown", value: null, reason: "workflow result does not expose an effective model" },
@@ -284,7 +294,9 @@ function buildEvidenceReceipt(found, options = {}) {
     },
     estimate: unknownUsageEstimate(),
     cost: { apiEquivalent: { label: "unknown", value: null, currency: null, pricingDate: null, model: null, reason: "no valid dated API pricing mapping" } },
-    warningSurface: { status: "unknown", deliveries: [] },
+    warningSurface: warningDeliveries.length > 0
+      ? { status: "observed", deliveries: warningDeliveries }
+      : { status: "unknown", deliveries: [] },
     git: {
       baseCommit: baseCommit
         ? { status: "known", value: baseCommit }
@@ -381,6 +393,8 @@ function renderEvidenceReceiptMarkdown(receipt) {
 - Status: ${receipt.completeness.runStatus} (${receipt.completeness.status})
 - Execution: ${receipt.execution.owner} / ${receipt.execution.backend || "none"}
 - Operating modes: ${receipt.operatingModes.join(", ")}
+- Provider: ${receipt.providers[0].provider.status === "known" ? receipt.providers[0].provider.value : "unknown"}
+- Effective model: ${receipt.providers[0].effectiveModel.status === "known" ? receipt.providers[0].effectiveModel.value : "unknown"}
 - Source: ${receipt.sourcePlan.kind}; ${receipt.sourcePlan.path || "direct goal"}
 - Workflow: ${receipt.workflow.id} revision ${receipt.workflow.revision}; ${receipt.workflow.digest}
 - Git base: ${receipt.git.baseCommit.status === "known" ? receipt.git.baseCommit.value : "unknown"}
@@ -426,6 +440,7 @@ ${allocationLines || "- none"}
 - Host-internal usage: ${receipt.usage.hostInternal.label}
 - Estimate: ${receipt.estimate.label}; confidence ${receipt.estimate.confidence}; samples ${receipt.estimate.sampleBasis.count}; estimator ${receipt.estimate.estimator.version}; drift ${receipt.estimate.drift.state}
 - API-equivalent cost: ${receipt.cost.apiEquivalent.label}${receipt.cost.apiEquivalent.model ? `; model ${receipt.cost.apiEquivalent.model}; pricing ${receipt.cost.apiEquivalent.pricingDate}` : ""}
+- Warning surface: ${receipt.warningSurface.status}; deliveries ${receipt.warningSurface.deliveries.length}
 
 ${observationLines || "- no usage observations"}
 

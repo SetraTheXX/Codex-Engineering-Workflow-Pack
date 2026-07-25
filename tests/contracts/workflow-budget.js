@@ -131,6 +131,7 @@ function runWorkflowBudgetContract() {
     assert(pausedReceipt.events.some((entry) => entry.category === "safe-pause"), "safe pause is normalized in the event ledger");
     assert(pausedReceipt.events.some((entry) => entry.category === "threshold"), "budget refusal records the reached threshold");
     assert(pausedReceipt.events.some((entry) => entry.category === "warning-presentation"), "budget refusal records Core warning presentation");
+    assert(pausedReceipt.warningSurface.status === "observed" && pausedReceipt.warningSurface.deliveries[0].surface === "cewp-core-state", "receipt reports warning delivery only from event evidence");
 
     const addBudget = runNode(cewpCli, [
       "workflow", "intervene", approved.runId,
