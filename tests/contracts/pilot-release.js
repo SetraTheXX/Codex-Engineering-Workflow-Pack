@@ -18,7 +18,7 @@ function runContract() {
   assert(plugin.version === packageJson.version, "plugin and package versions stay aligned");
 
   const notes = read("docs/release-notes.md");
-  assert(/^## Unreleased\s+\nNo changes yet\./m.test(notes), "Unreleased is reset after release preparation");
+  assert(/^## Unreleased\s*$/m.test(notes), "release notes retain an Unreleased section after beta preparation");
   assert(notes.includes("## 0.13.0-beta.0"), "Phase 13 beta has versioned release notes");
   assert(/prepared locally.*not published, tagged, or released/is.test(notes), "release notes prohibit a false publication claim");
   assert(/real external.*evidence.*absent/is.test(notes), "release notes disclose missing external evidence");

@@ -2,7 +2,11 @@
 
 ## Unreleased
 
-No changes yet.
+### Added
+
+- Added a maintainer-safe manual acceptance guide covering credential-free preflight,
+  one bounded real supervised checkpoint, pause/revise/resume, review and receipt,
+  ownership conflicts, recovery fixtures, and honest pilot classification.
 
 ## 0.14.0-beta.0
 

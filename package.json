@@ -44,6 +44,7 @@
     "docs/performance-budgets.md",
     "docs/contracts.md",
     "docs/native-goal-or-cewp.md",
+    "docs/manual-acceptance.md",
     "docs/adr/0001-codex-first-supervised-goals.md",
     "docs/adr/0002-execution-ownership.md",
     "docs/adr/0003-cost-assurance-and-safe-pauses.md",

@@ -144,6 +144,7 @@ absent. Fixtures and this maintainer's own runs do not satisfy external-user gat
 - [Troubleshooting and Recovery](docs/recovery-guide.md)
 - [Performance Budgets](docs/performance-budgets.md)
 - [1.0 Security Review](docs/security-review-1.0.md)
+- [Manual Acceptance](docs/manual-acceptance.md)
 - [External Integration Boundary](docs/external-integration-boundary.md)
 - [Evidence Receipts](docs/evidence-receipts.md)
 - [Architecture](docs/architecture.md)

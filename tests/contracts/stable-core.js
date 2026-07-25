@@ -39,6 +39,7 @@ function runContract() {
     "docs/performance-budgets.md",
     "docs/contracts.md",
     "docs/native-goal-or-cewp.md",
+    "docs/manual-acceptance.md",
   ];
   for (const file of requiredDocs) assert(fs.existsSync(path.join(repoRoot, file)), `${file} exists`);
 
@@ -55,6 +56,21 @@ function runContract() {
     assert(security.toLowerCase().includes(phrase), `security review covers ${phrase}`);
   }
   assert(security.includes("P0/P1"), "security review states the severity release gate");
+
+  const manualAcceptance = read("docs/manual-acceptance.md");
+  for (const phrase of [
+    "Credential-free preflight",
+    "Supervised checkpoint",
+    "Pause, revise, and resume",
+    "Independent review and receipt",
+    "Ownership conflict",
+    "Pilot evidence",
+    "What must not be claimed",
+  ]) {
+    assert(manualAcceptance.includes(phrase), `manual acceptance covers ${phrase}`);
+  }
+  assert(manualAcceptance.includes("maintainer-dogfood"), "manual acceptance classifies the maintainer honestly");
+  assert(manualAcceptance.includes("does not count as independent"), "manual acceptance cannot turn maintainer testing into external evidence");
 }
 
 try {
