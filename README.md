@@ -123,6 +123,8 @@ CEWP still ships ten reusable engineering skills and the earlier Coordinator Mod
 - [Supervised Workflow](docs/supervised-workflow.md)
 - [External Integration Boundary](docs/external-integration-boundary.md)
 - [Evidence Receipts](docs/evidence-receipts.md)
+- [Architecture](docs/architecture.md)
+- [Contract Extension Example](docs/contract-extension-example.md)
 - [Workflow Runtime](docs/workflow-runtime.md)
 - [Known Limitations](docs/known-limitations.md)
 - [Pilot Kit](docs/pilot-kit.md)
@@ -131,6 +133,8 @@ CEWP still ships ten reusable engineering skills and the earlier Coordinator Mod
 - [Coordinator Mode Compatibility](docs/coordinator-mode.md)
 - [Adapter Contract](docs/adapter-contract.md)
 - [Release Notes](docs/release-notes.md)
+- [Contributing](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
 
 ## Status
 
