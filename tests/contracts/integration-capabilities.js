@@ -123,14 +123,6 @@ function main() {
     assert(decision.includes(required), `integration decision documents ${required}`);
   }
 
-  const capabilityMatrix = fs.readFileSync(
-    path.join(repoRoot, "docs", "codex-capability-matrix.md"),
-    "utf8",
-  );
-  assert(capabilityMatrix.includes("Status: accepted Phase 11 decision"), "capability matrix is Phase 11 current");
-  assert(capabilityMatrix.includes("plugin install, disable, upgrade, and uninstall"), "plugin lifecycle evidence is current");
-  assert(!capabilityMatrix.includes("Phase 9 must test"), "capability matrix has no stale Phase 9 promise");
-
   const externalBoundary = fs.readFileSync(
     path.join(repoRoot, "docs", "external-integration-boundary.md"),
     "utf8",

@@ -14,7 +14,7 @@ function buildPlan() {
     packageVersion: packageJson.version,
     artifactRoot: `.cewp/release-prep/${packageJson.version}`,
     validation: ["npm run check", "npm run pack:dry-run", "git diff --check"],
-    blockers: ["phase-13-pilot-gates", "exact-clean-linux-current-source"],
+    blockers: ["exact-release-matrix", "clean-release-source"],
     externalActions: ["npm-publication", "git-tag", "github-release", "remote-push"].map((id) => ({
       id,
       automatic: false,

@@ -2576,11 +2576,8 @@ async function main() {
       assert(packOutput.includes("docs/adapter-contract.md"), "adapter contract doc should be packed");
       assert(packOutput.includes("docs/supervised-workflow.md"), "supervised workflow doc should be packed");
       assert(packOutput.includes("docs/known-limitations.md"), "known limitations should be packed");
-      assert(packOutput.includes("docs/pilot-kit.md"), "external pilot kit should be packed");
-      assert(packOutput.includes("docs/case-study-template.md"), "pilot case-study template should be packed");
       assert(packOutput.includes("CONTRIBUTING.md"), "contributor guide should be packed");
       assert(packOutput.includes("SECURITY.md"), "security policy should be packed");
-      assert(packOutput.includes("docs/codex-capability-matrix.md"), "public capability evidence should be packed");
       assert(packOutput.includes("docs/adr/0004-workflow-contract-boundaries.md"), "workflow contract ADR should be packed");
       assert(packOutput.includes("docs/workflow-runtime.md"), "workflow runtime guide should be packed");
       assert(packOutput.includes(".agents/plugins/marketplace.json"), "plugin marketplace should be packed");
@@ -2592,6 +2589,10 @@ async function main() {
       assert(!packOutput.includes(".cewp-private/"), ".cewp-private/ should not be packed");
       assert(!packOutput.includes("docs/plans/"), "development plans should not be packed");
       assert(!packOutput.includes("docs/agents/"), "docs/agents/ should not be packed");
+      assert(!packOutput.includes("docs/manual-acceptance.md"), "maintainer-only manual should not be packed");
+      assert(!packOutput.includes("docs/pilot-kit.md"), "pilot-study kit should not be packed");
+      assert(!packOutput.includes("docs/case-study-template.md"), "pilot case-study template should not be packed");
+      assert(!packOutput.includes("docs/codex-capability-matrix.md"), "obsolete capability probe should not be packed");
       assert(!packOutput.includes("tests/"), "tests/ should not be packed");
     });
   } finally {

@@ -2,7 +2,12 @@
 
 ## Unreleased
 
-No unreleased changes.
+### Changed
+
+- Removed the maintainer-only Turkish acceptance guide, pilot-study templates,
+  and the obsolete Codex capability probe matrix from the public package.
+- Kept operational, security, compatibility, recovery, and API documentation as
+  the supported public documentation surface.
 
 ## 0.14.0-beta.0 — 2026-07-27
 
@@ -25,10 +30,6 @@ separate decision.
 - Added clean package install/upgrade/downgrade-warning/uninstall capability evidence.
 - Added local validation and artifact preparation with a hashed manifest; remote
   publication, tag, push, and GitHub release actions remain human-only and absent.
-- Added a maintainer-safe manual acceptance guide covering credential-free
-  preflight, one bounded real supervised checkpoint, pause/revise/resume, review
-  and receipt, ownership conflicts, recovery fixtures, and honest pilot
-  classification.
 - Added a repository hygiene contract that rejects private planning paths, CEWP
   runtime state, and personal machine identities from the tracked public surface.
 

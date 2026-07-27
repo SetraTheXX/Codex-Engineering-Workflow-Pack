@@ -21,8 +21,8 @@ function runContract() {
   const plan = JSON.parse(planResult.stdout);
   assert(plan.schemaVersion === "release-preparation/v1", "release preparation plan is versioned");
   assert(plan.externalActions.every((entry) => entry.automatic === false && entry.humanApprovalRequired === true), "publish, tag, and release stay human-approved");
-  assert(plan.blockers.includes("phase-13-pilot-gates"), "missing external evidence remains a release blocker");
-  assert(packageJson.files.includes("docs/manual-acceptance.md"), "manual acceptance guide ships with the reviewed package");
+  assert(plan.blockers.includes("exact-release-matrix"), "the exact release matrix remains a release gate");
+  assert(plan.blockers.includes("clean-release-source"), "release preparation requires a clean source boundary");
 }
 
 try {

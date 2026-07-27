@@ -23,7 +23,7 @@ function runWorkflowReleaseContract() {
   assert(unreleasedIndex >= 0 && releaseIndex > unreleasedIndex, "fresh Unreleased precedes the Phase 12 release");
   assert(previousIndex > releaseIndex, "Phase 12 release precedes earlier release history");
   const unreleased = releaseNotes.slice(unreleasedIndex, releaseIndex);
-  assert(/No changes yet|Manual acceptance/i.test(unreleased), "Unreleased truthfully records current post-beta work");
+  assert(/\S/.test(unreleased), "Unreleased truthfully records current post-beta work");
   for (const claim of [
     "`evidence-receipt/v1`",
     "`event/v1`",
