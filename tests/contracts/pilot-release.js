@@ -35,6 +35,8 @@ function runContract() {
   const validation = read("docs/validation-status.md");
   assert(/technical acceptance: complete/i.test(validation), "validation status records technical acceptance");
   assert(/independent user validation: not claimed/i.test(validation), "validation status avoids an external-user claim");
+  assert(/GitHub prerelease: `v0\.14\.0-beta\.0`/i.test(validation), "validation status identifies the current GitHub prerelease");
+  assert(/npm registry: `0\.7\.0-beta\.0`.*publication pending/is.test(validation), "validation status discloses that npm trails the current source");
   assert(/local run identifiers.*not part of\s+the public repository/is.test(validation), "validation status excludes local run identities");
   assert(packageJson.files.includes("docs/validation-status.md"), "aggregate validation status is packaged");
 

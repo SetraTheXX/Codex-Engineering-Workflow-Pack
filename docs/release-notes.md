@@ -8,6 +8,8 @@
   and the obsolete Codex capability probe matrix from the public package.
 - Kept operational, security, compatibility, recovery, and API documentation as
   the supported public documentation surface.
+- Clarified that the current GitHub prerelease leads the npm registry and that the
+  Codex plugin is installed from a source checkout rather than a global catalog.
 
 ## 0.14.0-beta.0 — 2026-07-27
 
