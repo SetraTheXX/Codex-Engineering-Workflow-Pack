@@ -2,36 +2,17 @@
 
 ## Unreleased
 
-### Phase 13 closure
+No unreleased changes.
 
-Phase 13 is complete under the user-approved maintainer technical acceptance
-model. Independent external validation was not collected and is not claimed.
-The completion contract now requires one repository attempt, supervised golden
-path, finalized receipt-linked full reviewed run, measurable benefit, recovered
-control flow, and a guardrail audit with no unresolved bypasses. Independent
-reviewer PASS, verification, scope, ownership, policy reset, and fail-closed
-receipt integrity remain unchanged.
-
-Public validation is reported only at the aggregate product level. Local run
-identifiers, participant identities, machine paths, private plans, and raw logs
-remain outside the repository and package. This change is local only: it does not
-publish, tag, push, or create a release.
-
-### Added
-
-- Added a maintainer-safe manual acceptance guide covering credential-free preflight,
-  one bounded real supervised checkpoint, pause/revise/resume, review and receipt,
-  ownership conflicts, recovery fixtures, and honest pilot classification.
-
-## 0.14.0-beta.0
+## 0.14.0-beta.0 — 2026-07-27
 
 ### Summary
 
 Stable-core candidate contracts, recovery/security guidance, CEWP-owned performance
-budgets, package lifecycle coverage, and local release-artifact preparation. This
-version is prepared locally and is not published, tagged, pushed, or released.
-It is deliberately not `1.0.0`: at the time of this beta preparation, Phase 13
-had not yet been closed and exact clean release matrices remained mandatory.
+budgets, package lifecycle coverage, maintainer technical acceptance, and a
+professional public repository surface. This beta is deliberately not `1.0.0`;
+independent user validation is not claimed and stable publication remains a
+separate decision.
 
 ### Added
 
@@ -44,14 +25,30 @@ had not yet been closed and exact clean release matrices remained mandatory.
 - Added clean package install/upgrade/downgrade-warning/uninstall capability evidence.
 - Added local validation and artifact preparation with a hashed manifest; remote
   publication, tag, push, and GitHub release actions remain human-only and absent.
+- Added a maintainer-safe manual acceptance guide covering credential-free
+  preflight, one bounded real supervised checkpoint, pause/revise/resume, review
+  and receipt, ownership conflicts, recovery fixtures, and honest pilot
+  classification.
+- Added a repository hygiene contract that rejects private planning paths, CEWP
+  runtime state, and personal machine identities from the tracked public surface.
+
+### Changed
+
+- Closed Phase 13 under the approved maintainer technical acceptance model while
+  preserving verification, reviewer PASS, scope, ownership, policy reset, and
+  fail-closed receipt gates.
+- Reworked the README and public documentation around product capabilities,
+  safety boundaries, aggregate validation, and current limitations.
+- Removed local acceptance identifiers, private development plans, machine paths,
+  and an obsolete terminal UI architecture plan from the public package.
 
 ### Validation truth
 
-- Windows local contracts can prove the candidate implementation, but do not replace
-  a clean Linux run of this exact source or the repository release matrix.
+- The exact release source passed the repository matrix on Windows and Ubuntu
+  across Node.js 22, 24, and 26.
 - No external participant, repeat-use, case-study, feedback, or contribution
-  evidence was fabricated. This historical 0.14.0-beta.0 snapshot left Phase 13
-  open; the Unreleased section records its later approved closure.
+  evidence was fabricated. Phase 13 closure uses maintainer technical acceptance
+  and does not claim independent user validation.
 - The security review states the local technical finding boundary; it cannot prove
   that no undisclosed external vulnerability exists.
 
