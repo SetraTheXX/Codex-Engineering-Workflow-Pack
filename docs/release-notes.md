@@ -12,9 +12,10 @@ control flow, and a guardrail audit with no unresolved bypasses. Independent
 reviewer PASS, verification, scope, ownership, policy reset, and fail-closed
 receipt integrity remain unchanged.
 
-The accepted dogfood evidence is published as a privacy-safe Turkish report and a
-versioned JSON summary. This change is local only: it does not publish, tag, push,
-or create a release.
+Public validation is reported only at the aggregate product level. Local run
+identifiers, participant identities, machine paths, private plans, and raw logs
+remain outside the repository and package. This change is local only: it does not
+publish, tag, push, or create a release.
 
 ### Added
 

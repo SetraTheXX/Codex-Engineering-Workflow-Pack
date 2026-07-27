@@ -25,7 +25,7 @@ gibi gösterilmez ve bağımsız reviewer PASS kapısı yine zorunludur.
 CEWP kaynak deposunda PowerShell aç ve kaynak komutunun yolunu tanımla:
 
 ```powershell
-$cewpRepo = "C:\Users\tunca\Desktop\Projeler Ve Planlar Güncel\CEWP Phase 8"
+$cewpRepo = "C:\path\to\Codex-Engineering-Workflow-Pack"
 $cewp = Join-Path $cewpRepo "bin\cewp.js"
 Set-Location $cewpRepo
 node $cewp --help

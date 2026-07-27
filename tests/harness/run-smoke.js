@@ -2590,7 +2590,7 @@ async function main() {
       assert(!packOutput.includes(".ctxo/"), ".ctxo/ should not be packed");
       assert(!packOutput.includes(".codegraph/"), ".codegraph/ should not be packed");
       assert(!packOutput.includes(".cewp-private/"), ".cewp-private/ should not be packed");
-      assert(!packOutput.includes("phase-8-to-1.0-implementation-plan.md"), "private implementation roadmap should not be packed");
+      assert(!packOutput.includes("docs/plans/"), "development plans should not be packed");
       assert(!packOutput.includes("docs/agents/"), "docs/agents/ should not be packed");
       assert(!packOutput.includes("tests/"), "tests/ should not be packed");
     });

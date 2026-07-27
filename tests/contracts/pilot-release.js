@@ -29,29 +29,23 @@ function runContract() {
   assert(!limitations.includes("A general multi-checkpoint graph, dependency scheduler, automatic plan compiler, and plan migration engine are not shipped"), "known limitations no longer contradict the shipped workflow runtime");
 
   const readme = read("README.md");
-  assert(readme.includes("cewp pilot status --json"), "README exposes the pilot status entry point");
-  assert(/Phase 13.*complete.*maintainer technical acceptance/is.test(readme), "README publishes the approved Phase 13 state");
-  assert(/independent user validation.*not required/i.test(readme), "README distinguishes optional external feedback from completion");
+  assert(readme.includes("docs/validation-status.md"), "README links the aggregate validation boundary");
+  assert(!/dogfood|pilot id|run id/i.test(readme), "README omits local acceptance-run details");
 
-  const acceptance = JSON.parse(read("docs/phase-13-maintainer-acceptance.json"));
-  assert(acceptance.schemaVersion === "phase-13-maintainer-acceptance/v1", "Phase 13 closure evidence is versioned");
-  assert(acceptance.status === "complete" && acceptance.phase === 13, "Phase 13 closure evidence is explicit");
-  assert(acceptance.validationModel === "maintainer-technical-acceptance", "closure evidence names the validation model");
-  assert(acceptance.independentUserValidation.required === false && acceptance.independentUserValidation.collected === false, "closure evidence does not fabricate independent users");
-  assert(acceptance.evidence.reviewerDecision === "PASS" && acceptance.evidence.verification === "PASS", "closure evidence records reviewer and verification results");
-  assert(acceptance.evidence.receipt === "complete" && acceptance.evidence.finalized === true, "closure evidence records receipt and finalize completion");
-  assert(acceptance.evidence.pilotStatus === "complete" && acceptance.evidence.pilotExport === "PASS", "closure evidence records pilot status and export");
-  assert(packageJson.files.includes("docs/phase-13-maintainer-acceptance.json"), "machine-readable closure evidence is packaged");
-  assert(packageJson.files.includes("docs/phase-13-maintainer-acceptance.md"), "Turkish closure report is packaged");
+  const validation = read("docs/validation-status.md");
+  assert(/technical acceptance: complete/i.test(validation), "validation status records technical acceptance");
+  assert(/independent user validation: not claimed/i.test(validation), "validation status avoids an external-user claim");
+  assert(/local run identifiers.*not part of\s+the public repository/is.test(validation), "validation status excludes local run identities");
+  assert(packageJson.files.includes("docs/validation-status.md"), "aggregate validation status is packaged");
 
-  for (const privateSurface of [".cewp", ".cewp-private", "phase-8-to-1.0", "docs/plans"]) {
+  for (const privateSurface of [".cewp", ".cewp-private", "docs/plans", "docs/agents"]) {
     assert(!packageJson.files.some((entry) => entry === privateSurface || entry.startsWith(`${privateSurface}/`)), `package files exclude ${privateSurface}`);
   }
 }
 
 try {
   runContract();
-  console.log("[PASS] Phase 13 maintainer technical acceptance is complete and evidence-honest");
+  console.log("[PASS] release surface is professional and evidence-honest");
 } catch (error) {
   console.error("[FAIL] Phase 13 release surface contract");
   console.error(error && error.stack ? error.stack : error);

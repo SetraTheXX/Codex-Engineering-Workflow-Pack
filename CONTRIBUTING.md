@@ -53,13 +53,13 @@ the full suite, package dry-run, and the relevant clean-install/platform gate.
 
 ## Privacy
 
-Do not commit `.cewp/pilots/`, `.cewp/`, `.cewp-private`, credentials, raw prompts,
-private logs, or local repository paths. The private `phase-8-to-1.0` roadmap is
-not a public package artifact. Before every maintainer commit, the tracking scan
-must return no matches:
+Do not commit CEWP runtime state, private planning material, credentials, raw
+prompts, private logs, local repository paths, or machine-specific artifacts.
+Before every maintainer commit, review the tracked and packaged file lists:
 
 ```bash
-git ls-files | rg "phase-8-to-1\.0|\.cewp-private"
+git ls-files
+npm pack --dry-run
 ```
 
 Redacted exports reduce disclosure risk but do not prove arbitrary prose contains

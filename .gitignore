@@ -33,6 +33,7 @@ temp/
 
 # CEWP local runtime state
 .cewp/
+.cewp-private/
 .cewp-worktrees/
 
 # Local env and secrets
@@ -53,6 +54,7 @@ env/
 
 # Internal planning and validation docs
 docs/agents/
+docs/plans/
 docs/adr/
 CONTEXT.md
 source-analysis.md
