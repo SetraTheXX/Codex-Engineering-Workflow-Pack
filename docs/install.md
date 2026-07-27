@@ -16,6 +16,13 @@ CEWP has three public surfaces:
 
 ## One-Time Repo Install
 
+The npm registry can trail the current GitHub prerelease. Check the published
+registry version before using `npx`:
+
+```bash
+npm view @setrathex/codex-engineering-workflow-pack version
+```
+
 Install CEWP skills into the current repo:
 
 ```bash
@@ -60,7 +67,9 @@ cewp list
 
 ## Codex Plugin Install
 
-The current beta plugin is installed from a CEWP source checkout through Codex's marketplace commands. The npm package remains the supported CLI distribution.
+The current beta plugin is installed from a CEWP source checkout through Codex's
+marketplace commands. CEWP is not listed as a bundled or curated Codex plugin.
+The npm package distributes the CLI when the matching version has been published.
 
 ```bash
 codex plugin marketplace add /path/to/Codex-Engineering-Workflow-Pack

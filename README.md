@@ -39,18 +39,23 @@ Requirements:
 - Git 2.39 or newer
 - Codex CLI for managed execution
 
-Install and verify the environment:
+The current source is published as a GitHub prerelease. The npm registry may lag
+the GitHub candidate; check [Validation Status](docs/validation-status.md) before
+choosing an install source.
+
+Run the current source from a checkout:
 
 ```bash
-npm install -g @setrathex/codex-engineering-workflow-pack
-cewp init
-cewp doctor
+git clone https://github.com/SetraTheXX/Codex-Engineering-Workflow-Pack.git
+cd Codex-Engineering-Workflow-Pack
+node ./bin/cewp.js init
+node ./bin/cewp.js doctor
 ```
 
 Run the credential-free walkthrough:
 
 ```bash
-cewp demo supervised
+node ./bin/cewp.js demo supervised
 ```
 
 Create a bounded checkpoint in a disposable or reviewed repository:
