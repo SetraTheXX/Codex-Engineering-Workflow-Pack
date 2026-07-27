@@ -6,20 +6,11 @@ const { PILOT_RECORD_SCHEMA_VERSION } = require("./record");
 
 const PILOT_STATUS_SCHEMA_VERSION = "pilot-status/v1";
 const COUNT_GATES = Object.freeze([
-  { id: "independent-repository-attempts", threshold: 10, observationType: "repository-attempt" },
-  { id: "independent-external-participants", threshold: 3, source: "participants" },
-  { id: "real-bounded-external-repository-task", threshold: 1, observationType: "bounded-external-task" },
-  { id: "full-reviewed-runs", threshold: 5, observationType: "full-reviewed-run" },
-  { id: "repeat-users-without-maintainer-assistance", threshold: 3, observationType: "repeat-user" },
-  { id: "comparable-native-goal-runs", threshold: 3, observationType: "native-goal-comparison" },
+  { id: "maintainer-repository-attempt", threshold: 1, observationType: "repository-attempt" },
+  { id: "supervised-golden-path", threshold: 1, observationType: "golden-path-complete" },
+  { id: "full-reviewed-runs", threshold: 1, observationType: "full-reviewed-run" },
   { id: "measurable-cewp-benefit", threshold: 1, observationType: "measurable-benefit" },
-  { id: "recovered-pause-or-failure-scenarios", threshold: 3, observationType: "recovery" },
-  { id: "operational-budget-exhaustion", threshold: 1, observationType: "operational-budget-exhaustion" },
-  { id: "controlled-host-limit", threshold: 1, observationType: "controlled-host-limit" },
-  { id: "top-onboarding-failures-remediated", threshold: 5, observationType: "onboarding-remediation" },
-  { id: "external-contribution-or-substantive-issue", threshold: 1, observationType: "external-contribution" },
-  { id: "public-case-studies", threshold: 3, observationType: "public-case-study" },
-  { id: "usage-estimate-calibration-reported", threshold: 1, observationType: "estimate-calibration-report" },
+  { id: "recovered-control-flow", threshold: 1, observationType: "recovery" },
   { id: "guardrail-audit-with-no-unresolved-bypass", threshold: 1, observationType: "guardrail-audit-pass" },
 ]);
 
@@ -67,7 +58,7 @@ function derivePilotStatus(repoRoot) {
     )))
     .map((record) => record.participant.id));
   const evidenceByType = new Map();
-  for (const record of externalRecords) {
+  for (const record of records) {
     for (const observation of record.observations || []) {
       if (!observation || observation.qualification?.eligible !== true || typeof observation.type !== "string") continue;
       if (!evidenceByType.has(observation.type)) evidenceByType.set(observation.type, []);
@@ -107,6 +98,8 @@ function derivePilotStatus(repoRoot) {
   });
   return {
     schemaVersion: PILOT_STATUS_SCHEMA_VERSION,
+    validationModel: "maintainer-technical-acceptance",
+    independentUserValidationRequired: false,
     complete: inspected.invalid.length === 0 && gates.every((gate) => gate.status === "met"),
     records: { total: records.length + inspected.invalid.length, valid: records.length, invalid: inspected.invalid.length },
     participants: {
@@ -114,13 +107,7 @@ function derivePilotStatus(repoRoot) {
       independentExternal: externalParticipantIds.size,
     },
     gates,
-    exclusions: records
-      .filter((record) => record.participant.classification !== "independent-external")
-      .map((record) => ({
-        pilotId: record.pilotId,
-        classification: record.participant.classification,
-        reason: "maintainer dogfood never counts as independent Phase 13 evidence",
-      })),
+    exclusions: [],
     warnings: [
       ...inspected.invalid.map((record) => ({ code: "pilot-record-invalid", pilotId: record.pilotId, reason: record.reason })),
       ...gates

@@ -51,9 +51,10 @@ function runContract() {
     assert(pilotKit.includes(command), `pilot kit documents ${command}`);
   }
   assert(pilotKit.includes(".cewp/pilots/"), "pilot kit documents ignored canonical storage");
-  assert(/ten\s+independent repositories/.test(pilotKit), "pilot kit documents the repository threshold");
-  assert(/five full\s+reviewed runs/.test(pilotKit), "pilot kit documents the reviewed-run threshold");
-  assert(/three repeat users/.test(pilotKit), "pilot kit documents the repeat-use threshold");
+  assert(/maintainer technical acceptance/i.test(pilotKit), "pilot kit names the approved validation model");
+  assert(/one repository attempt/i.test(pilotKit), "pilot kit documents the repository-attempt threshold");
+  assert(/one full reviewed run/i.test(pilotKit), "pilot kit documents the reviewed-run threshold");
+  assert(/independent user.*optional/i.test(pilotKit), "pilot kit keeps independent feedback optional without fabricating it");
 }
 
 try {

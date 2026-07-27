@@ -17,13 +17,13 @@ function runContract() {
     "npm run check",
     "git diff --check",
     "good first issue",
-    "phase-8-to-1.0",
-    ".cewp-private",
+    "npm pack --dry-run",
+    "private planning material",
     "provider expansion",
   ]) {
     assert(contributing.toLowerCase().includes(requirement.toLowerCase()), `contribution guide includes ${requirement}`);
   }
-  assert(/do not commit.*\.cewp\/pilots/is.test(contributing), "contribution guide keeps pilot records private");
+  assert(/do not commit.*runtime state/is.test(contributing), "contribution guide keeps runtime records private");
   assert(/red.*green.*refactor/is.test(contributing), "contribution guide documents the TDD loop");
 
   const security = read("SECURITY.md");

@@ -2,21 +2,17 @@
 
 ## Unreleased
 
-### Added
+No unreleased changes.
 
-- Added a maintainer-safe manual acceptance guide covering credential-free preflight,
-  one bounded real supervised checkpoint, pause/revise/resume, review and receipt,
-  ownership conflicts, recovery fixtures, and honest pilot classification.
-
-## 0.14.0-beta.0
+## 0.14.0-beta.0 — 2026-07-27
 
 ### Summary
 
 Stable-core candidate contracts, recovery/security guidance, CEWP-owned performance
-budgets, package lifecycle coverage, and local release-artifact preparation. This
-version is prepared locally and is not published, tagged, pushed, or released.
-It is deliberately not `1.0.0`: real Phase 13 evidence and exact clean release
-matrices remain mandatory blockers.
+budgets, package lifecycle coverage, maintainer technical acceptance, and a
+professional public repository surface. This beta is deliberately not `1.0.0`;
+independent user validation is not claimed and stable publication remains a
+separate decision.
 
 ### Added
 
@@ -29,13 +25,32 @@ matrices remain mandatory blockers.
 - Added clean package install/upgrade/downgrade-warning/uninstall capability evidence.
 - Added local validation and artifact preparation with a hashed manifest; remote
   publication, tag, push, and GitHub release actions remain human-only and absent.
+- Added a maintainer-safe manual acceptance guide covering credential-free
+  preflight, one bounded real supervised checkpoint, pause/revise/resume, review
+  and receipt, ownership conflicts, recovery fixtures, and honest pilot
+  classification.
+- Added a repository hygiene contract that rejects private planning paths, CEWP
+  runtime state, and personal machine identities from the tracked public surface.
+
+### Changed
+
+- Closed Phase 13 under the approved maintainer technical acceptance model while
+  preserving verification, reviewer PASS, scope, ownership, policy reset, and
+  fail-closed receipt gates.
+- Reworked the README and public documentation around product capabilities,
+  safety boundaries, aggregate validation, and current limitations.
+- Removed local acceptance identifiers, private development plans, machine paths,
+  and an obsolete terminal UI architecture plan from the public package.
 
 ### Validation truth
 
-- Windows local contracts can prove the candidate implementation, but do not replace
-  a clean Linux run of this exact source or the repository release matrix.
-- No external participant, repository, repeat-use, case-study, feedback, or
-  contribution evidence was fabricated. Phase 13 and the 1.0 gate remain open.
+- The exact release source passed the repository matrix on Windows and Ubuntu
+  across Node.js 22, 24, and 26.
+- Phase 13 is complete under the approved maintainer technical acceptance model.
+  Independent external evidence was not collected and is not claimed.
+- No external participant, repeat-use, case-study, feedback, or contribution
+  evidence was fabricated. Phase 13 closure uses maintainer technical acceptance
+  and does not claim independent user validation.
 - The security review states the local technical finding boundary; it cannot prove
   that no undisclosed external vulnerability exists.
 

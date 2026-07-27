@@ -56,7 +56,7 @@ function runCleanInstall() {
     assert(fs.existsSync(cli), "installed package exposes the CLI");
     assert(fs.existsSync(path.join(installedRoot, "plugins", "cewp", ".codex-plugin", "plugin.json")), "installed package includes the plugin");
     assert(fs.existsSync(path.join(installedRoot, "docs", "supervised-workflow.md")), "installed package includes supervised docs");
-    assert(!fs.existsSync(path.join(installedRoot, "docs", "phase-8-to-1.0-implementation-plan.md")), "private roadmap is absent from the installed package");
+    assert(!fs.existsSync(path.join(installedRoot, "docs", "plans")), "development plans are absent from the installed package");
     assert(!fs.existsSync(path.join(installedRoot, ".cewp-private")), "private capability evidence is absent from the installed package");
 
     run(process.execPath, [cli, "--help"], { cwd: target, env });

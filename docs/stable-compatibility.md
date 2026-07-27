@@ -12,4 +12,6 @@ not CEWP verification or reviewer PASS. Missing host usage remains unknown.
 
 Package and plugin versions must match. Private desktop attachment, persistent native
 panels, automatic model routing, and non-Codex provider expansion are not supported.
-The command reports `blocked-pilot-evidence` until genuine Phase 13 gates pass.
+The command reports `phase-13-complete-release-validation-required`: the approved
+maintainer technical acceptance gates passed, while exact final-source release
+validation and human-controlled publication remain separate requirements.

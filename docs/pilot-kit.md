@@ -1,6 +1,8 @@
 # Supervised Workflow Pilot Kit
 
-This kit collects real adoption evidence without mandatory telemetry. Do not mark a pilot complete unless a person outside the maintainer's normal environment performs the steps and confirms the result.
+This kit collects local adoption evidence without mandatory telemetry. Phase 13 uses
+the approved **maintainer technical acceptance** model. Independent user feedback
+is optional and must never be fabricated or relabeled as maintainer evidence.
 
 ## Local Pilot Ledger
 
@@ -22,18 +24,17 @@ contains no secret.
 
 A `repository-attempt` observation must use two different privacy-safe identifiers:
 `attempt.id` identifies that run, while `attempt.repositoryId` is a stable pseudonym
-for the repository. Status counts distinct `repositoryId` values, so repeat attempts
-against one repository cannot satisfy the ten-repository gate. Repeat-user evidence
-is likewise counted once per privacy-safe participant id. Malformed or incompatible
-local records remain visible as invalid warnings and keep status incomplete.
+for the repository. Status keeps distinct `repositoryId` values reviewable.
+Malformed or incompatible local records remain visible as invalid warnings and
+keep status incomplete.
 
-Maintainer runs, fixtures, demos, and multiple machines used by one person remain
-visible but excluded from independent counts. Real pilot completion requires ten
-independent repositories, at least three independent participants, five full
-reviewed runs, three repeat users without maintainer assistance, three comparable
-native-goal studies, three recovery scenarios, budget and host-limit evidence,
-three public case studies, onboarding remediation, and external contributor
-evidence. The CLI infrastructure cannot manufacture any of those results.
+Technical acceptance requires one repository attempt, one supervised golden path,
+one full reviewed run backed by a finalized and integrity-valid receipt, one
+measurable benefit observation, one recovered control-flow scenario, and one
+guardrail audit with zero unresolved bypasses. Maintainer evidence qualifies for
+these gates. Receipt integrity, verification, and independent reviewer PASS remain
+fail-closed. Independent user studies remain useful optional product feedback, but
+they are not a Phase 13 completion quota.
 
 ## Pilot Target
 
@@ -138,4 +139,8 @@ Provide the exact public command, sanitized error, expected behavior, actual beh
 
 ## Completion Rule
 
-A Phase 9 external-pilot gate requires at least three independent people to complete the golden path, including at least one real bounded repository task. Deterministic fixtures and maintainer dogfooding are useful engineering evidence but do not count as those people.
+`cewp pilot status --json` reports completion only when all six maintainer technical
+acceptance gates have qualifying structured evidence and no local pilot record is
+invalid. Deterministic fixtures prove the contract but are not runtime evidence.
+Independent users, when available, must remain classified `independent-external`;
+their absence does not block Phase 13.

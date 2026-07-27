@@ -34,16 +34,18 @@ function runContract() {
     const status = JSON.parse(statusResult.stdout);
     assert(status.command === "pilot.status", "pilot status has a stable command envelope");
     assert(status.data.schemaVersion === "pilot-status/v1", "pilot status is versioned");
-    assert(status.data.complete === false, "maintainer dogfood cannot complete Phase 13");
+    assert(status.data.complete === false, "an empty maintainer record cannot complete technical acceptance");
+    assert(status.data.validationModel === "maintainer-technical-acceptance", "status names the approved Phase 13 validation model");
+    assert(status.data.independentUserValidationRequired === false, "independent user quotas are not a Phase 13 completion gate");
     assert(status.data.participants.maintainerDogfood === 1, "maintainer dogfood is visible");
     assert(status.data.participants.independentExternal === 0, "maintainer dogfood is excluded from independent participants");
-    const externalGate = status.data.gates.find((gate) => gate.id === "independent-external-participants");
-    const repositoryGate = status.data.gates.find((gate) => gate.id === "independent-repository-attempts");
+    const repositoryGate = status.data.gates.find((gate) => gate.id === "maintainer-repository-attempt");
+    const goldenGate = status.data.gates.find((gate) => gate.id === "supervised-golden-path");
     const reviewedGate = status.data.gates.find((gate) => gate.id === "full-reviewed-runs");
-    assert(externalGate.threshold === 3 && externalGate.observed === 0 && externalGate.status === "unmet", "three independent participants remain required");
-    assert(repositoryGate.threshold === 10 && repositoryGate.observed === 0, "ten repository attempts remain required");
-    assert(reviewedGate.threshold === 5 && reviewedGate.observed === 0, "five reviewed runs remain required");
-    assert(status.data.exclusions.some((entry) => entry.pilotId === "dogfood-1"), "excluded maintainer evidence is explained");
+    assert(repositoryGate.threshold === 1 && repositoryGate.observed === 0, "one repository attempt remains required");
+    assert(goldenGate.threshold === 1 && goldenGate.observed === 0, "one supervised golden path remains required");
+    assert(reviewedGate.threshold === 1 && reviewedGate.observed === 0, "one reviewed finalized run remains required");
+    assert(status.data.exclusions.length === 0, "maintainer records are not excluded from technical acceptance");
 
     const duplicate = runNode(cewpCli, [
       "pilot", "create",

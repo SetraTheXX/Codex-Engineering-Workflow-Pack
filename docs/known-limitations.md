@@ -16,7 +16,7 @@ CEWP is beta software. These limits are product boundaries, not hidden roadmap p
 - Manual is a non-executing handoff adapter. Claude, Gemini, Hermes, and other providers are not implemented.
 - Supervised worktree cleanup automation is not shipped; rollback is available for owned unverified work, and terminal evidence is retained for deliberate inspection/removal.
 - CEWP never automatically merges, pushes, publishes, tags, or creates a release.
-- The stable-core candidate publishes explicit schema and migration contracts, but the package remains beta and 1.0 eligibility is blocked by real Phase 13 evidence and exact release matrices.
-- Phase 13 pilot infrastructure validates local records and thresholds but does not supply real participants. Maintainer dogfood and deterministic fixtures remain excluded; the external-user, repository, repeat-use, case-study, feedback, and contribution gates are still open.
+- The stable-core candidate publishes explicit schema and migration contracts, but the package remains beta until exact final-source release validation and an explicit release decision are completed.
+- Phase 13 maintainer technical acceptance is complete. Independent user validation was not performed, so CEWP does not claim independent adoption, repeat-user evidence, or external case-study validation. Those remain optional future product feedback rather than a completion gate.
 
 Report setup failures, workflow failures, or misleading evidence through the repository issue tracker. Include `cewp doctor --json` output after removing local paths or sensitive values.

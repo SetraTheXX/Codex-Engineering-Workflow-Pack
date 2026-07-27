@@ -1,32 +1,45 @@
 # Codex Engineering Workflow Pack
 
-[![npm version](https://img.shields.io/npm/v/@setrathex/codex-engineering-workflow-pack?tag=latest)](https://www.npmjs.com/package/@setrathex/codex-engineering-workflow-pack)
+[![CI](https://github.com/SetraTheXX/Codex-Engineering-Workflow-Pack/actions/workflows/ci.yml/badge.svg)](https://github.com/SetraTheXX/Codex-Engineering-Workflow-Pack/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@setrathex/codex-engineering-workflow-pack)](https://www.npmjs.com/package/@setrathex/codex-engineering-workflow-pack)
+[![Node.js](https://img.shields.io/badge/Node.js-22%20%7C%2024%20%7C%2026-339933?logo=node.js&logoColor=white)](package.json)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-**Long-running goals without blind runs.**
+**Controlled Codex execution for work that is too important to run blind.**
 
-CEWP is an unofficial, local-first supervision layer for risky or long-running Codex work. Codex still writes the code. CEWP adds a bounded plan, an isolated worktree, scope and policy gates, deterministic verification, explicit repair limits, an independent reviewer, and a portable receipt.
+CEWP is an unofficial, local-first supervision and evidence layer for Codex. It
+adds explicit scope, isolated worktrees, bounded retries, deterministic
+verification, independent review, recovery controls, and portable receipts while
+leaving code generation to Codex.
 
-It is not another chat client, model router, or endless agent loop. It does not attach to a private ChatGPT task, patch the desktop UI, or make a model intrinsically faster.
+## Why CEWP
 
-## Native Goal Or CEWP?
+Native Codex is the right choice for small, low-risk work. CEWP is designed for
+changes where an undetected scope violation, failed verification, uncontrolled
+retry, or unverifiable result would be expensive.
 
-Use a native Codex goal alone when the task is small, low risk, easy to inspect, and interruption is unlikely to cost much.
+| Need | CEWP control |
+| --- | --- |
+| Prevent accidental broad edits | Approved file scope and isolated worktree |
+| Limit repeated model operations | Explicit operation, repair, and reviewer budgets |
+| Recover without losing evidence | Pause, resume, revise, retry, and retained checkpoints |
+| Verify outside the model loop | Deterministic local commands and scope inspection |
+| Require a second decision | Independent reviewer PASS before finalization |
+| Explain what happened | JSON and Markdown receipts with honest usage labels |
 
-Use CEWP when you need one or more of these:
+CEWP does not attach to private ChatGPT sessions, scrape interfaces, infer missing
+usage, route automatically between models, or merge, push, publish, tag, or
+release code.
 
-- approved scope and stopping conditions before execution,
-- a hard limit on worker, repair, and reviewer operations,
-- safe pause and resume evidence,
-- deterministic tests outside the model loop,
-- an independent reviewer PASS before finalization,
-- a receipt that explains what changed and what remains unknown.
+## Quick Start
 
-CEWP currently selects one golden-path pair: execution owner `managed`, backend `codex-exec`. Experimental OpenCode support remains optional and is not part of this path.
+Requirements:
 
-## Five-Minute Start
+- Node.js 22 or newer
+- Git 2.39 or newer
+- Codex CLI for managed execution
 
-Requirements: maintained Node.js 22 or newer, Git, and Codex CLI for managed execution.
+Install and verify the environment:
 
 ```bash
 npm install -g @setrathex/codex-engineering-workflow-pack
@@ -34,136 +47,116 @@ cewp init
 cewp doctor
 ```
 
-Run the credential-free deterministic walkthrough first:
+Run the credential-free walkthrough:
 
 ```bash
 cewp demo supervised
 ```
 
-In a disposable or reviewed repository, create one bounded checkpoint:
+Create a bounded checkpoint in a disposable or reviewed repository:
 
 ```bash
 cewp supervise plan \
-  --goal "Update the install example" \
+  --goal "Update the installation example" \
   --scope README.md \
   --verify "git diff --check" \
-  --stop "The install example is accurate and the approved check passes"
+  --stop "The example is accurate and the approved check passes"
 ```
 
-Inspect the preview, then explicitly approve it. Managed worker, reviewer, and finalize operations require the advanced local policy; this does not disable scope, verification, budget, or reviewer gates.
+Inspect the proposal before enabling managed operations:
 
 ```bash
 cewp policy set full-authority
 cewp supervise approve <run-id> --yes
 cewp supervise execute <run-id> --yes
 cewp supervise verify <run-id>
-cewp supervise continue <run-id>
 cewp supervise review <run-id> --yes
 cewp supervise receipt <run-id>
 cewp supervise finalize <run-id> --yes
+cewp policy reset
 ```
 
-Nothing in that flow merges, pushes, publishes, tags, or creates a release.
+The advanced policy permits requested local operations; it does not disable
+scope, budget, verification, ownership, or reviewer gates.
 
-## Codex Plugin
+## Safety Model
 
-The thin plugin contributes exactly three conversational skills, a local stdio MCP bridge, and an optional
-review-required subagent evidence hook. Every mutating MCP operation delegates to the same CEWP Core used
-by the CLI; plugin surfaces do not become execution owners or bypass gates.
+CEWP Core is the authority for every completion claim:
 
-From a source checkout:
+1. The operator approves bounded scope and stopping conditions.
+2. Managed execution uses the selected `codex-exec` backend in an isolated
+   worktree.
+3. CEWP checks changed paths and test-authoring policy.
+4. Approved verification runs outside the model loop.
+5. An independent reviewer must return PASS.
+6. Receipt generation and explicit finalization close the run.
 
-```bash
-codex plugin marketplace add /path/to/Codex-Engineering-Workflow-Pack
-codex plugin add cewp@cewp-local
-codex plugin list
-```
+Unknown host usage remains `unknown`; it is never converted to zero or a
+fabricated currency value. Budget or host exhaustion produces a resumable state,
+not a false PASS.
 
-Then ask Codex to plan a supervised run, run the current checkpoint, or resume an existing run. The plugin
-can expose `cewp_create`, `cewp_inspect`, `cewp_approve`, `cewp_continue`, `cewp_retry`, `cewp_revise`,
-`cewp_verify`, and `cewp_finalize` when the package-provided `cewp-mcp` command is on `PATH`. It does not
-gain direct access to the host's private thread, native goal lifecycle, billing data, or persistent UI.
+## Operating Surfaces
 
-For a workflow with a validated host binding, `cewp integration controls <workflow-run-id> --json` shows
-preventive, post-execution, imported-observation, and unavailable control classes without promoting
-audit-only evidence into enforcement.
+- **CLI:** planning, execution, verification, recovery, review, receipts, and
+  workflow operations.
+- **Codex plugin:** three focused conversational skills.
+- **Local MCP:** the same Core operations and gates exposed over stdio.
+- **Evidence hooks:** optional, reviewable observations that never replace Core
+  enforcement.
 
-## What CEWP Records
-
-Phase 9 supervised state lives under `.cewp/supervised-runs/<run-id>/`; graph workflow state lives under `.cewp/workflow-runs/<run-id>/`. Human-readable `progress.md` is generated from canonical state and cannot silently change it.
-
-CEWP keeps four truth labels separate:
-
-- `observed`: reported by a supported structured interface,
-- `estimated`: a range learned from enough comparable local runs,
-- `budgeted`: an approved CEWP-controlled maximum,
-- `unknown`: unavailable from the selected host or authentication boundary.
-
-ChatGPT subscription usage is not converted into a fabricated per-run dollar value. A soft estimate never pretends to be an exact mid-turn token cap.
-
-## Assurance And Recovery
-
-The `prototype`, `standard`, and `critical` profiles set bounded operation, repair, elapsed-time, verification, and reserve envelopes. `standard` is the default with one worker and at most two repairs per checkpoint.
-
-Test authoring is separate from verification:
-
-- `auto`: tests may change inside approved scope,
-- `ask`: test changes require `approve --allow-test-authoring --yes`,
-- `never`: Core blocks detectable test-file changes, while approved non-test verification still runs.
-
-Budget or host exhaustion produces a resumable pause, not a fake PASS. Partial files remain isolated and cannot finalize without verification and reviewer PASS.
-
-## Existing Toolkit
-
-CEWP still ships ten reusable engineering skills and the earlier Coordinator Mode runtime for compatibility. The supervised path remains the managed `codex-exec` golden path. The workflow runtime adds source-bound compiler requests, approved task graphs, variable workers, result intake, recovery, revisions, and migrations without executing arbitrary prose or adding another backend.
-
-## Local Pilot Evidence
-
-Phase 13 pilot records are optional, local, and ignored by Git. They distinguish
-maintainer dogfood from genuinely independent participants and never add mandatory
-telemetry:
-
-```bash
-cewp pilot create --pilot-id dogfood-1 --participant maintainer-dogfood --participant-id maintainer-1
-cewp pilot status --json
-cewp pilot export dogfood-1 --json
-```
-
-The infrastructure is implemented, but real external pilot evidence is still
-absent. Fixtures and this maintainer's own runs do not satisfy external-user gates;
-1.0 is therefore not complete.
+The stable managed path is `managed` + `codex-exec`. App Server remains
+experimental and OpenCode remains optional and outside the golden path.
 
 ## Documentation
 
-- [Install Guide](docs/install.md)
-- [Supervised Workflow](docs/supervised-workflow.md)
-- [Native Goal or CEWP?](docs/native-goal-or-cewp.md)
-- [Stable Compatibility Contract](docs/stable-compatibility.md)
-- [Stable Contract Reference](docs/contracts.md)
-- [Migration Policy](docs/migration-policy.md)
-- [Troubleshooting and Recovery](docs/recovery-guide.md)
-- [Performance Budgets](docs/performance-budgets.md)
-- [1.0 Security Review](docs/security-review-1.0.md)
-- [Türkçe Manuel Kabul ve Deneme Rehberi](docs/manual-acceptance.md)
-- [External Integration Boundary](docs/external-integration-boundary.md)
-- [Evidence Receipts](docs/evidence-receipts.md)
+Start here:
+
+- [Installation](docs/install.md)
+- [Supervised workflow](docs/supervised-workflow.md)
+- [Native Codex or CEWP?](docs/native-goal-or-cewp.md)
 - [Architecture](docs/architecture.md)
-- [Contract Extension Example](docs/contract-extension-example.md)
-- [Workflow Runtime](docs/workflow-runtime.md)
-- [Known Limitations](docs/known-limitations.md)
-- [Pilot Kit](docs/pilot-kit.md)
-- [Operator Policy](docs/operator-policy.md)
-- [Security Model](docs/security-model.md)
-- [Coordinator Mode Compatibility](docs/coordinator-mode.md)
-- [Adapter Contract](docs/adapter-contract.md)
-- [Release Notes](docs/release-notes.md)
+- [Security model](docs/security-model.md)
+- [Recovery guide](docs/recovery-guide.md)
+- [Evidence receipts](docs/evidence-receipts.md)
+- [Compatibility contract](docs/stable-compatibility.md)
+- [Validation status](docs/validation-status.md)
+- [Known limitations](docs/known-limitations.md)
+
+Reference:
+
+- [Workflow runtime](docs/workflow-runtime.md)
+- [Contract index](docs/contracts.md)
+- [Contract extension example](docs/contract-extension-example.md)
+- [Adapter contract](docs/adapter-contract.md)
+- [Operator policy](docs/operator-policy.md)
+- [Migration policy](docs/migration-policy.md)
 - [Contributing](CONTRIBUTING.md)
-- [Security Policy](SECURITY.md)
+- [Security policy](SECURITY.md)
 
-## Status
+## Development
 
-CEWP is beta software. Phase 14 stable-core contracts are available through `cewp compatibility --json`, but external pilot gates and exact clean release matrices are still required before 1.0 can be declared complete. Review the plan, evidence, and receipt before integrating changes.
+The runtime has no package dependencies. From a source checkout:
+
+```bash
+node ./bin/cewp.js --help
+node ./bin/cewp.js doctor
+npm test
+npm run check
+npm run pack:dry-run
+```
+
+CI runs on Windows and Ubuntu with Node.js 22, 24, and 26.
+
+## Project Status
+
+CEWP is beta software. Stable-core compatibility, migration, recovery, security,
+and package lifecycle contracts are implemented. The project is not published as
+`1.0.0`; final release validation and explicit human-controlled publication
+remain separate steps.
+
+See [Validation Status](docs/validation-status.md) and
+[Release Notes](docs/release-notes.md) for the current evidence boundary.
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[MIT](LICENSE)

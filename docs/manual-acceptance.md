@@ -5,8 +5,9 @@ denemen içindir. Testleri yeni bir dalda, geçici bir klonda veya gözden çık
 bir depoda yap. Komutları onaylamadan önce oku; prompt ve test dosyalarına gizli bilgi
 koyma.
 
-Kendi yaptığın testler `maintainer-dogfood` olarak kaydedilmelidir. Bunlar değerli
-teknik kanıttır fakat bağımsız Phase 13 kullanıcı doğrulaması sayılmaz.
+Kendi yaptığın testler `maintainer-dogfood` olarak kaydedilmelidir. Doğrulanmış
+maintainer kaydı Phase 13 teknik kabul kanıtı sayılır; bağımsız kullanıcı yapılmış
+gibi gösterilmez ve bağımsız reviewer PASS kapısı yine zorunludur.
 
 ## Şimdi ne yapmalısın?
 
@@ -24,7 +25,7 @@ teknik kanıttır fakat bağımsız Phase 13 kullanıcı doğrulaması sayılmaz
 CEWP kaynak deposunda PowerShell aç ve kaynak komutunun yolunu tanımla:
 
 ```powershell
-$cewpRepo = "C:\Users\tunca\Desktop\Projeler Ve Planlar Güncel\CEWP Phase 8"
+$cewpRepo = "C:\path\to\Codex-Engineering-Workflow-Pack"
 $cewp = Join-Path $cewpRepo "bin\cewp.js"
 Set-Location $cewpRepo
 node $cewp --help
@@ -38,7 +39,7 @@ Beklenen sonuç:
 
 - Yardım metni görüntülenir.
 - Doctor sonucu anlaşılır ve uygulanabilir olur.
-- Uyumluluk sonucu, gerçek pilot kanıtları olmadığı için `blocked-pilot-evidence` gösterir.
+- Uyumluluk sonucu `phase-13-complete-release-validation-required` gösterir.
 - Temiz kurulum, kimlik bilgisi gerektirmeyen demo ve kaldırma testi geçer.
 - İzole plugin testi kurulum, devre dışı bırakma, yükseltme ve kaldırma adımlarını geçer.
 - Testler yeni bir Codex kimlik doğrulama dosyası oluşturmaz.
@@ -202,7 +203,7 @@ içermeyen bağımsız bir katılımcı kimliği kullanmalıdır.
 - Eksik, eski veya bozuk host kullanım bilgisi sıfır değildir.
 - Windows testi tek başına Linux release matrisini kanıtlamaz.
 - Artifact hazırlamak publish, tag, push veya GitHub release yapmak değildir.
-- Gerçek Phase 13 kapıları geçmeden `1.0.0` hazır veya tamamlandı denmemelidir.
+- Phase 13 teknik kabulü tamamlanmış olsa da son kaynak release matrisi ve açık yayın kararı geçmeden `1.0.0` yayımlandı denmemelidir.
 
 ## Test sonunda kaydetmen gerekenler
 
