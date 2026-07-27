@@ -8,6 +8,7 @@ const repoRoot = path.resolve(__dirname, "..", "..");
 
 function runContract() {
   const packageJson = JSON.parse(fs.readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+  assert(packageJson.publishConfig && packageJson.publishConfig.access === "public", "scoped npm publication is explicitly public");
   assert(packageJson.scripts["release:plan"] === "node scripts/prepare-release.js --plan --json", "release planning is deterministic and read-only");
   assert(packageJson.scripts["release:prepare"] === "node scripts/prepare-release.js --yes", "artifact preparation requires explicit approval");
   const source = fs.readFileSync(path.join(repoRoot, "scripts", "prepare-release.js"), "utf8");

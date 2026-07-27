@@ -18,7 +18,7 @@ function runContract() {
   assert(result.status === 0, `compatibility command succeeds: ${result.stderr}`);
   const contract = JSON.parse(result.stdout);
   assert(contract.schemaVersion === "stable-compatibility/v1", "compatibility output has a stable schema");
-  assert(contract.packageVersion === "0.14.0-beta.0", "package is prepared for the Phase 14 stable-core beta");
+  assert(contract.packageVersion === "0.14.0-beta.1", "package is prepared for the current Phase 14 stable-core beta");
   assert(contract.release.status === "phase-13-complete-release-validation-required", "compatibility reports Phase 13 complete without claiming publication");
   assert(contract.release.phase13.validationModel === "maintainer-technical-acceptance", "compatibility names the approved Phase 13 model");
   assert(contract.release.phase13.independentUserValidationRequired === false, "compatibility removes independent-user quotas");

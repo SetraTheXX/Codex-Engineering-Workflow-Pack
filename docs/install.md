@@ -16,30 +16,29 @@ CEWP has three public surfaces:
 
 ## One-Time Repo Install
 
-The npm registry can trail the current GitHub prerelease. Check the published
-registry version before using `npx`:
+Check the live registry tags before using `npx`:
 
 ```bash
-npm view @setrathex/codex-engineering-workflow-pack version
+npm view @setrathex/codex-engineering-workflow-pack dist-tags --json
 ```
 
 Install CEWP skills into the current repo:
 
 ```bash
-npx @setrathex/codex-engineering-workflow-pack init
+npx @setrathex/codex-engineering-workflow-pack@beta init
 ```
 
 Install into a specific repo:
 
 ```bash
-npx @setrathex/codex-engineering-workflow-pack init --mode repo --target "/path/to/repo"
+npx @setrathex/codex-engineering-workflow-pack@beta init --mode repo --target "/path/to/repo"
 ```
 
 After install, verify:
 
 ```bash
-npx @setrathex/codex-engineering-workflow-pack doctor
-npx @setrathex/codex-engineering-workflow-pack list
+npx @setrathex/codex-engineering-workflow-pack@beta doctor
+npx @setrathex/codex-engineering-workflow-pack@beta list
 ```
 
 ## Global Install
@@ -47,7 +46,7 @@ npx @setrathex/codex-engineering-workflow-pack list
 Install the CLI globally if you use CEWP across many repos:
 
 ```bash
-npm install -g @setrathex/codex-engineering-workflow-pack
+npm install -g @setrathex/codex-engineering-workflow-pack@beta
 cewp init
 ```
 
