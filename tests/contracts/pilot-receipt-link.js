@@ -22,8 +22,8 @@ function createPilot(repoRoot, pilotId) {
   const result = runNode(cewpCli, [
     "pilot", "create",
     "--pilot-id", pilotId,
-    "--participant", "independent-external",
-    "--participant-id", `person-${pilotId.slice(-1)}`,
+    "--participant", "maintainer-dogfood",
+    "--participant-id", `maintainer-${pilotId.slice(-1)}`,
     "--json",
   ], repoRoot);
   assert(result.status === 0, `pilot ${pilotId} is created: ${result.stderr}`);
@@ -97,6 +97,53 @@ function reviewedObservation(observationId, workflowRunId) {
   };
 }
 
+function supervisedReviewedObservation(observationId, supervisedRunId) {
+  return {
+    schemaVersion: "pilot-observation/v1",
+    observationId,
+    type: "full-reviewed-run",
+    observedAt: "2026-07-22T07:30:00.000Z",
+    run: { supervisedRunId },
+  };
+}
+
+function completeSupervisedRun(repoRoot, runId) {
+  const runRoot = path.join(repoRoot, ".cewp", "supervised-runs", runId);
+  writeJson(path.join(runRoot, "run.json"), {
+    schemaVersion: "supervised-run/v1",
+    runId,
+    status: "completed",
+    reviewer: { independent: true, status: "passed", decision: "PASS" },
+    receipt: { status: "finalized" },
+    tasks: [{
+      id: "checkpoint-1",
+      status: "completed",
+      verification: { latest: { status: "pass" }, scope: { status: "pass" } },
+      evidence: [
+        { type: "verification", verificationIds: ["targeted-1"], scopeStatus: "pass" },
+        { type: "independent-review", decision: "PASS", path: "review/reviewer-report.md" },
+      ],
+    }],
+  });
+  writeJson(path.join(runRoot, "receipt.json"), {
+    schemaVersion: "supervised-receipt/v1-beta",
+    runId,
+    status: "completed",
+    finalized: true,
+    reviewer: { independent: true, status: "passed", decision: "PASS" },
+  });
+  writeJson(path.join(runRoot, "ownership.json"), {
+    schemaVersion: "execution-ownership/v1",
+    runId,
+    taskId: "checkpoint-1",
+    checkpointId: "checkpoint-1",
+    owner: "managed",
+    backend: "codex-exec",
+    status: "released",
+    worktree: { id: `${runId}-checkpoint-1`, path: "worktrees/checkpoint-1" },
+  });
+}
+
 function recordObservation(repoRoot, pilotId, observation) {
   const fileName = `${observation.observationId}.json`;
   writeJson(path.join(repoRoot, fileName), observation);
@@ -127,7 +174,7 @@ function runContract() {
 
     const status = JSON.parse(runNode(cewpCli, ["pilot", "status", "--json"], repoRoot).stdout).data;
     const reviewedGate = status.gates.find((gate) => gate.id === "full-reviewed-runs");
-    assert(reviewedGate.observed === 1 && reviewedGate.remaining === 4, "only the complete reviewed run counts");
+    assert(reviewedGate.observed === 1 && reviewedGate.remaining === 0, "only the complete reviewed run counts and it satisfies the technical gate");
 
     const tampered = completeRun(repoRoot, 2);
     fs.appendFileSync(path.join(repoRoot, tampered.paths.targeted), "tampered\n");
@@ -144,7 +191,16 @@ function runContract() {
     }
     const completedStatus = JSON.parse(runNode(cewpCli, ["pilot", "status", "--json"], repoRoot).stdout).data;
     const completedGate = completedStatus.gates.find((gate) => gate.id === "full-reviewed-runs");
-    assert(completedGate.observed === 5 && completedGate.status === "met", "five distinct verified reviewed runs satisfy the roadmap threshold");
+    assert(completedGate.observed === 5 && completedGate.threshold === 1 && completedGate.status === "met", "one verified reviewed run satisfies the technical acceptance threshold while all evidence remains visible");
+
+    createPilot(repoRoot, "supervised-1");
+    completeSupervisedRun(repoRoot, "20260722-073000");
+    const supervisedLink = recordObservation(repoRoot, "supervised-1", supervisedReviewedObservation("supervised-reviewed-1", "20260722-073000"));
+    assert(supervisedLink.status === 0, `finalized supervised run is linkable: ${supervisedLink.stderr}`);
+    const supervisedEvidence = JSON.parse(supervisedLink.stdout).data.observation;
+    assert(supervisedEvidence.qualification.eligible === true, "finalized supervised receipt qualifies");
+    assert(supervisedEvidence.evidence.runKind === "supervised", "linked evidence identifies the supervised run kind");
+    assert(supervisedEvidence.evidence.reviewer.independentPass === true, "supervised link preserves independent reviewer PASS");
   } finally {
     cleanupRepo(repoRoot);
   }

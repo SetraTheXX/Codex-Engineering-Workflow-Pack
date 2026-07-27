@@ -39,8 +39,13 @@ function buildCompatibilityContract() {
     packageVersion: packageVersion(),
     release: {
       line: "1.x candidate",
-      status: "blocked-pilot-evidence",
-      reason: "Phase 13 requires genuine independent pilot evidence before 1.0.",
+      status: "phase-13-complete-release-validation-required",
+      reason: "Phase 13 maintainer technical acceptance is complete; exact release validation and an explicit release decision remain.",
+      phase13: {
+        status: "complete",
+        validationModel: "maintainer-technical-acceptance",
+        independentUserValidationRequired: false,
+      },
     },
     runtime: {
       node: { majors: [22, 24, 26], minimum: "22.0.0", evidence: "repository CI matrix" },

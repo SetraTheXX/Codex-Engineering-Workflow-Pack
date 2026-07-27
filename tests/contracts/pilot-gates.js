@@ -109,15 +109,13 @@ function runContract() {
     const dogfood = recordObservation(repoRoot, "dogfood-1", "dogfood-attempt.json");
     assert(dogfood.status === 0, `dogfood observation is recorded: ${dogfood.stderr}`);
     const dogfoodOutput = JSON.parse(dogfood.stdout).data;
-    assert(dogfoodOutput.observation.qualification.eligible === false, "maintainer observation remains ineligible");
+    assert(dogfoodOutput.observation.qualification.eligible === true, "maintainer observation qualifies for technical acceptance");
 
     const statusResult = runNode(cewpCli, ["pilot", "status", "--json"], repoRoot);
     const status = JSON.parse(statusResult.stdout).data;
-    const repositoryGate = status.gates.find((gate) => gate.id === "independent-repository-attempts");
-    const participantGate = status.gates.find((gate) => gate.id === "independent-external-participants");
-    assert(repositoryGate.observed === 1, "only the independent repository attempt counts");
-    assert(repositoryGate.qualifyingEvidence.length === 1 && repositoryGate.qualifyingEvidence[0] === "repo-attempt-1", "privacy-safe repository identity makes qualifying evidence reviewable");
-    assert(participantGate.observed === 0, "an enrolled external participant does not count before golden-path completion");
+    const repositoryGate = status.gates.find((gate) => gate.id === "maintainer-repository-attempt");
+    assert(repositoryGate.observed === 2, "maintainer and external repository attempts remain honestly classified and count as technical evidence");
+    assert(repositoryGate.qualifyingEvidence.includes("repo-attempt-dogfood"), "privacy-safe maintainer repository identity makes evidence reviewable");
 
     createPilot(repoRoot, "external-2", "independent-external", "person-2");
     createPilot(repoRoot, "external-3", "independent-external", "person-3");
@@ -131,16 +129,15 @@ function runContract() {
       assert(recorded.status === 0, `${pilotId} golden path is recorded: ${recorded.stderr}`);
     }
     const afterGolden = JSON.parse(runNode(cewpCli, ["pilot", "status", "--json"], repoRoot).stdout).data;
-    const completedParticipants = afterGolden.gates.find((gate) => gate.id === "independent-external-participants");
-    assert(completedParticipants.observed === 3 && completedParticipants.status === "met", "three distinct completed external participants satisfy the deferred gate");
-    assert(afterGolden.complete === false, "participant completion alone cannot complete Phase 13");
+    const goldenGate = afterGolden.gates.find((gate) => gate.id === "supervised-golden-path");
+    assert(goldenGate.observed === 3 && goldenGate.status === "met", "a supervised golden path satisfies its technical gate");
+    assert(afterGolden.complete === false, "golden-path completion alone cannot complete technical acceptance");
 
     writeJson(path.join(repoRoot, "bounded-task.json"), boundedExternalTask("bounded-task-1"));
     const bounded = recordObservation(repoRoot, "external-1", "bounded-task.json");
     assert(bounded.status === 0, `bounded external task is recorded: ${bounded.stderr}`);
     const afterBounded = JSON.parse(runNode(cewpCli, ["pilot", "status", "--json"], repoRoot).stdout).data;
-    const boundedGate = afterBounded.gates.find((gate) => gate.id === "real-bounded-external-repository-task");
-    assert(boundedGate.observed === 1 && boundedGate.status === "met", "one real bounded external task satisfies its distinct gate");
+    assert(afterBounded.complete === false, "legacy external-task evidence remains recordable without becoming a completion quota");
 
     for (let index = 2; index <= 10; index += 1) {
       recordInline(repoRoot, `external-${((index - 1) % 3) + 1}`, repositoryAttempt(`external-attempt-${index}`, `repo-attempt-${index}`));
@@ -214,17 +211,10 @@ function runContract() {
 
     const broadStatus = JSON.parse(runNode(cewpCli, ["pilot", "status", "--json"], repoRoot).stdout).data;
     const expectedMet = [
-      "independent-repository-attempts",
-      "repeat-users-without-maintainer-assistance",
-      "comparable-native-goal-runs",
+      "maintainer-repository-attempt",
+      "supervised-golden-path",
       "measurable-cewp-benefit",
-      "recovered-pause-or-failure-scenarios",
-      "operational-budget-exhaustion",
-      "controlled-host-limit",
-      "top-onboarding-failures-remediated",
-      "external-contribution-or-substantive-issue",
-      "public-case-studies",
-      "usage-estimate-calibration-reported",
+      "recovered-control-flow",
       "guardrail-audit-with-no-unresolved-bypass",
     ];
     for (const gateId of expectedMet) {
@@ -243,8 +233,7 @@ function runContract() {
       withoutMaintainerAssistance: true,
     }, 59));
     const afterRepeatedSameParticipant = JSON.parse(runNode(cewpCli, ["pilot", "status", "--json"], repoRoot).stdout).data;
-    const repeatGate = afterRepeatedSameParticipant.gates.find((gate) => gate.id === "repeat-users-without-maintainer-assistance");
-    assert(repeatGate.observed === 3, "repeat-user gate counts distinct participant ids rather than repeat observations");
+    assert(afterRepeatedSameParticipant.complete === false, "legacy repeat-use evidence cannot bypass the reviewed-run gate");
 
     writeJson(path.join(repoRoot, "duplicate-attempt.json"), repositoryAttempt("duplicate-attempt-observation", "repo-attempt-1"));
     const duplicateAttempt = recordObservation(repoRoot, "external-2", "duplicate-attempt.json");

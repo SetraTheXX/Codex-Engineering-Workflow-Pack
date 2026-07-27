@@ -260,8 +260,15 @@ function validateGuardrailAudit(value) {
 
 function validateReviewedRun(value) {
   const input = requireObject(value, "full-reviewed-run");
+  const hasWorkflow = typeof input.workflowRunId === "string";
+  const hasSupervised = typeof input.supervisedRunId === "string";
+  if (hasWorkflow === hasSupervised) {
+    throw new Error("full-reviewed-run requires exactly one workflowRunId or supervisedRunId.");
+  }
   return {
-    workflowRunId: requireSafeId(input.workflowRunId, "full-reviewed-run workflowRunId"),
+    ...(hasWorkflow
+      ? { workflowRunId: requireSafeId(input.workflowRunId, "full-reviewed-run workflowRunId") }
+      : { supervisedRunId: requireSafeId(input.supervisedRunId, "full-reviewed-run supervisedRunId") }),
   };
 }
 
@@ -322,7 +329,9 @@ function observationEvidenceIdentity(observation) {
   if (observation.type === "recovery") return `recovery:${observation.data.recovery.id}`;
   if (observation.type === "public-case-study") return `public-case-study:${observation.data.caseStudy.id}`;
   if (observation.type === "onboarding-remediation") return `onboarding-remediation:${observation.data.failure.code}`;
-  if (observation.type === "full-reviewed-run") return `full-reviewed-run:${observation.data.run.workflowRunId}`;
+  if (observation.type === "full-reviewed-run") {
+    return `full-reviewed-run:${observation.data.run.workflowRunId || observation.data.run.supervisedRunId}`;
+  }
   return `${observation.type}:${observation.id}`;
 }
 
@@ -357,11 +366,11 @@ function recordPilotObservation(options = {}) {
   if (duplicateIdentity) {
     throw new Error(`Pilot evidence identity already exists: ${duplicateIdentity}.`);
   }
-  const independentParticipant = found.record.participant.classification === "independent-external";
   const evidence = observation.type === "full-reviewed-run"
-    ? inspectReviewedRunEvidence(repoRoot, observation.data.run.workflowRunId)
+    ? inspectReviewedRunEvidence(repoRoot, observation.data.run)
     : null;
-  const eligible = independentParticipant && (!evidence || evidence.status === "qualified");
+  const eligible = !evidence || evidence.status === "qualified";
+  const maintainerEvidence = found.record.participant.classification === "maintainer-dogfood";
   const stored = {
     ...observation,
     recordedAt: (options.now || new Date()).toISOString(),
@@ -370,13 +379,13 @@ function recordPilotObservation(options = {}) {
     qualification: {
       eligible,
       classification: eligible
-        ? "independent-evidence"
-        : independentParticipant ? "excluded-evidence" : "maintainer-dogfood",
+        ? maintainerEvidence ? "maintainer-technical-evidence" : "independent-evidence"
+        : "excluded-evidence",
       reason: eligible
-        ? "validated structured observation from an independent-external pilot record"
-        : independentParticipant
-          ? evidence.reason
-          : "maintainer dogfood never counts as independent Phase 13 evidence",
+        ? maintainerEvidence
+          ? "validated structured maintainer observation for Phase 13 technical acceptance"
+          : "validated structured observation from an independent-external pilot record"
+        : evidence.reason,
     },
   };
   const record = {

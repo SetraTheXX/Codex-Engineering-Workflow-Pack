@@ -119,9 +119,9 @@ CEWP still ships ten reusable engineering skills and the earlier Coordinator Mod
 
 ## Local Pilot Evidence
 
-Phase 13 pilot records are optional, local, and ignored by Git. They distinguish
-maintainer dogfood from genuinely independent participants and never add mandatory
-telemetry:
+Phase 13 pilot records are optional, local, and ignored by Git. They preserve the
+truthful distinction between maintainer dogfood and independent participants and
+never add mandatory telemetry:
 
 ```bash
 cewp pilot create --pilot-id dogfood-1 --participant maintainer-dogfood --participant-id maintainer-1
@@ -129,9 +129,12 @@ cewp pilot status --json
 cewp pilot export dogfood-1 --json
 ```
 
-The infrastructure is implemented, but real external pilot evidence is still
-absent. Fixtures and this maintainer's own runs do not satisfy external-user gates;
-1.0 is therefore not complete.
+Phase 13 is complete under the approved **maintainer technical acceptance** model.
+The accepted run proved real managed execution, bounded scope, verification,
+independent reviewer PASS, receipt creation, finalization, recovery controls, and a
+safe final policy state. Independent user validation is not required for Phase 13
+completion and was not collected; future external feedback must still be labeled
+honestly. See the [Turkish closure report](docs/phase-13-maintainer-acceptance.md).
 
 ## Documentation
 
@@ -152,6 +155,7 @@ absent. Fixtures and this maintainer's own runs do not satisfy external-user gat
 - [Workflow Runtime](docs/workflow-runtime.md)
 - [Known Limitations](docs/known-limitations.md)
 - [Pilot Kit](docs/pilot-kit.md)
+- [Phase 13 Maintainer Kabul Raporu](docs/phase-13-maintainer-acceptance.md)
 - [Operator Policy](docs/operator-policy.md)
 - [Security Model](docs/security-model.md)
 - [Coordinator Mode Compatibility](docs/coordinator-mode.md)
@@ -162,7 +166,7 @@ absent. Fixtures and this maintainer's own runs do not satisfy external-user gat
 
 ## Status
 
-CEWP is beta software. Phase 14 stable-core contracts are available through `cewp compatibility --json`, but external pilot gates and exact clean release matrices are still required before 1.0 can be declared complete. Review the plan, evidence, and receipt before integrating changes.
+CEWP is beta software. Phase 13 maintainer technical acceptance is complete and Phase 14 stable-core contracts are available through `cewp compatibility --json`. A `1.0.0` publication still requires the exact final-source release validation, explicit version/release decision, and the human-controlled publish/tag/release steps. Review the plan, evidence, and receipt before integrating changes.
 
 ## License
 

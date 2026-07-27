@@ -1,0 +1,41 @@
+{
+  "schemaVersion": "phase-13-maintainer-acceptance/v1",
+  "phase": 13,
+  "status": "complete",
+  "validationModel": "maintainer-technical-acceptance",
+  "acceptedAt": "2026-07-27",
+  "independentUserValidation": {
+    "required": false,
+    "collected": false,
+    "claim": "not-performed"
+  },
+  "evidence": {
+    "runId": "20260726-033847",
+    "pilotId": "maintainer-dogfood-20260726-033831",
+    "managedCodexCalls": 3,
+    "implementation": "PASS",
+    "scope": [
+      "README.md"
+    ],
+    "verification": "PASS",
+    "reviewerDecision": "PASS",
+    "reviewerIndependent": true,
+    "receipt": "complete",
+    "finalized": true,
+    "pilotStatus": "complete",
+    "pilotExport": "PASS",
+    "policyFinal": "safe",
+    "sourceWorktreeFinal": "clean"
+  },
+  "controlFlow": {
+    "pauseStatusResume": "PASS",
+    "reviseReapprove": "PASS",
+    "repairUsed": true,
+    "priorEvidenceRetained": true
+  },
+  "truth": {
+    "wrapperFailureClassifiedAsCewpBug": false,
+    "externalParticipantsClaimed": 0,
+    "publicationClaimed": false
+  }
+}

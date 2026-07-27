@@ -19,7 +19,9 @@ function runContract() {
   const contract = JSON.parse(result.stdout);
   assert(contract.schemaVersion === "stable-compatibility/v1", "compatibility output has a stable schema");
   assert(contract.packageVersion === "0.14.0-beta.0", "package is prepared for the Phase 14 stable-core beta");
-  assert(contract.release.status === "blocked-pilot-evidence", "compatibility truth does not claim 1.0 eligibility");
+  assert(contract.release.status === "phase-13-complete-release-validation-required", "compatibility reports Phase 13 complete without claiming publication");
+  assert(contract.release.phase13.validationModel === "maintainer-technical-acceptance", "compatibility names the approved Phase 13 model");
+  assert(contract.release.phase13.independentUserValidationRequired === false, "compatibility removes independent-user quotas");
   assert(JSON.stringify(contract.runtime.node.majors) === JSON.stringify([22, 24, 26]), "tested Node majors are explicit");
   assert(contract.execution.managedBackend.id === "codex-exec", "codex-exec remains the stable managed backend");
   assert(contract.execution.appServer.status === "experimental-not-graduated", "App Server remains ungraduated");
@@ -71,7 +73,7 @@ function runContract() {
     assert(manualAcceptance.includes(phrase), `manual acceptance covers ${phrase}`);
   }
   assert(manualAcceptance.includes("maintainer-dogfood"), "manual acceptance classifies the maintainer honestly");
-  assert(manualAcceptance.includes("bağımsız Phase 13 kullanıcı doğrulaması sayılmaz"), "manual acceptance cannot turn maintainer testing into external evidence");
+  assert(manualAcceptance.includes("Phase 13 teknik kabul kanıtı sayılır"), "manual acceptance explains the maintainer technical evidence policy");
 }
 
 try {

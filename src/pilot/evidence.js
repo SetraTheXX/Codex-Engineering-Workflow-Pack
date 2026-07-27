@@ -5,12 +5,85 @@ const fs = require("node:fs");
 const path = require("node:path");
 const { verifyWorkflowRun } = require("../evidence/verify");
 const { loadWorkflowRun } = require("../workflow/state");
+const { findSupervisedRun } = require("../supervise/state");
+const { validateOwnershipRecord } = require("../run/ownership");
 
 function sha256(filePath) {
   return `sha256:${crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex")}`;
 }
 
-function inspectReviewedRunEvidence(repoRoot, workflowRunId) {
+function inspectSupervisedRunEvidence(repoRoot, supervisedRunId) {
+  let found;
+  try {
+    found = findSupervisedRun({ repoRoot, runId: supervisedRunId });
+  } catch (error) {
+    return {
+      status: "excluded",
+      reason: `supervised run is unavailable: ${error.message}`,
+      runKind: "supervised",
+      supervisedRunId,
+      verification: { schemaVersion: "supervised-verification/v1", status: "failed", issues: [{ code: "run-unavailable", message: error.message }] },
+      receipt: null,
+      reviewer: { decision: null, independentPass: false },
+      rawEvidenceCopied: false,
+    };
+  }
+  const receiptPath = path.join(found.runRoot, "receipt.json");
+  const ownershipPath = path.join(found.runRoot, "ownership.json");
+  let receiptValue = null;
+  let ownership = null;
+  try {
+    receiptValue = JSON.parse(fs.readFileSync(receiptPath, "utf8"));
+  } catch {}
+  try {
+    ownership = validateOwnershipRecord(JSON.parse(fs.readFileSync(ownershipPath, "utf8")));
+  } catch {}
+  const tasks = Array.isArray(found.run.tasks) ? found.run.tasks : [];
+  const verificationPassed = tasks.length > 0 && tasks.every((task) => (
+    task.status === "completed"
+    && task.verification?.latest?.status === "pass"
+    && task.verification?.scope?.status === "pass"
+    && (task.evidence || []).some((entry) => entry.type === "verification")
+  ));
+  const independentPass = found.run.reviewer?.independent === true
+    && found.run.reviewer?.status === "passed"
+    && found.run.reviewer?.decision === "PASS"
+    && tasks.every((task) => (task.evidence || []).some((entry) => entry.type === "independent-review" && entry.decision === "PASS"));
+  let reason = null;
+  if (found.run.status !== "completed") reason = `supervised run is not completed (status ${found.run.status})`;
+  else if (found.run.receipt?.status !== "finalized") reason = "supervised run receipt is not finalized";
+  else if (!receiptValue || receiptValue.schemaVersion !== "supervised-receipt/v1-beta" || receiptValue.runId !== supervisedRunId || receiptValue.finalized !== true) reason = "supervised receipt is missing, incomplete, or incompatible";
+  else if (!verificationPassed) reason = "supervised run verification or scope evidence failed";
+  else if (!independentPass) reason = "supervised run lacks an independent reviewer PASS";
+  else if (ownership?.runId !== supervisedRunId || ownership?.status !== "released") reason = "supervised execution ownership is invalid or not released";
+  return {
+    status: reason ? "excluded" : "qualified",
+    reason,
+    runKind: "supervised",
+    supervisedRunId,
+    verification: {
+      schemaVersion: "supervised-verification/v1",
+      status: verificationPassed ? "passed" : "failed",
+      issues: verificationPassed ? [] : [{ code: "supervised-verification-failed", message: "Verification, scope, or task evidence did not pass." }],
+    },
+    receipt: receiptValue ? {
+      schemaVersion: receiptValue.schemaVersion || null,
+      generatedAt: receiptValue.generatedAt || null,
+      completeness: receiptValue.finalized === true ? "complete" : "incomplete",
+      integrityClaim: "finalization-gated-local-receipt",
+      sha256: sha256(receiptPath),
+    } : null,
+    reviewer: { decision: found.run.reviewer?.decision || null, independentPass },
+    ownership: { status: ownership?.status || "unknown" },
+    rawEvidenceCopied: false,
+  };
+}
+
+function inspectReviewedRunEvidence(repoRoot, runReference) {
+  if (runReference && typeof runReference === "object" && runReference.supervisedRunId) {
+    return inspectSupervisedRunEvidence(repoRoot, runReference.supervisedRunId);
+  }
+  const workflowRunId = typeof runReference === "string" ? runReference : runReference?.workflowRunId;
   let found;
   try {
     found = loadWorkflowRun(repoRoot, workflowRunId);
@@ -64,6 +137,7 @@ function inspectReviewedRunEvidence(repoRoot, workflowRunId) {
   return {
     status: reason ? "excluded" : "qualified",
     reason,
+    runKind: "workflow",
     workflowRunId,
     verification: {
       schemaVersion: verification.schemaVersion,

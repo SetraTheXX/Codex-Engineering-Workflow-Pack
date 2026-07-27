@@ -1,7 +1,8 @@
 # 1.0 Security Review
 
-Status: technical review complete for the candidate surface; 1.0 remains blocked by
-Phase 13 and exact release matrices. The release gate is zero open P0/P1 security or
+Status: technical review complete for the candidate surface and Phase 13 maintainer
+technical acceptance is complete. Exact final-source release matrices and an
+explicit release decision remain. The release gate is zero open P0/P1 security or
 data-loss issues. This document does not assert the state of unreported external bugs.
 
 Reviewed boundaries:

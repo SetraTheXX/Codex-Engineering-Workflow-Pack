@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Phase 13 closure
+
+Phase 13 is complete under the user-approved maintainer technical acceptance
+model. Independent external validation was not collected and is not claimed.
+The completion contract now requires one repository attempt, supervised golden
+path, finalized receipt-linked full reviewed run, measurable benefit, recovered
+control flow, and a guardrail audit with no unresolved bypasses. Independent
+reviewer PASS, verification, scope, ownership, policy reset, and fail-closed
+receipt integrity remain unchanged.
+
+The accepted dogfood evidence is published as a privacy-safe Turkish report and a
+versioned JSON summary. This change is local only: it does not publish, tag, push,
+or create a release.
+
 ### Added
 
 - Added a maintainer-safe manual acceptance guide covering credential-free preflight,
@@ -15,8 +29,8 @@
 Stable-core candidate contracts, recovery/security guidance, CEWP-owned performance
 budgets, package lifecycle coverage, and local release-artifact preparation. This
 version is prepared locally and is not published, tagged, pushed, or released.
-It is deliberately not `1.0.0`: real Phase 13 evidence and exact clean release
-matrices remain mandatory blockers.
+It is deliberately not `1.0.0`: at the time of this beta preparation, Phase 13
+had not yet been closed and exact clean release matrices remained mandatory.
 
 ### Added
 
@@ -34,8 +48,9 @@ matrices remain mandatory blockers.
 
 - Windows local contracts can prove the candidate implementation, but do not replace
   a clean Linux run of this exact source or the repository release matrix.
-- No external participant, repository, repeat-use, case-study, feedback, or
-  contribution evidence was fabricated. Phase 13 and the 1.0 gate remain open.
+- No external participant, repeat-use, case-study, feedback, or contribution
+  evidence was fabricated. This historical 0.14.0-beta.0 snapshot left Phase 13
+  open; the Unreleased section records its later approved closure.
 - The security review states the local technical finding boundary; it cannot prove
   that no undisclosed external vulnerability exists.
 
