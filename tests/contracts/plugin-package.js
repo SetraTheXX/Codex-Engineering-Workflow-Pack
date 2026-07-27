@@ -15,6 +15,7 @@ function runPluginPackageContract() {
   const packageJson = readJson(path.join(repoRoot, "package.json"));
   const manifest = readJson(path.join(repoRoot, "plugins", "cewp", ".codex-plugin", "plugin.json"));
   const marketplace = readJson(path.join(repoRoot, ".agents", "plugins", "marketplace.json"));
+  const readme = fs.readFileSync(path.join(repoRoot, "README.md"), "utf8");
   const compatibility = readJson(
     path.join(repoRoot, "tests", "fixtures", "compat", "v0.7.0-beta.0", "contracts.json"),
   );
@@ -79,6 +80,19 @@ function runPluginPackageContract() {
   assert(entry.source.path === "./plugins/cewp", "marketplace path stays repo-relative");
   assert(entry.policy.installation === "AVAILABLE", "plugin install remains opt-in");
   assert(entry.policy.authentication === "ON_INSTALL", "marketplace auth policy is explicit");
+  assert(
+    /npm.*CLI.*does not.*register.*Codex plugin/is.test(readme),
+    "README distinguishes npm CLI installation from Codex plugin registration",
+  );
+  assert(
+    /codex plugin marketplace add.*codex-engineering-workflow-pack/is.test(readme),
+    "README installs the marketplace from the globally installed npm package",
+  );
+  assert(readme.includes("codex plugin add cewp@cewp-local"), "README installs the CEWP plugin from its marketplace");
+  assert(
+    /Use CEWP to complete.*roadmap\.md/is.test(readme),
+    "README shows the roadmap-completion product intent",
+  );
 
   assert(compatibility.schemas.adapterResult === ADAPTER_RESULT_SCHEMA_VERSION, "v0.7 adapter result readable");
   assert(

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- Documented full CEWP Codex plugin installation from the globally installed npm
+  package as a separate step from CLI installation.
+- Clarified the intended roadmap-driven Codex experience and the current boundary
+  between supervised checkpoints, Coordinator Mode, workflow DAG state, and
+  native Codex subagent evidence.
+
 ## 0.14.0-beta.1 — 2026-07-27
 
 ### Changed

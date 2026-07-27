@@ -48,6 +48,37 @@ cewp init
 cewp doctor
 ```
 
+The npm install provides the `cewp` and `cewp-mcp` commands. It does not
+automatically register the CEWP Codex plugin.
+
+## Install The Codex Plugin
+
+The full local plugin bundles three CEWP skills, the local `cewp-mcp` bridge,
+review-required subagent evidence hooks, and plugin metadata. After installing
+the npm package globally, register its marketplace with Codex.
+
+PowerShell:
+
+```powershell
+$cewpPackage = Join-Path (npm root -g) "@setrathex\codex-engineering-workflow-pack"
+codex plugin marketplace add "$cewpPackage"
+codex plugin add cewp@cewp-local
+codex plugin list
+```
+
+macOS or Linux:
+
+```bash
+codex plugin marketplace add "$(npm root -g)/@setrathex/codex-engineering-workflow-pack"
+codex plugin add cewp@cewp-local
+codex plugin list
+```
+
+Restart Codex, open a new conversation, and enable CEWP from the Plugins
+Directory. This installs the complete plugin on the current machine from a
+local marketplace source; it does not list CEWP in the universal public plugin
+directory.
+
 To evaluate the exact GitHub candidate before or without a registry publication,
 run it from a source checkout:
 
@@ -55,6 +86,13 @@ run it from a source checkout:
 git clone https://github.com/SetraTheXX/Codex-Engineering-Workflow-Pack.git
 cd Codex-Engineering-Workflow-Pack
 node ./bin/cewp.js doctor
+```
+
+The source checkout can also be registered directly:
+
+```bash
+codex plugin marketplace add /path/to/Codex-Engineering-Workflow-Pack
+codex plugin add cewp@cewp-local
 ```
 
 Run the credential-free walkthrough:
@@ -88,6 +126,40 @@ cewp policy reset
 
 The advanced policy permits requested local operations; it does not disable
 scope, budget, verification, ownership, or reviewer gates.
+
+## Use CEWP From Codex
+
+The intended product interaction is a normal Codex request that explicitly
+selects CEWP:
+
+```text
+Use CEWP to complete @roadmap.md. Turn it into bounded checkpoints, use
+independent workers only where scopes do not overlap, verify every checkpoint,
+require reviewer PASS, preserve receipts, and stop on a closed gate.
+```
+
+Native Codex `/goal` keeps a persistent objective attached to the active task.
+CEWP does not replace or control that private host goal. The plugin adds an
+engineering control plane around the work: source-bound planning, explicit
+scope, isolated worktrees, budgets, deterministic verification, recovery,
+independent review, and final evidence.
+
+Today CEWP provides three related execution levels:
+
+1. **Supervised checkpoint:** the plugin plans and runs one bounded managed
+   checkpoint at a time through CEWP Core.
+2. **Coordinator Mode:** CEWP can run two non-overlapping `codex-exec` workers
+   sequentially or in parallel, then run an independent reviewer.
+3. **Workflow runtime:** CEWP validates versioned DAGs, dependencies, worker
+   capacity, budgets, revisions, results, and reviewer gates.
+
+The complete one-sentence-to-finished-roadmap experience is a product direction,
+not a current completion claim. The workflow compiler currently emits a
+source-bound agent request; the host agent must produce the structured workflow
+proposal, and approval, task start/result, review, and finalization transitions
+remain explicit. Codex can spawn native subagents when directly requested or
+when plugin/project instructions request them, but CEWP currently treats native
+subagent hooks as optional evidence rather than canonical execution control.
 
 ## Safety Model
 
