@@ -41,9 +41,8 @@ managed enforcement claims.
 ### Evidence and pilot
 
 Workflow receipts, offline reports, comparisons, and redacted exports consume the
-same canonical run evidence. Phase 13 pilot records live under `.cewp/pilots/` and
-count only validated independent evidence. Fixtures and maintainer dogfood never
-become external pilot proof.
+same canonical run evidence. Optional pilot records live under `.cewp/pilots/`.
+Fixtures and maintainer observations never become external-user proof.
 
 ## Contract Boundary
 

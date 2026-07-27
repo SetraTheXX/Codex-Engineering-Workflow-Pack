@@ -22,6 +22,7 @@ function runContract() {
     /^docs\/plans\//,
     /roadmap/i,
     /^\.cewp(?:-private)?\//,
+    /^docs\/(?:manual-acceptance|pilot-kit|case-study-template|codex-capability-matrix)\.md$/,
   ];
   for (const file of tracked) {
     assert(!forbiddenPaths.some((pattern) => pattern.test(file)), `tracked public path is repository-ready: ${file}`);

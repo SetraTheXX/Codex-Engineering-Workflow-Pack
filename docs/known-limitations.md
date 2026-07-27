@@ -17,6 +17,6 @@ CEWP is beta software. These limits are product boundaries, not hidden roadmap p
 - Supervised worktree cleanup automation is not shipped; rollback is available for owned unverified work, and terminal evidence is retained for deliberate inspection/removal.
 - CEWP never automatically merges, pushes, publishes, tags, or creates a release.
 - The stable-core candidate publishes explicit schema and migration contracts, but the package remains beta until exact final-source release validation and an explicit release decision are completed.
-- Phase 13 maintainer technical acceptance is complete. Independent user validation was not performed, so CEWP does not claim independent adoption, repeat-user evidence, or external case-study validation. Those remain optional future product feedback rather than a completion gate.
+- Maintainer technical acceptance is complete. Independent user validation was not performed, so CEWP does not claim independent adoption, repeat-user evidence, or external case-study validation.
 
 Report setup failures, workflow failures, or misleading evidence through the repository issue tracker. Include `cewp doctor --json` output after removing local paths or sensitive values.

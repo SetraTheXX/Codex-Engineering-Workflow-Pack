@@ -4,7 +4,7 @@ The workflow runtime turns a bounded goal or repository document into an approve
 
 `cewp workflow compile` creates an agent request and does not execute prose, call a model, or create canonical run state. A host agent or operator supplies a structured candidate. CEWP validates that candidate, shows a proposal, and requires explicit approval before creating a run.
 
-The Phase 10 managed owner/backend pair remains `managed` plus `codex-exec`. OpenCode remains experimental and is outside this workflow path. The runtime does not merge, push, publish, or tag. It also does not attach to private ChatGPT tasks, control native goals, add a desktop UI, or add providers.
+The managed owner/backend pair remains `managed` plus `codex-exec`. OpenCode remains experimental and is outside this workflow path. The runtime does not merge, push, publish, or tag. It also does not attach to private ChatGPT tasks, control native goals, add a desktop UI, or add providers.
 
 ## Contracts
 

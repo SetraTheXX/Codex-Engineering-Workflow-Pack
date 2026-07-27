@@ -30,38 +30,13 @@ function runContract() {
   assert(read(".github/ISSUE_TEMPLATE/workflow-failure.yml").includes("Expected behavior"), "workflow form distinguishes expected behavior");
   assert(read(".github/ISSUE_TEMPLATE/receipt-quality.yml").includes("observed / estimated / budgeted / unknown"), "receipt form preserves usage truth labels");
 
-  const caseStudy = read("docs/case-study-template.md");
-  for (const section of [
-    "Task shape",
-    "Plan and checkpoints",
-    "Elapsed time and CEWP overhead",
-    "Usage truth and estimate confidence",
-    "Interventions and recovery",
-    "Failures caught and reviewer findings",
-    "Redacted receipt excerpt",
-    "Limitations",
-  ]) {
-    assert(caseStudy.includes(`## ${section}`), `case-study template includes ${section}`);
-  }
-  assert(/unknown is never zero/i.test(caseStudy), "case study keeps unavailable usage unknown");
-  assert(/maintainer dogfood.*does not count/i.test(caseStudy), "case study cannot disguise maintainer dogfood as external evidence");
-
-  const pilotKit = read("docs/pilot-kit.md");
-  for (const command of ["cewp pilot create", "cewp pilot record", "cewp pilot status", "cewp pilot export"]) {
-    assert(pilotKit.includes(command), `pilot kit documents ${command}`);
-  }
-  assert(pilotKit.includes(".cewp/pilots/"), "pilot kit documents ignored canonical storage");
-  assert(/maintainer technical acceptance/i.test(pilotKit), "pilot kit names the approved validation model");
-  assert(/one repository attempt/i.test(pilotKit), "pilot kit documents the repository-attempt threshold");
-  assert(/one full reviewed run/i.test(pilotKit), "pilot kit documents the reviewed-run threshold");
-  assert(/independent user.*optional/i.test(pilotKit), "pilot kit keeps independent feedback optional without fabricating it");
 }
 
 try {
   runContract();
-  console.log("[PASS] public Phase 13 pilot feedback and case-study surface");
+  console.log("[PASS] public support issue forms");
 } catch (error) {
-  console.error("[FAIL] public pilot surface contract");
+  console.error("[FAIL] public support issue forms");
   console.error(error && error.stack ? error.stack : error);
   process.exitCode = 1;
 }

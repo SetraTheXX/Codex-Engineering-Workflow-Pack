@@ -41,7 +41,6 @@ function runContract() {
     "docs/performance-budgets.md",
     "docs/contracts.md",
     "docs/native-goal-or-cewp.md",
-    "docs/manual-acceptance.md",
   ];
   for (const file of requiredDocs) assert(fs.existsSync(path.join(repoRoot, file)), `${file} exists`);
 
@@ -59,21 +58,6 @@ function runContract() {
   }
   assert(security.includes("P0/P1"), "security review states the severity release gate");
 
-  const manualAcceptance = read("docs/manual-acceptance.md");
-  for (const phrase of [
-    "Şimdi ne yapmalısın?",
-    "Kimlik bilgisi gerektirmeyen ön kontrol",
-    "Denetimli checkpoint",
-    "Duraklatma, revizyon ve devam ettirme",
-    "Bağımsız inceleme ve makbuz",
-    "Sahiplik çakışması",
-    "Pilot kanıtı",
-    "Ne iddia edilmemeli?",
-  ]) {
-    assert(manualAcceptance.includes(phrase), `manual acceptance covers ${phrase}`);
-  }
-  assert(manualAcceptance.includes("maintainer-dogfood"), "manual acceptance classifies the maintainer honestly");
-  assert(manualAcceptance.includes("Phase 13 teknik kabul kanıtı sayılır"), "manual acceptance explains the maintainer technical evidence policy");
 }
 
 try {

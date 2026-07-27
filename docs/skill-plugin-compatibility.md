@@ -19,7 +19,7 @@ CEWP's ten bundled skills use the current Codex skill shape: a required `SKILL.m
 | prototype | compatible | present | no |
 | improve-codebase-architecture | compatible | present | no |
 
-The Phase 9 plugin follows the official boundary:
+The packaged Codex plugin follows the official boundary:
 
 - `.codex-plugin/plugin.json` is the required manifest and the only file under `.codex-plugin/`.
 - `skills/`, `hooks/`, `.mcp.json`, `.app.json`, and `assets/` live at the plugin root and use `./`-prefixed contained paths.
