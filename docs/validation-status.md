@@ -6,9 +6,9 @@ the public repository.
 
 ## Current Candidate
 
-- Package: `0.14.0-beta.0`
-- GitHub prerelease: `v0.14.0-beta.0`
-- npm registry: `0.7.0-beta.0` (`0.14.0-beta.0` publication pending)
+- Package: `0.14.0-beta.1`
+- GitHub release target: `v0.14.0-beta.1`
+- npm publication target: `0.14.0-beta.1`
 - Codex plugin distribution: source-checkout marketplace only
 - Managed backend: `codex-exec`
 - Supported Node.js majors: 22, 24, and 26
@@ -16,6 +16,13 @@ the public repository.
 - Technical acceptance: complete
 - Independent user validation: not claimed
 - Publication status: GitHub prerelease; not released as `1.0.0`
+
+Registry state can change independently of the repository. Query the live
+distribution tags before installation:
+
+```bash
+npm view @setrathex/codex-engineering-workflow-pack dist-tags --json
+```
 
 `cewp compatibility --json` is the canonical machine-readable compatibility
 projection. A release still requires validation of the exact final source,

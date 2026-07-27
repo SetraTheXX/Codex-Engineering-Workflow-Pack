@@ -13,7 +13,7 @@ function read(relativePath) {
 function runContract() {
   const packageJson = JSON.parse(read("package.json"));
   const plugin = JSON.parse(read("plugins/cewp/.codex-plugin/plugin.json"));
-  const version = packageJson.version.match(/^0\.(\d+)\.0-beta\.0$/);
+  const version = packageJson.version.match(/^0\.(\d+)\.0-beta\.\d+$/);
   assert(version && Number(version[1]) >= 13, "current beta preserves the Phase 13 release surface");
   assert(plugin.version === packageJson.version, "plugin and package versions stay aligned");
 
@@ -30,13 +30,16 @@ function runContract() {
 
   const readme = read("README.md");
   assert(readme.includes("docs/validation-status.md"), "README links the aggregate validation boundary");
+  assert(/npm install -g @setrathex\/codex-engineering-workflow-pack@beta/i.test(readme), "README gives npm visitors a current beta install command");
   assert(!/dogfood|pilot id|run id/i.test(readme), "README omits local acceptance-run details");
 
   const validation = read("docs/validation-status.md");
   assert(/technical acceptance: complete/i.test(validation), "validation status records technical acceptance");
   assert(/independent user validation: not claimed/i.test(validation), "validation status avoids an external-user claim");
-  assert(/GitHub prerelease: `v0\.14\.0-beta\.0`/i.test(validation), "validation status identifies the current GitHub prerelease");
-  assert(/npm registry: `0\.7\.0-beta\.0`.*publication pending/is.test(validation), "validation status discloses that npm trails the current source");
+  assert(/Package: `0\.14\.0-beta\.1`/i.test(validation), "validation status identifies the package prepared for npm");
+  assert(/GitHub release target: `v0\.14\.0-beta\.1`/i.test(validation), "validation status identifies the matching GitHub release target");
+  assert(/npm publication target: `0\.14\.0-beta\.1`/i.test(validation), "validation status identifies the matching npm publication target");
+  assert(/npm view @setrathex\/codex-engineering-workflow-pack dist-tags --json/i.test(validation), "validation status directs readers to live registry truth");
   assert(/local run identifiers.*not part of\s+the public repository/is.test(validation), "validation status excludes local run identities");
   assert(packageJson.files.includes("docs/validation-status.md"), "aggregate validation status is packaged");
 

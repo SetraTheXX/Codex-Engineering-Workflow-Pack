@@ -2572,7 +2572,7 @@ async function main() {
       const pack = run("npm", ["pack", "--dry-run"], { cwd: cewpRoot, timeout: 120000 });
       const packOutput = `${pack.stdout}\n${pack.stderr}`;
       assertExit(pack, 0, "npm pack --dry-run");
-      assert(/^0\.\d+\.0-beta\.0$/.test(packageJson.version), `unexpected beta package version: ${packageJson.version}`);
+      assert(/^0\.\d+\.0-beta\.\d+$/.test(packageJson.version), `unexpected beta package version: ${packageJson.version}`);
       assert(packOutput.includes("docs/adapter-contract.md"), "adapter contract doc should be packed");
       assert(packOutput.includes("docs/supervised-workflow.md"), "supervised workflow doc should be packed");
       assert(packOutput.includes("docs/known-limitations.md"), "known limitations should be packed");

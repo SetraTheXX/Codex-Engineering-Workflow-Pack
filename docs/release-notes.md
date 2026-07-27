@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.14.0-beta.1 — 2026-07-27
+
 ### Changed
 
 - Removed the maintainer-only Turkish acceptance guide, pilot-study templates,
@@ -10,6 +12,10 @@
   the supported public documentation surface.
 - Clarified that the current GitHub prerelease leads the npm registry and that the
   Codex plugin is installed from a source checkout rather than a global catalog.
+- Added an npm-first beta installation path, explicit public scoped-package
+  metadata, and matching package/plugin version contracts.
+- Prepared a new patch prerelease so npm and GitHub do not reuse
+  `0.14.0-beta.0` for source that changed after its tag.
 
 ## 0.14.0-beta.0 — 2026-07-27
 

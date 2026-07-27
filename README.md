@@ -39,16 +39,21 @@ Requirements:
 - Git 2.39 or newer
 - Codex CLI for managed execution
 
-The current source is published as a GitHub prerelease. The npm registry may lag
-the GitHub candidate; check [Validation Status](docs/validation-status.md) before
-choosing an install source.
+Check the live npm tags, then install the current beta CLI:
 
-Run the current source from a checkout:
+```bash
+npm view @setrathex/codex-engineering-workflow-pack dist-tags --json
+npm install -g @setrathex/codex-engineering-workflow-pack@beta
+cewp init
+cewp doctor
+```
+
+To evaluate the exact GitHub candidate before or without a registry publication,
+run it from a source checkout:
 
 ```bash
 git clone https://github.com/SetraTheXX/Codex-Engineering-Workflow-Pack.git
 cd Codex-Engineering-Workflow-Pack
-node ./bin/cewp.js init
 node ./bin/cewp.js doctor
 ```
 
